@@ -1,0 +1,23 @@
+{
+  "skill_name": "nf-wiki",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "새로운 웹서비스 프로젝트를 시작했어. nf-wiki를 사용해서 현재 디렉토리에 위키 폴더를 초기화해줘.",
+      "expected_output": "pjt_wiki 디렉토리가 생성되고, 내부에 00_schema 및 parent_wiki가 템플릿으로부터 복사됨. init_wiki.py 스크립트 실행 여부 확인.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "회원가입 기능 개발을 완료했어. Users 테이블에 'age' 컬럼을 추가했고, 그 과정에서 발생한 중복 이메일 체크 관련 500 에러를 해결했어. 위키를 업데이트해줘.",
+      "expected_output": "pjt_wiki/00_schema/log.md에 내역 추가, pjt_wiki/parent_wiki/interfaces.md(또는 서브프로젝트)에 Users.age 반영, pjt_wiki/parent_wiki/errors.md에 500 에러 해결법 추가. policy.md의 '요약 금지' 규칙 준수 여부.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "새로운 캐싱 전략에 대한 벤치마크 테스트를 완료했어. 결과적으로 Redis를 도입하기로 결정했고, 이를 반영하여 위키를 업데이트해줘.",
+      "expected_output": "operations/experiments.md에 벤치마크 결과 기록, decisions.md에 Redis 도입 결정 기록, 00_schema/graph.md에 decisions.md와 관련된 새로운 의존 관계 추가 확인.",
+      "files": []
+    }
+  ]
+}
