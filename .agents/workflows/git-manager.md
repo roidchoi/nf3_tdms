@@ -75,3 +75,9 @@ Angular/Conventional Commits 규칙을 엄격하게 따릅니다.
   - `git reset --hard HEAD~1` (주의: 커밋, 파일 변경사항 모두 삭제)
 - **실수 복구 (Reflog)**:
   - 잘못된 Reset이나 Rebase를 복구해야 할 때 `git reflog` 명령을 실행하여 이전 HEAD 상태의 해시를 찾은 뒤, `git reset --hard <해시>`로 복구합니다.
+
+## 7. OS 및 쉘 호환성 가이드 (Compatibility)
+- **Windows 환경 주의사항**: 
+  - Windows PowerShell 환경에서는 명령어 체이닝 연산자(`&&`)가 작동하지 않을 수 있습니다. (PowerShell 7 미만 버전)
+  - **권장 사항**: 모든 Git 명령어는 `run_command`를 통해 **하나씩 개별적으로 실행**하십시오.
+  - 복합 명령어가 필요한 경우 연산자(`&&`, `;`)를 사용하기보다 단계별로 나누어 실행하고, 각 단계의 결과를 `git status` 등으로 검증하십시오.
