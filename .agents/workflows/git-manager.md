@@ -29,19 +29,24 @@ description: 사용자가 소스 관리, 커밋, 브랜치 관리, 푸시, 풀, 
   - (예: `git checkout -b feat/login-system`)
 
 ## 4. 커밋 메시지 컨벤션 (Commit Convention)
-Angular/Conventional Commits 규칙을 엄격하게 따릅니다.
-- **형식**: `<타입>: <제목>` (예: `feat: add user authentication`)
+Angular/Conventional Commits 규칙을 따르되, **모든 내용은 한국어로 작성**합니다.
+- **형식**: `<타입>: <한글 제목>` (예: `feat: 사용자 인증 기능 추가`)
 - **타입**:
   - `feat`: 새로운 기능 추가
   - `fix`: 버그 수정
-  - `docs`: 문서 수정
+  - `docs`: 문서 수정 (예: 위키 업데이트)
   - `style`: 코드 포맷팅, 세미콜론 누락 등 (코드 로직 변경 없음)
   - `refactor`: 코드 리팩토링
   - `test`: 테스트 코드 추가/수정
   - `chore`: 빌드 업무 수정, 패키지 매니저 설정 등
-- **작성 지침**:
-  - 제목은 50자 이내로 명확하게 작성합니다.
-  - 추가 설명이 필요한 경우 본문에 "왜(Why)" 변경했는지와 상세 내용을 포함합니다. (예: `git commit -m "feat: 제목" -m "본문 상세 설명"`)
+- **작성 규칙 (일관성 유지)**:
+  - **제목**: 50자 이내, 명령조보다는 명사형 종결이나 "~함"체 권장 (예: "~ 추가", "~ 수정")
+  - **본문**: "왜(Why)"와 "무엇을(What)" 위주로 기술하며, 다음 템플릿을 준수합니다.
+    ```
+    - 원인: [작업 배경/이유]
+    - 내용: [주요 변경 사항]
+    ```
+  - **실행 명령**: `git commit -m "타입: 제목" -m "- 원인: 내용" -m "- 내용: 내용"`
 
 ## 5. 병합 및 동기화 (Merge & Sync)
 가장 깔끔한 히스토리 관리를 위해 **"Rebase 후 `--no-ff` 병합"**을 기본 전략으로 사용합니다.
@@ -54,8 +59,9 @@ Angular/Conventional Commits 규칙을 엄격하게 따릅니다.
      `git rebase origin/main` (또는 로컬 main)
   2. Rebase 완료 후 메인 브랜치로 이동합니다.
      `git checkout main`
-  3. 작업 브랜치를 `--no-ff` 옵션을 주어 병합합니다. (기능 단위의 Merge Commit 생성)
-     `git merge --no-ff <작업브랜치>`
+  3. 작업 브랜치를 `--no-ff` 옵션을 주어 병합하며, **병합 메시지 역시 한국어로 작성**합니다.
+     - **형식**: `merge: <브랜치명> 병합 - <주요 작업 요약>`
+     - (예: `git merge --no-ff <작업브랜치> -m "merge: feat/login-ui 병합 - 로그인 화면 구현 완료"`)
   4. 원격 저장소에 푸시합니다.
      `git push origin main`
 
