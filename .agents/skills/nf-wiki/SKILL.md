@@ -1,12 +1,12 @@
 ---
 name: nf-wiki
-description: 새로운 프로젝트를 시작하여 지식 관리용 위키(pjt_wiki)를 초기화해야 하거나, 개발 작업(Task)을 완료한 후 발생한 에러, 인터페이스 변경사항, 기술적 결정사항 등을 문서화하고 지식을 축적해야 할 때 이 스킬을 반드시 사용하십시오.
+description: 개발 프로젝트의 기술적 자산(코드 맵, 환경, 인터페이스 등)을 관리하고, 원자 단위의 지식 축적과 계층적 프로젝트 구조를 지원하는 지능형 위키 관리 스킬입니다. 새로운 프로젝트를 초기화하거나 작업 완료 후 지식의 복리 효과를 위해 반드시 사용하십시오.
 ---
 
-# nf-wiki Skill (v3.0)
+# nf-wiki Skill (v4.1) - Dev-Centric & Atomic Edition
 
 프로젝트 중 발생한 핵심 지식이 유실되지 않도록 **pjt_wiki** 구조를 관리하고 최신화를 자동화합니다. 
-과거 버전과 달리, **Antigravity(당신)**가 주도적으로 `pjt_wiki`의 파일들을 읽고/쓰고/수정(Read/Write/Edit)합니다.
+복합적인 개발 프로젝트 환경에서 발생하는 코드 구조, 환경 설정, 기술적 결정을 체계화하며, 지식을 원자화하여 LLM의 맥락 파악 능력과 복리 효과를 극대화합니다.
 
 ## 1. 스킬의 역할 및 트리거 시점
 
@@ -14,25 +14,33 @@ description: 새로운 프로젝트를 시작하여 지식 관리용 위키(pjt_
 - **[초기화 모드]**: 완전히 새로운 프로젝트 폴더에서 첫 번째 워크플로우를 시작할 때. (예: "위키 세팅해줘")
 - **[업데이트 모드]**: 특정 기능 개발, 버그 수정, 아키텍처 설계 등 논리적인 단일 작업(Task)을 완료했을 때. (예: "작업 완료했어. 위키 업데이트해줘")
 
-## 2. 참조 문서 및 파일 구조
-
-- `{WIKI_ROOT}`: 위키의 루트 폴더 (기본값: 프로젝트 최상단 `./pjt_wiki`).
-- `{TEMPLATE_DIR}`: `.agents/skills/nf-wiki/templates/` (복사할 템플릿 원본 파일들).
-- **운영 정책 (필수 필독)**: `.agents/skills/nf-wiki/references/policy.md`. 업데이트를 수행하기 전 반드시 이 파일을 먼저 읽고 지침을 확인하세요.
-- **초기화 스크립트**: `.agents/skills/nf-wiki/scripts/init_wiki.py`. (명령어로 구조를 단번에 생성할 때 사용)
-
 > **💡 Antigravity KIs (Knowledge Items) 와의 차이점**
 > - **pjt_wiki**: *현재 프로젝트*에 종속되는 구체적인 스키마, 로컬 에러, 인터페이스 등. 인간/다른 에이전트와 프로젝트 문서를 공유할 목적으로 작성합니다.
 > - **KIs (`<appDataDir>/knowledge`)**: *모든 프로젝트를 초월하여* 당신이 앞으로 계속 써먹을 수 있는 추상화된 패턴, 스크립트 작성 요령 등.
 > 만약 업데이트 중 이 지식이 다른 프로젝트에서도 널리 쓰일 만한 "메타 지식"이라고 판단되면, `pjt_wiki` 업데이트와 별개로 KIs(App Data Directory)에도 저장하십시오.
 
-## 3. [초기화 모드] 새로운 프로젝트 위키 구축
+## 2. 참조 문서 및 파일 구조 (Dev-Centric)
+
+- `{WIKI_ROOT}`: 위키의 루트 폴더 (기본값: 프로젝트 최상단 `./pjt_wiki`).
+- `{TEMPLATE_DIR}`: `.agents/skills/nf-wiki/templates/` (복사할 템플릿 원본).
+- **운영 정책 (필수 필독)**: `.agents/skills/nf-wiki/references/policy.md`. 업데이트를 수행하기 전 반드시 이 파일을 먼저 읽고 지침을 확인하세요.
+- **Lint 지침서**: `.agents/skills/nf-wiki/references/wiki_lint_guideline.md`. 주기적인 물리/논리 동기화 지침.
+
+### 핵심 관리 구조
+- `00_schema/index.md`: **MoC (지식 지도)**. 전체 위키 엔티티 요약 및 상태.
+- `parent_wiki/`: 프로젝트 전반에 걸친 공통 정책 및 공유 지식.
+- `p{n}_wiki/`: 특정 서브 프로젝트 전용 지식.
+    - `codebase_map.md`, `environment.md`: 물리적/논리적 토대.
+    - `interfaces/`, `errors/`, `decisions/`: **원자적 지식 저장소** (반드시 개별 `.md` 파일로 관리).
+
+## 3. [초기화 모드] 계층적 위키 구축
 
 위키가 없는 새 프로젝트에서 다음 절차를 따릅니다.
 
-1. **초기화 스크립트 실행**: 터미널 도구를 사용해 `python .agents/skills/nf-wiki/scripts/init_wiki.py` 를 실행합니다. 이 스크립트가 기본 폴더 구조와 템플릿을 생성해 줍니다.
-2. **Sub Project 확인**: 프로젝트 내에 하위 서비스(p1, p2 등)가 분리되어 있다면, `python .agents/skills/nf-wiki/scripts/init_wiki.py --sub-project p1 p2` 형식으로 서브 프로젝트 위키도 함께 생성할 수 있습니다.
-3. **정보 채우기**: 생성된 `pjt_wiki/00_schema/index.md`나 `pjt_wiki/parent_wiki/overview.md`에 프로젝트의 기본 정보를 적어 초기화를 마무리합니다.
+1. **초기화 스크립트 실행**: 터미널 도구를 사용해 `python .agents/skills/nf-wiki/scripts/init_wiki.py` 를 실행합니다.
+2. **Sub Project 설정**: 하위 모듈이 있다면 `--sub-project p1 p2` 인자를 사용하여 계층적 구조를 동시에 생성합니다.
+3. **토대 기록**: `p{n}_wiki/codebase_map.md`에 현재 폴더 구조를, `p{n}_wiki/environment.md`에 개발 환경 정보를 즉시 반영하여 초기 맥락을 확보합니다.
+4. **정보 채우기**: 생성된 `00_schema/index.md`나 `parent_wiki/overview.md`에 기본 정보를 적어 초기화를 마무리합니다.
 
 ## 4. [업데이트 모드] 작업 완료 후 지식 축적
 
@@ -41,23 +49,28 @@ description: 새로운 프로젝트를 시작하여 지식 관리용 위키(pjt_
 
 ### Step 1: 업데이트 대상 식별
 당신이 방금 완료한 작업에서 다음 중 해당하는 사항이 있는지 자문해 보세요:
-- DB 스키마나 함수 시그니처가 변경되었나? (→ `interfaces.md` 업데이트)
-- 까다로운 에러를 만났고, 명확한 해결책을 찾아냈나? (→ `errors.md` 업데이트)
-- 폴더 구조나 모듈 구조가 변경되었나? (→ `codebase_map.md` 업데이트)
-- 중요한 기술적 결정을 내렸거나 위키 문서 간 새로운 의존성/참조 관계가 생겼나? (→ `decisions.md` 및 `00_schema/graph.md` 업데이트)
+- DB 스키마나 함수 시그니처가 변경되었나? (→ `interfaces/` 내 개별 문서 수정/생성)
+- 까다로운 에러를 만났고, 명확한 해결책을 찾아냈나? (→ `errors/` 내 개별 문서 기록)
+- 폴더 구조나 모듈 구조가 변경되었나? (→ `codebase_map.md` 현행화)
+- 중요한 기술적 결정을 내렸거나 위키 문서 간 새로운 의존성/참조 관계가 생겼나? (→ `decisions/` 내 문서 기록 및 MoC 갱신)
 - 실험, 벤치마크, 모델 평가를 완료했나? (→ `operations/experiments.md` 업데이트)
 - 배포 절차나 운영 스크립트(Runbook)가 변경되었나? (→ `operations/deployment.md` 또는 `runbook.md` 업데이트)
 - 설치된 패키지(버전)나 환경 설정이 변경되었나? (→ `environment.md` 업데이트)
 
-### Step 2: 문서 갱신
-대상을 식별했다면, `replace_file_content` 등의 파일 수정 도구를 사용하여 각 파일에 정확한 내용을 기재합니다.
-- 변경된 내용은 원본 파일의 형식을 그대로 유지해야 합니다.
-- **Why?**: LLM이 정보를 대충 요약해 버리면 나중에 다른 에이전트가 그 정보를 읽고 코드 컨텍스트를 파악할 때 심각한 환각(Hallucination)이 발생할 수 있습니다. 따라서 `interfaces.md` 등은 실제 경로, 라인 번호, 정확한 타입을 절대 요약하지 말고 원본 그대로 명확히 기록해야 합니다.
+### Step 2: 원자적 문서 갱신 (Atomization & Detail)
+- **개별 파일 관리**: 거대한 단일 파일에 내용을 추가하지 말고, 특정 기능/에러 단위로 **개별 `.md` 파일**을 생성/수정합니다.
+- **정보 보존**: LLM의 환각(Hallucination) 방지를 위해, `interfaces/` 등은 실제 경로, 라인 번호, 정확한 타입 등을 **절대 요약하지 말고 원본 그대로** 명확히 기록해야 합니다.
 
-### Step 3: 로그 및 인덱스 갱신 (항상 수행)
-- `pjt_wiki/00_schema/log.md` 상단에 방금 수행한 업데이트 내역을 한 줄로 요약하여 추가합니다.
-- `pjt_wiki/00_schema/index.md`에서 마지막 업데이트 시간과 관련된 내역을 갱신합니다.
+### Step 3: 연결 및 합성 (Link & Synthesis)
+- 새로운 문서를 생성/수정할 때, 연관된 지식으로의 링크를 `[[path/to/file]]` (Obsidian 스타일) 형식으로 반드시 삽입합니다.
+- `00_schema/index.md` (MoC)에 새로운 문서의 존재와 핵심 요약을 반영하여 지도를 최신화합니다.
+
+### Step 4: 로그 갱신 (항상 수행)
+- `00_schema/log.md` 상단에 방금 수행한 업데이트 내역을 한 줄로 요약하여 추가합니다.
 
 ## 5. 완료 보고
 
-모든 위키 갱신이 끝났다면 사용자에게 "어떤 위키 문서가 어떻게 업데이트 되었는지"를 간결하게 브리핑하십시오.
+모든 위키 갱신이 끝났다면 사용자에게 다음 사항을 브리핑하십시오.
+- **수정된 개발 문서**: (예: codebase_map.md 현행화, 환경 설정 변경 내역)
+- **추가/수정된 원자적 지식**: (예: 신규 생성된 `interfaces/` 또는 `errors/` 문서 목록)
+- **계층적 위치**: (예: `parent_wiki`에 공통 정책 반영 여부)
