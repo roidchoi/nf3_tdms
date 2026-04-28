@@ -1,0 +1,1343 @@
+{
+  "timestamp": "2025-12-23T11:29:47.866765",
+  "target_count": 4533,
+  "success_count": 4266,
+  "failure_count": 267,
+  "failures": [
+    {
+      "cik": "0000007323",
+      "ticker": "EAI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000007323.json"
+    },
+    {
+      "cik": "0000018748",
+      "ticker": "CET",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000018748.json"
+    },
+    {
+      "cik": "0000040417",
+      "ticker": "GAM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000040417.json"
+    },
+    {
+      "cik": "0000041091",
+      "ticker": "GPJA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000041091.json"
+    },
+    {
+      "cik": "0000062362",
+      "ticker": "MARPS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000062362.json"
+    },
+    {
+      "cik": "0000066901",
+      "ticker": "EMP",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000066901.json"
+    },
+    {
+      "cik": "0000071508",
+      "ticker": "ENJ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000071508.json"
+    },
+    {
+      "cik": "0000072633",
+      "ticker": "NRT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000072633.json"
+    },
+    {
+      "cik": "0000075398",
+      "ticker": "PAI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000075398.json"
+    },
+    {
+      "cik": "0000099614",
+      "ticker": "TY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000099614.json"
+    },
+    {
+      "cik": "0000201533",
+      "ticker": "CMS-PB",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000201533.json"
+    },
+    {
+      "cik": "0000216851",
+      "ticker": "PEO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000216851.json"
+    },
+    {
+      "cik": "0000275694",
+      "ticker": "MCI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000275694.json"
+    },
+    {
+      "cik": "0000313364",
+      "ticker": "MTR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000313364.json"
+    },
+    {
+      "cik": "0000319654",
+      "ticker": "PBT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000319654.json"
+    },
+    {
+      "cik": "0000319655",
+      "ticker": "SJT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000319655.json"
+    },
+    {
+      "cik": "0000705432",
+      "ticker": "SBSI",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0000710752",
+      "ticker": "SBR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000710752.json"
+    },
+    {
+      "cik": "0000732717",
+      "ticker": "T",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0000748691",
+      "ticker": "KF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000748691.json"
+    },
+    {
+      "cik": "0000751978",
+      "ticker": "VICR",
+      "reason": "Out of bounds nanosecond timestamp: 6016-06-30, at position 65. You might want to try:\n    - passing `format` if your strings have a consistent format;\n    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;\n    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this."
+    },
+    {
+      "cik": "0000793040",
+      "ticker": "ECF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000793040.json"
+    },
+    {
+      "cik": "0000794685",
+      "ticker": "GAB",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000794685.json"
+    },
+    {
+      "cik": "0000798287",
+      "ticker": "PAMT",
+      "reason": "Out of bounds nanosecond timestamp: 3015-03-31, at position 67. You might want to try:\n    - passing `format` if your strings have a consistent format;\n    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;\n    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this."
+    },
+    {
+      "cik": "0000801961",
+      "ticker": "MFM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000801961.json"
+    },
+    {
+      "cik": "0000804116",
+      "ticker": "RVT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000804116.json"
+    },
+    {
+      "cik": "0000805267",
+      "ticker": "HQH",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000805267.json"
+    },
+    {
+      "cik": "0000809173",
+      "ticker": "MMT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000809173.json"
+    },
+    {
+      "cik": "0000809559",
+      "ticker": "TSI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000809559.json"
+    },
+    {
+      "cik": "0000809844",
+      "ticker": "CMU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000809844.json"
+    },
+    {
+      "cik": "0000811641",
+      "ticker": "ICCC",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0000811922",
+      "ticker": "MGF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000811922.json"
+    },
+    {
+      "cik": "0000812801",
+      "ticker": "NUV",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000812801.json"
+    },
+    {
+      "cik": "0000818850",
+      "ticker": "NNY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000818850.json"
+    },
+    {
+      "cik": "0000818851",
+      "ticker": "NCA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000818851.json"
+    },
+    {
+      "cik": "0000818972",
+      "ticker": "LEO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000818972.json"
+    },
+    {
+      "cik": "0000826735",
+      "ticker": "MIN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000826735.json"
+    },
+    {
+      "cik": "0000827773",
+      "ticker": "PPT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000827773.json"
+    },
+    {
+      "cik": "0000830487",
+      "ticker": "MHF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000830487.json"
+    },
+    {
+      "cik": "0000830622",
+      "ticker": "PIM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000830622.json"
+    },
+    {
+      "cik": "0000831655",
+      "ticker": "MPV",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000831655.json"
+    },
+    {
+      "cik": "0000833021",
+      "ticker": "CIF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000833021.json"
+    },
+    {
+      "cik": "0000833040",
+      "ticker": "FT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000833040.json"
+    },
+    {
+      "cik": "0000835948",
+      "ticker": "MVF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000835948.json"
+    },
+    {
+      "cik": "0000838131",
+      "ticker": "JMM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000838131.json"
+    },
+    {
+      "cik": "0000839533",
+      "ticker": "KTF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000839533.json"
+    },
+    {
+      "cik": "0000844790",
+      "ticker": "PMM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000844790.json"
+    },
+    {
+      "cik": "0000845606",
+      "ticker": "CXE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000845606.json"
+    },
+    {
+      "cik": "0000847411",
+      "ticker": "CXH",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000847411.json"
+    },
+    {
+      "cik": "0000850027",
+      "ticker": "GRF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000850027.json"
+    },
+    {
+      "cik": "0000851170",
+      "ticker": "MCR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000851170.json"
+    },
+    {
+      "cik": "0000855887",
+      "ticker": "DSM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000855887.json"
+    },
+    {
+      "cik": "0000870780",
+      "ticker": "NQP",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000870780.json"
+    },
+    {
+      "cik": "0000878932",
+      "ticker": "EQS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000878932.json"
+    },
+    {
+      "cik": "0000879361",
+      "ticker": "MYD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000879361.json"
+    },
+    {
+      "cik": "0000880807",
+      "ticker": "AMSC",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0000881787",
+      "ticker": "CRT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000881787.json"
+    },
+    {
+      "cik": "0000882071",
+      "ticker": "PFO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000882071.json"
+    },
+    {
+      "cik": "0000882150",
+      "ticker": "MYN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000882150.json"
+    },
+    {
+      "cik": "0000882300",
+      "ticker": "SBI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000882300.json"
+    },
+    {
+      "cik": "0000884121",
+      "ticker": "HQL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000884121.json"
+    },
+    {
+      "cik": "0000885731",
+      "ticker": "NXN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000885731.json"
+    },
+    {
+      "cik": "0000886043",
+      "ticker": "MMU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000886043.json"
+    },
+    {
+      "cik": "0000887394",
+      "ticker": "MQT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000887394.json"
+    },
+    {
+      "cik": "0000890119",
+      "ticker": "NIM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000890119.json"
+    },
+    {
+      "cik": "0000891290",
+      "ticker": "RFI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000891290.json"
+    },
+    {
+      "cik": "0000892992",
+      "ticker": "NAZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000892992.json"
+    },
+    {
+      "cik": "0000895456",
+      "ticker": "RCKY",
+      "reason": "Out of bounds nanosecond timestamp: 0205-01-01, at position 63. You might want to try:\n    - passing `format` if your strings have a consistent format;\n    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;\n    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this."
+    },
+    {
+      "cik": "0000897269",
+      "ticker": "MVT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000897269.json"
+    },
+    {
+      "cik": "0000897419",
+      "ticker": "NMT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000897419.json"
+    },
+    {
+      "cik": "0000897421",
+      "ticker": "NPV",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000897421.json"
+    },
+    {
+      "cik": "0000899782",
+      "ticker": "NOM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000899782.json"
+    },
+    {
+      "cik": "0000900422",
+      "ticker": "PMO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000900422.json"
+    },
+    {
+      "cik": "0000904112",
+      "ticker": "MSD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000904112.json"
+    },
+    {
+      "cik": "0000906013",
+      "ticker": "AWF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000906013.json"
+    },
+    {
+      "cik": "0000908187",
+      "ticker": "PCM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000908187.json"
+    },
+    {
+      "cik": "0000909112",
+      "ticker": "TEI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000909112.json"
+    },
+    {
+      "cik": "0000910068",
+      "ticker": "HIO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000910068.json"
+    },
+    {
+      "cik": "0000912147",
+      "ticker": "RMT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000912147.json"
+    },
+    {
+      "cik": "0000916183",
+      "ticker": "RCS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000916183.json"
+    },
+    {
+      "cik": "0000916618",
+      "ticker": "IIF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0000916618.json"
+    },
+    {
+      "cik": "0000926423",
+      "ticker": "MIND",
+      "reason": "Out of bounds nanosecond timestamp: 0202-02-01, at position 62. You might want to try:\n    - passing `format` if your strings have a consistent format;\n    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;\n    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this."
+    },
+    {
+      "cik": "0001034665",
+      "ticker": "MHD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001034665.json"
+    },
+    {
+      "cik": "0001038186",
+      "ticker": "MHN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001038186.json"
+    },
+    {
+      "cik": "0001048268",
+      "ticker": "IESC",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0001071899",
+      "ticker": "MUE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001071899.json"
+    },
+    {
+      "cik": "0001074769",
+      "ticker": "NAN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001074769.json"
+    },
+    {
+      "cik": "0001074952",
+      "ticker": "NAC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001074952.json"
+    },
+    {
+      "cik": "0001080720",
+      "ticker": "GUT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001080720.json"
+    },
+    {
+      "cik": "0001083839",
+      "ticker": "NAD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001083839.json"
+    },
+    {
+      "cik": "0001087786",
+      "ticker": "NXJ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001087786.json"
+    },
+    {
+      "cik": "0001090116",
+      "ticker": "NVG",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001090116.json"
+    },
+    {
+      "cik": "0001098146",
+      "ticker": "PNBK",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0001108524",
+      "ticker": "CRM",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0001137390",
+      "ticker": "BNY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001137390.json"
+    },
+    {
+      "cik": "0001137391",
+      "ticker": "BFZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001137391.json"
+    },
+    {
+      "cik": "0001140411",
+      "ticker": "PCQ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001140411.json"
+    },
+    {
+      "cik": "0001157842",
+      "ticker": "RQI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001157842.json"
+    },
+    {
+      "cik": "0001158289",
+      "ticker": "JRS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001158289.json"
+    },
+    {
+      "cik": "0001160864",
+      "ticker": "BHK",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001160864.json"
+    },
+    {
+      "cik": "0001162027",
+      "ticker": "AFB",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001162027.json"
+    },
+    {
+      "cik": "0001163792",
+      "ticker": "WEA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001163792.json"
+    },
+    {
+      "cik": "0001170299",
+      "ticker": "PML",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001170299.json"
+    },
+    {
+      "cik": "0001170311",
+      "ticker": "PNI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001170311.json"
+    },
+    {
+      "cik": "0001171471",
+      "ticker": "CHI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001171471.json"
+    },
+    {
+      "cik": "0001174164",
+      "ticker": "FFC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001174164.json"
+    },
+    {
+      "cik": "0001176194",
+      "ticker": "BLE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001176194.json"
+    },
+    {
+      "cik": "0001181187",
+      "ticker": "BYM",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001181187.json"
+    },
+    {
+      "cik": "0001195738",
+      "ticker": "NKX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001195738.json"
+    },
+    {
+      "cik": "0001199004",
+      "ticker": "FMN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001199004.json"
+    },
+    {
+      "cik": "0001210123",
+      "ticker": "EAD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001210123.json"
+    },
+    {
+      "cik": "0001214935",
+      "ticker": "NCV",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001214935.json"
+    },
+    {
+      "cik": "0001219360",
+      "ticker": "PHK",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001219360.json"
+    },
+    {
+      "cik": "0001222401",
+      "ticker": "HYT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001222401.json"
+    },
+    {
+      "cik": "0001222719",
+      "ticker": "CHY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001222719.json"
+    },
+    {
+      "cik": "0001224450",
+      "ticker": "RNP",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001224450.json"
+    },
+    {
+      "cik": "0001227073",
+      "ticker": "ERC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001227073.json"
+    },
+    {
+      "cik": "0001227476",
+      "ticker": "JQC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001227476.json"
+    },
+    {
+      "cik": "0001227857",
+      "ticker": "NCZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001227857.json"
+    },
+    {
+      "cik": "0001227862",
+      "ticker": "EMD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001227862.json"
+    },
+    {
+      "cik": "0001254370",
+      "ticker": "WIA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001254370.json"
+    },
+    {
+      "cik": "0001259708",
+      "ticker": "FRA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001259708.json"
+    },
+    {
+      "cik": "0001260563",
+      "ticker": "NFJ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001260563.json"
+    },
+    {
+      "cik": "0001260729",
+      "ticker": "GDV",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001260729.json"
+    },
+    {
+      "cik": "0001266585",
+      "ticker": "NMZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001266585.json"
+    },
+    {
+      "cik": "0001267902",
+      "ticker": "WIW",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001267902.json"
+    },
+    {
+      "cik": "0001268533",
+      "ticker": "TYG",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001268533.json"
+    },
+    {
+      "cik": "0001268884",
+      "ticker": "IGR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001268884.json"
+    },
+    {
+      "cik": "0001270131",
+      "ticker": "SCD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001270131.json"
+    },
+    {
+      "cik": "0001275214",
+      "ticker": "CSQ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001275214.json"
+    },
+    {
+      "cik": "0001276533",
+      "ticker": "JFR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001276533.json"
+    },
+    {
+      "cik": "0001278211",
+      "ticker": "LGI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001278211.json"
+    },
+    {
+      "cik": "0001278895",
+      "ticker": "CII",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001278895.json"
+    },
+    {
+      "cik": "0001279014",
+      "ticker": "ERH",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001279014.json"
+    },
+    {
+      "cik": "0001282850",
+      "ticker": "FCT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001282850.json"
+    },
+    {
+      "cik": "0001282957",
+      "ticker": "GLU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001282957.json"
+    },
+    {
+      "cik": "0001285650",
+      "ticker": "CGO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001285650.json"
+    },
+    {
+      "cik": "0001285890",
+      "ticker": "IGD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001285890.json"
+    },
+    {
+      "cik": "0001289868",
+      "ticker": "MCN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001289868.json"
+    },
+    {
+      "cik": "0001293613",
+      "ticker": "KYN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001293613.json"
+    },
+    {
+      "cik": "0001298699",
+      "ticker": "BXMX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001298699.json"
+    },
+    {
+      "cik": "0001299939",
+      "ticker": "CADE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001299939.json"
+    },
+    {
+      "cik": "0001306550",
+      "ticker": "BGR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001306550.json"
+    },
+    {
+      "cik": "0001316463",
+      "ticker": "GLQ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001316463.json"
+    },
+    {
+      "cik": "0001318025",
+      "ticker": "PGP",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001318025.json"
+    },
+    {
+      "cik": "0001319183",
+      "ticker": "FMY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001319183.json"
+    },
+    {
+      "cik": "0001320375",
+      "ticker": "BOE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001320375.json"
+    },
+    {
+      "cik": "0001332283",
+      "ticker": "BDJ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001332283.json"
+    },
+    {
+      "cik": "0001332943",
+      "ticker": "IGA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001332943.json"
+    },
+    {
+      "cik": "0001341439",
+      "ticker": "ORCL",
+      "reason": "Result is too large for pandas.Timedelta. Convert inputs to datetime.datetime with 'Timestamp.to_pydatetime()' before subtracting."
+    },
+    {
+      "cik": "0001343793",
+      "ticker": "BTA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001343793.json"
+    },
+    {
+      "cik": "0001368493",
+      "ticker": "CAF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001368493.json"
+    },
+    {
+      "cik": "0001371782",
+      "ticker": "MVO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001371782.json"
+    },
+    {
+      "cik": "0001375340",
+      "ticker": "FOF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001375340.json"
+    },
+    {
+      "cik": "0001379384",
+      "ticker": "BTZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001379384.json"
+    },
+    {
+      "cik": "0001383441",
+      "ticker": "NIE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001383441.json"
+    },
+    {
+      "cik": "0001385632",
+      "ticker": "IAE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001385632.json"
+    },
+    {
+      "cik": "0001386067",
+      "ticker": "EOD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001386067.json"
+    },
+    {
+      "cik": "0001388141",
+      "ticker": "EDD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001388141.json"
+    },
+    {
+      "cik": "0001393299",
+      "ticker": "BGY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001393299.json"
+    },
+    {
+      "cik": "0001417802",
+      "ticker": "IDE",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001417802.json"
+    },
+    {
+      "cik": "0001419275",
+      "ticker": "RVYL",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0001427437",
+      "ticker": "ETI-P",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001427437.json"
+    },
+    {
+      "cik": "0001438893",
+      "ticker": "GNT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001438893.json"
+    },
+    {
+      "cik": "0001468642",
+      "ticker": "AUGO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001468642.json"
+    },
+    {
+      "cik": "0001471420",
+      "ticker": "STK",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001471420.json"
+    },
+    {
+      "cik": "0001472215",
+      "ticker": "JLS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001472215.json"
+    },
+    {
+      "cik": "0001486298",
+      "ticker": "BSL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001486298.json"
+    },
+    {
+      "cik": "0001487610",
+      "ticker": "NHS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001487610.json"
+    },
+    {
+      "cik": "0001492165",
+      "ticker": "PFBC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001492165.json"
+    },
+    {
+      "cik": "0001493683",
+      "ticker": "BBN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001493683.json"
+    },
+    {
+      "cik": "0001495222",
+      "ticker": "OXLC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001495222.json"
+    },
+    {
+      "cik": "0001496292",
+      "ticker": "IHD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001496292.json"
+    },
+    {
+      "cik": "0001497186",
+      "ticker": "HYI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001497186.json"
+    },
+    {
+      "cik": "0001498612",
+      "ticker": "PSF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001498612.json"
+    },
+    {
+      "cik": "0001504545",
+      "ticker": "BWG",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001504545.json"
+    },
+    {
+      "cik": "0001505413",
+      "ticker": "VOC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001505413.json"
+    },
+    {
+      "cik": "0001506289",
+      "ticker": "BCX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001506289.json"
+    },
+    {
+      "cik": "0001506488",
+      "ticker": "NXG",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001506488.json"
+    },
+    {
+      "cik": "0001514490",
+      "ticker": "RGT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001514490.json"
+    },
+    {
+      "cik": "0001517518",
+      "ticker": "EMO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001517518.json"
+    },
+    {
+      "cik": "0001518557",
+      "ticker": "MMD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001518557.json"
+    },
+    {
+      "cik": "0001520048",
+      "ticker": "PVL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001520048.json"
+    },
+    {
+      "cik": "0001521404",
+      "ticker": "BGH",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001521404.json"
+    },
+    {
+      "cik": "0001524566",
+      "ticker": "WLTH",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001524566.json"
+    },
+    {
+      "cik": "0001525201",
+      "ticker": "DBL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001525201.json"
+    },
+    {
+      "cik": "0001528437",
+      "ticker": "BTT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001528437.json"
+    },
+    {
+      "cik": "0001528811",
+      "ticker": "VGI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001528811.json"
+    },
+    {
+      "cik": "0001533998",
+      "ticker": "DRIO",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0001534880",
+      "ticker": "ISD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001534880.json"
+    },
+    {
+      "cik": "0001539337",
+      "ticker": "JRI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001539337.json"
+    },
+    {
+      "cik": "0001546429",
+      "ticker": "BGB",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001546429.json"
+    },
+    {
+      "cik": "0001548717",
+      "ticker": "LDP",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001548717.json"
+    },
+    {
+      "cik": "0001554697",
+      "ticker": "GHY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001554697.json"
+    },
+    {
+      "cik": "0001557523",
+      "ticker": "PGZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001557523.json"
+    },
+    {
+      "cik": "0001559991",
+      "ticker": "DFP",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001559991.json"
+    },
+    {
+      "cik": "0001562051",
+      "ticker": "NML",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001562051.json"
+    },
+    {
+      "cik": "0001565381",
+      "ticker": "DMB",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001565381.json"
+    },
+    {
+      "cik": "0001566388",
+      "ticker": "DSL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001566388.json"
+    },
+    {
+      "cik": "0001567569",
+      "ticker": "FPF",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001567569.json"
+    },
+    {
+      "cik": "0001568194",
+      "ticker": "FSCO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001568194.json"
+    },
+    {
+      "cik": "0001569650",
+      "ticker": "OZK",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001569650.json"
+    },
+    {
+      "cik": "0001600222",
+      "ticker": "PXED",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001600222.json"
+    },
+    {
+      "cik": "0001602584",
+      "ticker": "CCD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001602584.json"
+    },
+    {
+      "cik": "0001604522",
+      "ticker": "THQ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001604522.json"
+    },
+    {
+      "cik": "0001607997",
+      "ticker": "NMS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001607997.json"
+    },
+    {
+      "cik": "0001608741",
+      "ticker": "QQQX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001608741.json"
+    },
+    {
+      "cik": "0001608742",
+      "ticker": "DIAX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001608742.json"
+    },
+    {
+      "cik": "0001615905",
+      "ticker": "JGH",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001615905.json"
+    },
+    {
+      "cik": "0001616678",
+      "ticker": "BST",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001616678.json"
+    },
+    {
+      "cik": "0001622148",
+      "ticker": "HGLB",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001622148.json"
+    },
+    {
+      "cik": "0001636289",
+      "ticker": "ACV",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001636289.json"
+    },
+    {
+      "cik": "0001639723",
+      "ticker": "NAVN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001639723.json"
+    },
+    {
+      "cik": "0001690080",
+      "ticker": "ETHZ",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0001710680",
+      "ticker": "HFRO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001710680.json"
+    },
+    {
+      "cik": "0001716951",
+      "ticker": "OCCI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001716951.json"
+    },
+    {
+      "cik": "0001724009",
+      "ticker": "PRT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001724009.json"
+    },
+    {
+      "cik": "0001756908",
+      "ticker": "PDX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001756908.json"
+    },
+    {
+      "cik": "0001768666",
+      "ticker": "BSTZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001768666.json"
+    },
+    {
+      "cik": "0001778114",
+      "ticker": "AIO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001778114.json"
+    },
+    {
+      "cik": "0001788399",
+      "ticker": "DLY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001788399.json"
+    },
+    {
+      "cik": "0001793882",
+      "ticker": "PTA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001793882.json"
+    },
+    {
+      "cik": "0001798618",
+      "ticker": "PDO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001798618.json"
+    },
+    {
+      "cik": "0001809541",
+      "ticker": "BCAT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001809541.json"
+    },
+    {
+      "cik": "0001810523",
+      "ticker": "FTHY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001810523.json"
+    },
+    {
+      "cik": "0001812923",
+      "ticker": "SDHY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001812923.json"
+    },
+    {
+      "cik": "0001819559",
+      "ticker": "WDI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001819559.json"
+    },
+    {
+      "cik": "0001823587",
+      "ticker": "SKYH",
+      "reason": "ON CONFLICT DO UPDATE command cannot affect row a second time\nHINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.\n"
+    },
+    {
+      "cik": "0001835068",
+      "ticker": "NPCT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001835068.json"
+    },
+    {
+      "cik": "0001836057",
+      "ticker": "BTX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001836057.json"
+    },
+    {
+      "cik": "0001837254",
+      "ticker": "MEHA",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001837254.json"
+    },
+    {
+      "cik": "0001843974",
+      "ticker": "DXYZ",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001843974.json"
+    },
+    {
+      "cik": "0001861115",
+      "ticker": "NMAI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001861115.json"
+    },
+    {
+      "cik": "0001873951",
+      "ticker": "XZO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0001873951.json"
+    },
+    {
+      "cik": "0002025774",
+      "ticker": "ALPS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002025774.json"
+    },
+    {
+      "cik": "0002034266",
+      "ticker": "CEPV",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002034266.json"
+    },
+    {
+      "cik": "0002041493",
+      "ticker": "ALUB-UN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002041493.json"
+    },
+    {
+      "cik": "0002044327",
+      "ticker": "CFND",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002044327.json"
+    },
+    {
+      "cik": "0002044725",
+      "ticker": "EVMN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002044725.json"
+    },
+    {
+      "cik": "0002047190",
+      "ticker": "TCGL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002047190.json"
+    },
+    {
+      "cik": "0002052243",
+      "ticker": "TWLVU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002052243.json"
+    },
+    {
+      "cik": "0002053033",
+      "ticker": "PLTS",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002053033.json"
+    },
+    {
+      "cik": "0002058349",
+      "ticker": "EFTY",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002058349.json"
+    },
+    {
+      "cik": "0002060016",
+      "ticker": "AGCC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002060016.json"
+    },
+    {
+      "cik": "0002063196",
+      "ticker": "NTSK",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002063196.json"
+    },
+    {
+      "cik": "0002063863",
+      "ticker": "ELWT",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002063863.json"
+    },
+    {
+      "cik": "0002065601",
+      "ticker": "CBC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002065601.json"
+    },
+    {
+      "cik": "0002065812",
+      "ticker": "FSSL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002065812.json"
+    },
+    {
+      "cik": "0002067767",
+      "ticker": "OTH",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002067767.json"
+    },
+    {
+      "cik": "0002069604",
+      "ticker": "PARK",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002069604.json"
+    },
+    {
+      "cik": "0002069785",
+      "ticker": "GLOO",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002069785.json"
+    },
+    {
+      "cik": "0002070457",
+      "ticker": "XXI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002070457.json"
+    },
+    {
+      "cik": "0002070849",
+      "ticker": "BLLN",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002070849.json"
+    },
+    {
+      "cik": "0002071288",
+      "ticker": "LMRI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002071288.json"
+    },
+    {
+      "cik": "0002076163",
+      "ticker": "BRR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002076163.json"
+    },
+    {
+      "cik": "0002076616",
+      "ticker": "TDWD",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002076616.json"
+    },
+    {
+      "cik": "0002077954",
+      "ticker": "EVOX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002077954.json"
+    },
+    {
+      "cik": "0002078856",
+      "ticker": "PURR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002078856.json"
+    },
+    {
+      "cik": "0002079292",
+      "ticker": "DYOR",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002079292.json"
+    },
+    {
+      "cik": "0002079999",
+      "ticker": "CDNL",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002079999.json"
+    },
+    {
+      "cik": "0002080023",
+      "ticker": "VACI",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002080023.json"
+    },
+    {
+      "cik": "0002081125",
+      "ticker": "DNMX",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002081125.json"
+    },
+    {
+      "cik": "0002081468",
+      "ticker": "MESHU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002081468.json"
+    },
+    {
+      "cik": "0002084563",
+      "ticker": "LFACU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002084563.json"
+    },
+    {
+      "cik": "0002085408",
+      "ticker": "GPACU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002085408.json"
+    },
+    {
+      "cik": "0002088749",
+      "ticker": "KBONU",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002088749.json"
+    },
+    {
+      "cik": "0002089661",
+      "ticker": "SUNC",
+      "reason": "404 Client Error: Not Found for url: https://data.sec.gov/api/xbrl/companyfacts/CIK0002089661.json"
+    }
+  ]
+}

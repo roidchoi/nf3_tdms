@@ -1,0 +1,67 @@
+services:
+  # 1. 데이터베이스 (TimescaleDB HA - PG16)
+  db:
+    image: timescale/timescaledb-ha:pg16
+    container_name: kdms_timescaledb
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - kdms_db_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+      - ./config/postgresql.conf:/var/lib/postgresql/data/postgresql.conf
+      - ./config/pg_hba.conf:/var/lib/postgresql/data/pg_hba.conf
+      - ./backups:/docker-entrypoint-initdb.d/backups
+    command: postgres -c config_file=/var/lib/postgresql/data/postgresql.conf
+    ports:
+      - "5432:5432"
+    networks:
+      - kdms-net
+
+  # 2. 백엔드 (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    container_name: kdms_backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      # 아래 변수들은 env_file에서 로드되지만, 명시적으로 오버라이드하거나 참조할 수도 있습니다.
+      # 여기서는 env_file이 있으므로 생략해도 되지만, 명확성을 위해 남겨둡니다.
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    env_file:
+      - .env  # [핵심] 백엔드는 이 파일을 통째로 로드하여 사용합니다.
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+    networks:
+      - kdms-net
+
+  # 3. 프론트엔드 (Nginx + Vue)
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    container_name: kdms_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - kdms-net
+
+volumes:
+  kdms_db_data:
+
+networks:
+  kdms-net:
+    driver: bridge

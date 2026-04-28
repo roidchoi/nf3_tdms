@@ -1,0 +1,399 @@
+{
+  "timestamp": "2025-12-22T16:17:53.674312",
+  "recovery_process": {
+    "targets": 68,
+    "success": 54,
+    "failures": [
+      {
+        "cik": "0001285786",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0000845379",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001177161",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001954705",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0000899394",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001971543",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0002078416",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001359841",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001177162",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001973056",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001883788",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001882198",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001840748",
+        "reason": "Empty Ticker/Exchange in API"
+      },
+      {
+        "cik": "0001106838",
+        "reason": "Empty Ticker/Exchange in API"
+      }
+    ]
+  },
+  "db_stats": {
+    "master_updated": 54,
+    "history_reset": 54
+  },
+  "purge_stats": {
+    "price_purged": 86828,
+    "financials_truncated": true
+  },
+  "details": [
+    {
+      "cik": "0001989183",
+      "ticker": "DSFIY",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001778784",
+      "ticker": "PVBC",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0000051644",
+      "ticker": "IPG",
+      "exchange_raw": "NYSE",
+      "exchange": "NYSE"
+    },
+    {
+      "cik": "0001762400",
+      "ticker": "LVCE",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001557651",
+      "ticker": "NXPRF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001821160",
+      "ticker": "GHLD",
+      "exchange_raw": "NYSE",
+      "exchange": "NYSE"
+    },
+    {
+      "cik": "0001839998",
+      "ticker": "AONC",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001550695",
+      "ticker": "PHLT",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0001166388",
+      "ticker": "VRNT",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0001780531",
+      "ticker": "OCFT",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0001577916",
+      "ticker": "PINC",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0001828884",
+      "ticker": "WHTCF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001852019",
+      "ticker": "IXAQF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0000924717",
+      "ticker": "SRDX",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0001850398",
+      "ticker": "TCBC",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001734875",
+      "ticker": "MSVB",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0000733337",
+      "ticker": "PWCO",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001543623",
+      "ticker": "UCLE",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0000319458",
+      "ticker": "ENSV",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0000884380",
+      "ticker": "KEGS",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001294591",
+      "ticker": "RKUNY",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001868778",
+      "ticker": "INFA",
+      "exchange_raw": "NYSE",
+      "exchange": "NYSE"
+    },
+    {
+      "cik": "0002040807",
+      "ticker": "MTSR",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0001175483",
+      "ticker": "DSHK",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001962911",
+      "ticker": "INFT",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001551206",
+      "ticker": "HGLD",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001776048",
+      "ticker": "AMMX",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001402371",
+      "ticker": "ELRA",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0000918545",
+      "ticker": "BISA",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0000768835",
+      "ticker": "BIGGQ",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001490596",
+      "ticker": "GVXXF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001865187",
+      "ticker": "ARIS",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0000882602",
+      "ticker": "OMVKY",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0002087280",
+      "ticker": "NYAE",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0000920822",
+      "ticker": "OUTKY",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0002012855",
+      "ticker": "ILPLF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001944212",
+      "ticker": "DYCQ",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0000096885",
+      "ticker": "TIKK",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0001479480",
+      "ticker": "CGDXF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0002088761",
+      "ticker": "JJHR",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0002002979",
+      "ticker": "FOMTF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001437470",
+      "ticker": "MYTHF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001489082",
+      "ticker": "PTGIF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001850262",
+      "ticker": "INTE",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001804591",
+      "ticker": "MEHCQ",
+      "exchange_raw": "NYS",
+      "exchange": "NYSE"
+    },
+    {
+      "cik": "0001721741",
+      "ticker": "GORV",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0001627606",
+      "ticker": "DTEAF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001903464",
+      "ticker": "AIMTF",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001501729",
+      "ticker": "FSEN",
+      "exchange_raw": "OTC",
+      "exchange": "OTC"
+    },
+    {
+      "cik": "0001785173",
+      "ticker": "ETNB",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0001837686",
+      "ticker": "VMEO",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0002056263",
+      "ticker": "BRRWU",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    },
+    {
+      "cik": "0001950246",
+      "ticker": "MTAL",
+      "exchange_raw": null,
+      "exchange": "OTHER"
+    },
+    {
+      "cik": "0001975218",
+      "ticker": "NETD",
+      "exchange_raw": "Nasdaq",
+      "exchange": "NASDAQ"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "timestamp": "2025-12-23T00:21:02.784601",
+  "params": {
+    "mode": "Full Historical",
+    "targets": 595
+  },
+  "stats": {
+    "success": 585,
+    "failed": 10
+  },
+  "failures": [
+    {
+      "cik": "0001298946",
+      "ticker": "DRH-PA",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0001287032",
+      "ticker": "PSEC-PA",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0001818643",
+      "ticker": "PHXE-P",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0000030554",
+      "ticker": "CTA-PA",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0001690012",
+      "ticker": "ICR-PA",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0001039828",
+      "ticker": "ANG-PD",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0000761648",
+      "ticker": "CDR-PB",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0001554625",
+      "ticker": "PRIF-PD",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0001427437",
+      "ticker": "ETI-P",
+      "reason": "No Data Returned"
+    },
+    {
+      "cik": "0000201533",
+      "ticker": "CMS-PB",
+      "reason": "No Data Returned"
+    }
+  ]
+}

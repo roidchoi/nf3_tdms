@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+asyncpg
+psycopg2-binary
+pandas
+numpy
+python-dotenv
+apscheduler
+requests
+aiohttp
+beautifulsoup4
+lxml
+pydantic-settings
+tqdm
+yfinance

@@ -1,0 +1,69 @@
+cik,ticker,in_tickers_json,in_exchange_json,api_status,api_ticker,api_exchange,mismatch_reason
+0001989183,DSFIY,N,N,200,"DSFIY,DSMFF","OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0001285786,EMX,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001778784,PVBC,N,N,200,PVBC,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0000051644,IPG,N,N,200,IPG,NYSE,Missing in Tickers JSON; Missing in Exchange JSON
+0001762400,LVCE,N,N,200,LVCE,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001557651,NXPRF,N,N,200,NXPRF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001821160,GHLD,N,N,200,GHLD,NYSE,Missing in Tickers JSON; Missing in Exchange JSON
+0001839998,AONC,N,N,200,"AONC,AONCW","OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0001550695,PHLT,N,N,200,PHLT,,Missing in Tickers JSON; Missing in Exchange JSON
+0000845379,CHN,N,N,200,CHN,,Missing in Tickers JSON; Missing in Exchange JSON
+0001166388,VRNT,N,N,200,VRNT,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0001780531,OCFT,N,N,200,OCFT,,Missing in Tickers JSON; Missing in Exchange JSON
+0001577916,PINC,N,N,200,PINC,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0001177161,EVM,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001828884,WHTCF,N,N,200,WHTCF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001852019,IXAQF,N,N,200,IXAQF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001954705,FFFZ,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0000924717,SRDX,N,N,200,SRDX,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0001850398,TCBC,N,N,200,TCBC,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0000899394,HRBR,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001734875,MSVB,N,N,200,MSVB,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0000733337,PWCO,N,N,200,PWCO,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001543623,UCLE,N,N,200,UCLE,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0000319458,ENSV,N,N,200,ENSV,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0000884380,KEGS,N,N,200,KEGS,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001294591,RKUNY,N,N,200,"RKUNY,RKUNF","OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0001971543,MURA,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0002078416,LLYVA,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001868778,INFA,N,N,200,INFA,NYSE,Missing in Tickers JSON; Missing in Exchange JSON
+0002040807,MTSR,N,N,200,MTSR,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0001175483,DSHK,N,N,200,"DSHK,DSHKN,DSHKO,DSHKP","OTC,OTC,OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0001962911,INFT,N,N,200,INFT,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001551206,HGLD,N,N,200,HGLD,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001776048,AMMX,N,N,200,AMMX,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001402371,ELRA,N,N,200,ELRA,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0000918545,BISA,N,N,200,BISA,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0000768835,BIGGQ,N,N,200,BIGGQ,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001359841,HBI,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001177162,ENX,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001490596,GVXXF,N,N,200,GVXXF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001973056,BOWN,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001865187,ARIS,N,N,200,ARIS,,Missing in Tickers JSON; Missing in Exchange JSON
+0000882602,OMVKY,N,N,200,"OMVKY,OMVJF","OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0001883788,DHAI,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0002087280,NYAE,N,N,200,NYAE,,Missing in Tickers JSON; Missing in Exchange JSON
+0000920822,OUTKY,N,N,200,"OUTKY,OUTFF","OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0002012855,ILPLF,N,N,200,ILPLF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001882198,ATEK,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001840748,LVTX,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001944212,DYCQ,N,N,200,"DYCQ,DYCQR","Nasdaq,Nasdaq",Missing in Tickers JSON; Missing in Exchange JSON
+0000096885,TIKK,N,N,200,TIKK,,Missing in Tickers JSON; Missing in Exchange JSON
+0001479480,CGDXF,N,N,200,CGDXF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0002088761,JJHR,N,N,200,JJHR,,Missing in Tickers JSON; Missing in Exchange JSON
+0002002979,FOMTF,N,N,200,FOMTF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001437470,MYTHF,N,N,200,MYTHF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001489082,PTGIF,N,N,200,PTGIF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001850262,INTE,N,N,200,"INTE,INTEU,INTEW","OTC,OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0001804591,MEHCQ,N,N,200,MEHCQ,NYS,Missing in Tickers JSON; Missing in Exchange JSON
+0001721741,GORV,N,N,200,GORV,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0001627606,DTEAF,N,N,200,DTEAF,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001903464,AIMUF,N,N,200,"AIMTF,AIMUF,AIMWF","OTC,OTC,OTC",Missing in Tickers JSON; Missing in Exchange JSON
+0001501729,FSEN,N,N,200,FSEN,OTC,Missing in Tickers JSON; Missing in Exchange JSON
+0001785173,ETNB,N,N,200,ETNB,,Missing in Tickers JSON; Missing in Exchange JSON
+0001837686,VMEO,N,N,200,VMEO,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0002056263,BRRWU,N,N,200,BRRWU,Nasdaq,Missing in Tickers JSON; Missing in Exchange JSON
+0001950246,MTAL,N,N,200,MTAL,,Missing in Tickers JSON; Missing in Exchange JSON
+0001106838,SONN,N,N,200,,,Missing in Tickers JSON; Missing in Exchange JSON; Ticker Mismatch in API
+0001975218,NETD,N,N,200,"NETD,NETDU,NETDW","Nasdaq,Nasdaq,Nasdaq",Missing in Tickers JSON; Missing in Exchange JSON

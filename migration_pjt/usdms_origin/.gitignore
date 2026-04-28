@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Secrets
+.env
+config.json
+.token_cache/
+
+# db
+usdms_data/
+backups/
+
+# temp
+temp_test/
+archive/
+logs/

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Conda
+.conda/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and Databases
+*.log
+*.sqlite
+*.sqlite3
+*.db
+db/
+db_legacy/
+backups/
+
+# Secrets
+.env
+config.json
+
+# API Cache
+.token_cache/
+
+# OS specific
+.DS_Store
+Thumbs.db
