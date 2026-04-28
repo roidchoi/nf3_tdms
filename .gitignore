@@ -1,3 +1,19 @@
 # 환경변수 보안
 .env
 
+# Python 캐시 및 가상환경
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env/
+
+# graphify 관련
+graphify-out/
+*.egg-info/
+.graphify_python
+.graphify_detect.json
+.graphify_ast.json
+
+# 시스템 파일
+.DS_Store

@@ -1,7 +1,7 @@
 ---
 name: graphify
 description: "코드베이스와 문서를 분석하여 지식 그래프를 생성/쿼리합니다. 사용자가 아키텍처나 구조를 물어볼 때 `graphify-out/GRAPH_REPORT.md`가 존재하면 파일 검색 전 무조건 이 스킬을 우선 참조하십시오."
-compatibility: [python 3.10+, tree-sitter]
+compatibility: [python 3.10+, tree-sitter, WSL/Ubuntu]
 ---
 
 # /graphify
@@ -36,20 +36,24 @@ Turn any folder of files into a navigable knowledge graph with community detecti
 If no path was given, use `.` (current directory). Do not ask the user for a path.
 Follow these steps in order. Do not skip steps.
 
-### Step 1 - Define Python Interpreter
+### Step 1 - Define Python Interpreter (WSL Optimized)
 
-This project uses a dedicated virtual environment for graphify.
+이 스킬은 공용 Conda 가상환경인 `graphify_env`를 사용합니다.
 
 ```bash
 mkdir -p graphify-out
-# Use the project-specific virtual environment Python
-PYTHON=".agents/skills/graphify/.venv/Scripts/python.exe"
-# Windows 경로를 안전하게 저장합니다.
-.agents/skills/graphify/.venv/Scripts/python.exe -c "open('graphify-out/.graphify_python', 'w', encoding='utf-8').write('.agents/skills/graphify/.venv/Scripts/python.exe')"
+# WSL Conda 환경 경로 자동 설정
+PYTHON_PATH=$(conda info --base)/envs/graphify_env/bin/python
 
+if [ ! -f "$PYTHON_PATH" ]; then
+  echo "Error: graphify_env not found. Please create it using requirements.txt in this folder."
+  exit 1
+fi
+
+echo "$PYTHON_PATH" > graphify-out/.graphify_python
 ```
 
-**In every subsequent bash block, replace `python3` with `$(cat graphify-out/.graphify_python)` to use the correct interpreter.**
+**모든 후속 작업에서 `python3` 대신 `$(cat graphify-out/.graphify_python)`를 사용하십시오.**
 
 ### Step 2 - Detect files
 
