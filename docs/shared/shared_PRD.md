@@ -1,6 +1,6 @@
 # shared PRD — 공통 모듈
 
-> **버전**: v1.0 | **작성일**: 2026-04-28
+> **버전**: v1.1 | **작성일**: 2026-04-29 (보완지침 반영)
 > **상위 PRD**: `docs/parent/tdms_PRD.md`
 > **사용 주체**: `p1_kdms`, `p2_usdms`, `p3_manager`
 
@@ -15,6 +15,7 @@
 2. **인터페이스 우선**: shared 모듈의 public API(메서드 시그니처)를 먼저 정의하고 변경 시 버전 태깅.
 3. **독립 테스트 가능**: shared 모듈은 p1·p2 없이 단독으로 단위 테스트 실행 가능해야 한다.
 4. **하드코딩 금지**: 모든 설정값(URL, 포트, 경로 등)은 `.env` 또는 생성자 인수로 주입.
+5. **DB 관련 구현 시 context7 MCP 필수**: `psycopg2`, `TimescaleDB`, `pg_dump/pg_restore` 등 DB 관련 기능 구현 전 반드시 context7 MCP로 최신 공식 문서를 조회하고 정확한 사용법을 확인한 후 구현한다.
 
 ---
 
@@ -32,10 +33,13 @@ shared/
 │   └── exceptions.py          # DB 관련 공통 예외
 │
 ├── ops/
-│   ├── backup_manager.py      # DB 백업·복구·검증
+│   ├── backup_manager.py      # DB 백업·복구·검증 (강건 복원 전략 포함)
+│   ├── sync_manager.py        # 🆕 개발PC ↔ 서버PC 양방향 DB 동기화
+│   ├── startup_validator.py   # 🆕 Docker 재기동 시 DB 기동 검증 + 조치 안내
 │   └── logger.py              # 공통 로거 팩토리 (WebSocket 핸들러 포함)
 │
 └── utils/
+    ├── env_detector.py        # 🆕 PC 환경 자동 감지 (hostname/IP 기반)
     ├── date_utils.py          # 날짜·시장 캘린더 유틸리티
     └── retry.py               # 재시도 데코레이터
 ```
@@ -242,6 +246,42 @@ class OhlcvRepo:
 
 도커 이미지 업데이트 시 DB 볼륨 유실 사례가 있었다. 백업·복구 절차를 표준화하여 어느 시스템에서도 동일하게 실행 가능하도록 한다.
 
+#### 필수 원칙: 강건 복원 전략
+
+> 과거 경험상 인덱스 생성/테이블 생성 순서 오류로 복원이 실패한 사례가 많았다. 아래 원칙을 반드시 준수한다.
+
+| 원칙 | 내용 |
+|---|---|
+| **표준 백업 포맷** | `pg_dump -Fc` (스키마+데이터 통합 custom 포맷) 표준 사용 |
+| **복원 순서 보장** | `pg_restore --section=pre-data` (테이블) → `--section=data` (데이터) → `--section=post-data` (인덱스/FK) 단계별 적용 |
+| **점진적 스키마 반영** | 복원 전 저장된 `init.sql` 기준으로 DB에 누락 컬럼/테이블 차분 적용 |
+| **충돌 안전 삽입** | 데이터 복원 시 `--clean --if-exists` 옵션 또는 `ON CONFLICT DO NOTHING` 활용 |
+| **복원 전 자동 백업** | `restore()` 호출 시 `pre_backup=True`(기본값)이면 실행 전 현 상태 스냅샷 필수 |
+
+#### Docker 볼륨 실물 파일 경로 명세
+
+> **DB 연결 오류 등 최악의 상황에서도 실물 파일 위치를 통해 데이터 생존 여부를 직접 확인할 수 있다.**
+
+```
+# WSL2 환경에서 Docker Desktop의 named volume 실제 저장 경로
+# (Docker Desktop for Windows + WSL2 통합 백엔드 기준)
+
+Windows 호스트 접근:
+  \\wsl.localhost\docker-desktop-data\data\docker\volumes\
+    ├─ kdms_pgdata\_data\
+    └─ usdms_pgdata\_data\
+
+WSL2 내부 접근:
+  /var/lib/docker/volumes/
+    ├─ kdms_pgdata/_data/    ← TimescaleDB의 실제 PostgreSQL 데이터 디렉토리
+    └─ usdms_pgdata/_data/
+
+실물 파일 존재 확인 명령:
+  # WSL 터미널에서
+  ls -la /var/lib/docker/volumes/kdms_pgdata/_data/
+  cat /var/lib/docker/volumes/kdms_pgdata/_data/PG_VERSION   # 존재 = 정상 볼륨
+```
+
 #### 인터페이스
 
 ```python
@@ -254,24 +294,45 @@ class BackupManager:
         db_name: str,              # DB명 (예: "kdms_db")
         db_user: str,
         backup_dir: str,           # 백업 파일 저장 디렉토리
+        volume_name: str,          # Docker 볼륨명 (예: "kdms_pgdata") ← 경로 확인용
     ): ...
 
     def backup(self, tag: str = "manual") -> Path:
         """
-        pg_dump 실행 후 .dump 파일 저장.
+        pg_dump -Fc 실행 후 .dump 파일 저장.
         파일명: {backup_dir}/{tag}/checkpoint_{YYYYMMDD_HHMMSS}.dump
         완료 후 verify() 자동 호출.
         """
         ...
 
     def verify(self, dump_path: Path) -> bool:
-        """pg_restore --list 로 dump 파일 헤더 파싱. 예상 테이블 존재 여부 확인."""
+        """
+        pg_restore --list 로 dump 파일 헤더 파싱.
+        확인 항목:
+          1. 예상 테이블 존재 여부
+          2. Hypertable 설정 존재 여부
+          3. dump 파일 크기 > 0 byte
+        """
         ...
 
-    def restore(self, dump_path: Path, pre_backup: bool = True) -> bool:
+    def restore(
+        self,
+        dump_path: Path,
+        pre_backup: bool = True,
+        section_order: bool = True,  # pre-data → data → post-data 단계 적용
+    ) -> bool:
         """
-        pg_restore 실행.
-        pre_backup=True 시 복구 전 자동 백업 실행 (안전 장치).
+        강건 복원 실행.
+        1. pre_backup=True 시 복원 전 현 상태 스냅샷 생성
+        2. section_order=True 시 pre-data → data → post-data 순서대로 적용
+           (인덱스/FK 생성 순서 방지 난수 해결)
+        """
+        ...
+
+    def check_volume_exists(self) -> dict:
+        """
+        Docker 볼륨 실물 파일 존재 여부 확인.
+        Returns: {"volume_path": str, "exists": bool, "pg_version": str|None, "size_bytes": int}
         """
         ...
 
@@ -309,10 +370,13 @@ python -m shared.ops.backup_manager backup --target kdms --tag daily
 python -m shared.ops.backup_manager verify \
   --file backups/kdms/daily/checkpoint_20260428_030000.dump
 
-# 복구
+# 복구 (순서 보장 + 사전 백업)
 python -m shared.ops.backup_manager restore \
   --target kdms \
   --file backups/kdms/pre_update/checkpoint_20260428_150000.dump
+
+# 볼륨 실물 파일 확인
+python -m shared.ops.backup_manager check-volume --target kdms
 
 # 이력 조회
 python -m shared.ops.backup_manager list --target kdms
@@ -403,6 +467,270 @@ def async_retry(...):
 
 ---
 
+### 3.9 환경 감지 모듈 (`utils/env_detector.py`)
+
+#### 배경
+
+개발PC(WSL2)와 서버PC(WSL2+Docker)가 동일한 코드베이스를 사용하므로, 실행 환경을 자동으로 감지하여 적절한 `.env` 프로파일을 적용해야 한다. 수동 설정 오류를 방지하고 환경별 자동 분기를 지원한다.
+
+#### 인터페이스
+
+```python
+class EnvDetector:
+    """hostname/IP 기반 실행 환경 자동 감지 및 .env 프로파일 로더."""
+
+    KNOWN_HOSTS = {
+        # .env 에 등록된 PC 식별 정보
+        # 예: {"dev-pc": {"hostname": "ROID-DEV", "ip_prefix": "192.168.1."}, ...}
+    }
+
+    def detect(self) -> Literal["dev", "server", "unknown"]:
+        """
+        현재 실행 PC를 감지한다.
+        감지 순서:
+          1. 환경변수 TDMS_ENV 명시적 지정 (최우선)
+          2. hostname 매칭 (.env의 DEV_HOSTNAME, SERVER_HOSTNAME)
+          3. IP 주소 대역 매칭 (.env의 DEV_IP_PREFIX, SERVER_IP_PREFIX)
+          4. 감지 실패 시 "unknown" 반환 후 경고 로그
+        """
+        ...
+
+    def load_env_profile(self) -> dict:
+        """
+        감지된 환경에 맞는 설정 반환.
+        - DB 접속 정보 (host, port, db_name, user, password)
+        - API 키 세트
+        - 백업/동기화 경로
+        """
+        ...
+
+    def get_peer_host(self) -> str:
+        """
+        동기화 상대방 PC의 IP 반환.
+        dev 환경이면 server IP, server 환경이면 dev IP.
+        """
+        ...
+```
+
+#### `.env` 환경 설정 예시
+
+```bash
+# 환경 감지 설정
+TDMS_ENV=                          # 명시 지정 시 자동 감지 무시 (dev / server)
+DEV_HOSTNAME=ROID-DEV              # 개발PC hostname
+SERVER_HOSTNAME=ROID-SERVER        # 서버PC hostname
+DEV_IP=192.168.1.10                # 개발PC IP
+SERVER_IP=192.168.1.20             # 서버PC IP
+
+# 환경별 DB 접속 (dev 기준)
+DEV_KDMS_DB_HOST=localhost
+DEV_KDMS_DB_PORT=5432
+SERVER_KDMS_DB_HOST=192.168.1.20   # 동기화 시 서버PC 접근용
+SERVER_KDMS_DB_PORT=5432
+```
+
+---
+
+### 3.10 DB 동기화 매니저 (`ops/sync_manager.py`)
+
+#### 배경
+
+개발PC와 서버PC(로컬 네트워크 SSH 접근 가능)가 각각 독립 DB를 운영하므로, 기능 추가나 초기 인계 시 양방향 동기화 기능이 필요하다.
+
+#### 동기화 모드
+
+| 모드 | 용도 | 내부 구현 |
+|---|---|---|
+| `full` | 초기 인계, 스키마 대규모 변경 후 재정렬 | `pg_dump -Fc` → SSH 전송(rsync) → `pg_restore --clean` |
+| `diff` | 주기적 일상 동기화 (Hypertable 시계열 특성 활용) | `pg_dump --table=T --where="dt > since"` → SSH → `pg_restore --data-only` |
+| `table` | 특정 테이블 핀포인트 갱신 | `pg_dump -t <table>` → SSH → UPSERT |
+
+#### ⚠️ Full 동기화 안전 검증 (FullSyncSafetyChecker)
+
+> **Full 동기화는 대상 DB의 기존 데이터를 전체 교체하는 매우 위험한 작업이다.**
+> 방향 설정 실수 시 운영 DB 데이터가 영구 유실될 수 있으므로, 반드시 아래 안전 검증을 통과해야 실행된다.
+
+```python
+class FullSyncSafetyChecker:
+    """Full 동기화 실행 전 소스/대상 DB 비교 안전 검증기."""
+
+    ANOMALY_CONDITIONS = [
+        "대상 DB 크기 >= 소스 DB 크기 × 0.8  →  대상이 더 크면 방향 오류 의심",
+        "대상 DB 데이터 최신일 > 소스 DB 데이터 최신일  →  대상이 더 최신",
+        "소스 DB 크기 == 0 또는 접속 불가  →  소스 유효성 오류",
+        "소스·대상 DB명 불일치  →  타깃 DB 오지정 의심",
+    ]
+
+    def compare(
+        self,
+        source_dsn: str,
+        target_dsn: str,
+        db_name: str,
+        key_tables: list[str],   # 커버리지 비교할 핵심 테이블 목록
+    ) -> SyncSafetyReport:
+        """
+        1. pg_database_size() 로 소스·대상 DB 크기 비교
+        2. 핵심 테이블의 MIN(dt)/MAX(dt) 비교 → 데이터 커버리지 기간 비교
+        3. 이상 조건 해당 시 SyncSafetyReport.is_safe = False + 경고 메시지 생성
+        """
+        ...
+
+    def confirm_with_user(self, report: SyncSafetyReport) -> bool:
+        """
+        비정상 상황 감지 시:
+          1. 소스/대상 DB 크기, 최신일, 커버리지 기간을 표로 출력
+          2. 경고 메시지 출력
+          3. "CONFIRM-FULL-SYNC" 문자열 직접 입력 요구
+          4. 30초 타임아웃 내 미입력 시 자동 취소
+        Returns: True(사용자 확인 완료) / False(취소 또는 타임아웃)
+        """
+        ...
+```
+
+#### 인터페이스
+
+```python
+class SyncManager:
+    """개발PC ↔ 서버PC 양방향 DB 동기화 관리자."""
+
+    def __init__(
+        self,
+        env_detector: EnvDetector,
+        backup_manager: BackupManager,
+        ssh_user: str,             # SSH 접속 계정
+        ssh_key_path: str,         # SSH 키 경로 (.env 로 주입)
+    ): ...
+
+    def sync(
+        self,
+        source: Literal["dev", "server"],
+        target: Literal["dev", "server"],
+        target_db: Literal["kdms", "usdms"],
+        mode: Literal["full", "diff", "table"],
+        tables: list[str] | None = None,  # mode="table" 시 지정
+        since: date | None = None,        # mode="diff" 시 기준일
+        dry_run: bool = False,            # True 시 실제 전송 없이 계획만 출력
+    ) -> SyncResult: ...
+```
+
+#### Full 동기화 실행 흐름
+
+```
+[사용자 호출] sync(source="dev", target="server", mode="full")
+    │
+    ▼
+[1] FullSyncSafetyChecker.compare()
+    ├── 소스 DB 크기: 12.3 GB
+    ├── 대상 DB 크기:  0.1 GB  ← 정상 (소스가 훨씬 큼)
+    └── 커버리지: 소스 2020-01~현재 / 대상 없음 → 안전
+    │
+    ▼ (이상 감지 시)
+[2] 경고 출력 + 재확인 요구
+    ⚠ WARNING: 대상 DB가 소스보다 큽니다. 방향을 재확인하세요.
+    소스(dev) kdms_db 크기: 0.5 GB | 최신일: 2026-01-10
+    대상(server) kdms_db 크기: 12.3 GB | 최신일: 2026-04-29
+    계속하려면 "CONFIRM-FULL-SYNC" 를 입력하세요 (30초 타임아웃):
+    │
+    ▼ (안전 확인 완료 또는 사용자 재확인 통과)
+[3] 대상 PC 사전 백업 (BackupManager.backup(tag="pre_sync"))
+    │
+    ▼
+[4] 소스 pg_dump -Fc → rsync → 대상 pg_restore (section_order=True)
+    │
+    ▼
+[5] StartupValidator.validate() 로 복원 결과 검증
+```
+
+#### CLI 사용법
+
+```bash
+# 개발PC → 서버PC full 동기화 (kdms)
+python -m shared.ops.sync_manager sync \
+  --source dev --target server --db kdms --mode full
+
+# 서버PC → 개발PC diff 동기화 (usdms, 2026-04-01 이후)
+python -m shared.ops.sync_manager sync \
+  --source server --target dev --db usdms --mode diff --since 2026-04-01
+
+# 특정 테이블만 동기화
+python -m shared.ops.sync_manager sync \
+  --source server --target dev --db usdms \
+  --mode table --tables us_ticker_master us_daily_price
+
+# 계획만 확인 (dry-run)
+python -m shared.ops.sync_manager sync \
+  --source dev --target server --db kdms --mode full --dry-run
+```
+
+---
+
+### 3.11 DB 기동 검증기 (`ops/startup_validator.py`)
+
+#### 배경
+
+Docker 이미지 재생성 또는 Docker Desktop 재실행 시, DB 볼륨이 정상 연결되었는지·기존 데이터가 정상 로드되었는지 자동으로 검증하고, 문제 발생 시 구체적인 조치 방법을 안내한다.
+
+#### 인터페이스
+
+```python
+class StartupValidator:
+    """Docker 재기동 시 DB 연결·데이터 정합성 자가 검증기."""
+
+    def validate(
+        self,
+        db_name: Literal["kdms", "usdms"],
+        expected_tables: list[str],       # 존재해야 할 핵심 테이블 목록
+        min_row_counts: dict[str, int],   # 테이블별 최소 예상 행 수
+    ) -> ValidationReport:
+        """
+        검증 항목:
+          1. DB 접속 가능 여부 (psycopg2 연결 테스트)
+          2. 핵심 테이블 존재 여부
+          3. 각 테이블 행 수 >= 최소 예상치
+          4. Docker 볼륨 실물 파일 존재 여부 (BackupManager.check_volume_exists())
+          5. Hypertable 청크 상태 (timescaledb_information.chunks)
+        """
+        ...
+
+    def print_report(self, report: ValidationReport):
+        """
+        검증 결과를 사람이 읽기 쉬운 형태로 출력.
+        실패 항목에는 구체적인 조치 방법 안내 포함.
+
+        출력 예시:
+          ✅ DB 접속: 정상
+          ✅ 테이블 존재: daily_ohlcv, minute_ohlcv, ... (9/9)
+          ❌ 행 수 부족: daily_ohlcv 현재 0행 (예상: 1,000,000행 이상)
+             → 조치: Docker 볼륨 경로 확인 후 pg_restore 실행
+             → 볼륨 경로: /var/lib/docker/volumes/kdms_pgdata/_data/
+             → 복구 명령: python -m shared.ops.backup_manager restore --target kdms
+        """
+        ...
+```
+
+#### FastAPI lifespan 연동 패턴
+
+```python
+# p1_kdms/main.py
+from contextlib import asynccontextmanager
+from shared.ops.startup_validator import StartupValidator
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    validator = StartupValidator(pool=db_pool)
+    report = validator.validate(
+        db_name="kdms",
+        expected_tables=["daily_ohlcv", "stock_info", "price_adjustment_factors"],
+        min_row_counts={"daily_ohlcv": 1_000_000, "stock_info": 2_000},
+    )
+    validator.print_report(report)
+    if not report.is_healthy:
+        logger.critical("DB 기동 검증 실패 — 위 조치 안내를 확인하세요.")
+    yield
+```
+
+---
+
 ## 4. 설치 및 사용 방법
 
 ### 4.1 프로젝트 내 패키지로 참조
@@ -476,7 +804,10 @@ shared 모듈은 p1·p2가 모두 의존하므로 **하위 호환성** 유지가
 shared/tests/
 ├── test_token_manager.py      # 토큰 캐시 유효성 확인, 갱신 트리거
 ├── test_db_connection.py      # get_cursor() 정상 동작, 예외 시 rollback
-├── test_backup_manager.py     # dump 파일 생성, 헤더 검증, 보관 정책
+├── test_backup_manager.py     # dump 파일 생성, 헤더 검증, 보관 정책, 볼륨 경로 확인
+├── test_env_detector.py       # 호스트명/IP 감지, .env 프로파일 로드
+├── test_sync_manager.py       # safety checker 이상 감지, dry-run, diff 필터
+├── test_startup_validator.py  # 테이블 존재, 행 수 검증, 볼륨 확인
 ├── test_date_utils.py         # 한국/미국 영업일 계산 정확성
 └── test_retry.py              # 재시도 횟수, 백오프 간격
 ```
@@ -492,6 +823,7 @@ pytest tests/ -v
 ## 7. 구현 단계 (Phase)
 
 ### Phase 1 — 핵심 인프라 (p1·p2 구현 착수 전 필수)
+- [ ] `utils/env_detector.py`: PC 환경 자동 감지 + .env 프로파일 분기
 - [ ] `db/connection.py`: `get_cursor()` context manager
 - [ ] `ops/logger.py`: 공통 로거 팩토리 + WebSocket 핸들러
 - [ ] `utils/retry.py`: 재시도 데코레이터 (동기/비동기)
@@ -504,10 +836,17 @@ pytest tests/ -v
 - [ ] p1·p2에서 기존 `kis_rest.py`, `kiwoom_rest.py` 교체 테스트
 
 ### Phase 3 — 운영 도구
-- [ ] `ops/backup_manager.py`: 백업·복구·검증·보관 정책
+- [ ] `ops/backup_manager.py`: 백업·복구·검증·비로미 벼륨 경로 명세 (강건 복원 포함)
+- [ ] `ops/startup_validator.py`: Docker 재기동 시 DB 기동 검증 + 조치 안내
 - [ ] `utils/date_utils.py`: 한국/미국 영업일 유틸리티
 - [ ] CLI 진입점 (`python -m shared.ops.backup_manager`)
 - [ ] p3_manager 백업 서비스 연동 테스트
+
+### Phase 4 — DB 동기화 도구
+- [ ] `ops/sync_manager.py`: full/diff/table 3가지 모드 구현
+- [ ] `FullSyncSafetyChecker`: 크기 비교 + 커버리지 분석 + 사용자 재확인 로직
+- [ ] kdms 초기 인계: 개발PC → 서버PC full 동기화 검증
+- [ ] usdms 초기 인계: 서버PC → 개발PC full 동기화 검증
 
 ---
 
@@ -519,6 +858,10 @@ pytest tests/ -v
 | Docker 내 캐시 경로 | 컨테이너마다 `~/.cache/` 경로가 다름 → 토큰 공유 불가 | 캐시 경로를 볼륨으로 마운트하거나 Redis 등 공유 저장소 사용 고려 |
 | psycopg2 스레드 안전성 | `ThreadedConnectionPool`은 스레드 안전하나, 커넥션 자체는 스레드 공유 금지 | `get_cursor()` 사용 시 커넥션을 스레드 경계 밖으로 전달 금지 |
 | shared 인터페이스 변경 | p1·p2 동시에 영향 → 한쪽만 업데이트 시 버전 불일치 | Major 변경 시 p1·p2 동시 배포 계획 필수 |
+| **kdms DB 유실 현황** | 서버PC kdms DB 유실 상태. 개발PC DB를 소스로 하여 서버PC로 full 동기화 후 Backfill 진행 | Phase 4: kdms 인계 절차 수행 (`sync --source dev --target server --mode full`) |
+| **full 동기화 방향 오설 위험** | 소스/대상 방향 실수 시 운영 DB 데이터 영구 유실 가능 | `FullSyncSafetyChecker` 필수 통과 조건: 크기 비교 + 커버리지 확인 + `CONFIRM-FULL-SYNC` 재확인 |
+| SSH 키 관리 | `sync_manager`의 SSH 키 경로를 `.env`에 주입. Git 커밋 절대 금지 | `SSH_KEY_PATH=~/.ssh/tdms_sync_rsa` (`.gitignore`에 포함) |
+| usdms 서버 동기화 | 서버PC usdms DB 정상 수집 중. 개발PC에 제일 먼저 full 동기화 후 이후 diff로 이상 없음 | Phase 4: usdms 인계 절차 수행 (`sync --source server --target dev --mode full`) |
 
 ---
 
