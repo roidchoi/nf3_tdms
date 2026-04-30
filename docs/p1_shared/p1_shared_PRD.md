@@ -1,19 +1,19 @@
-# shared PRD — 공통 모듈
+# p1_shared PRD — 공통 모듈
 
 > **버전**: v1.1 | **작성일**: 2026-04-29 (보완지침 반영)
 > **상위 PRD**: `docs/parent/tdms_PRD.md`
-> **사용 주체**: `p1_kdms`, `p2_usdms`, `p3_manager`
+> **사용 주체**: `p2_kdms`, `p3_usdms`, `p4_manager`
 
 ---
 
 ## 1. 목적 및 범위
 
-`shared/`는 p1·p2·p3 세 서브프로젝트가 **공통으로 사용하는 모듈**을 모아둔 패키지다.
+`p1_shared/`는 p2·p3·p4 네 서브프로젝트가 **공통으로 사용하는 모듈**을 모아둔 패키지다.
 
 ### 설계 원칙
-1. **서브프로젝트는 shared에 의존할 수 있으나, shared는 서브프로젝트에 의존하지 않는다.**
-2. **인터페이스 우선**: shared 모듈의 public API(메서드 시그니처)를 먼저 정의하고 변경 시 버전 태깅.
-3. **독립 테스트 가능**: shared 모듈은 p1·p2 없이 단독으로 단위 테스트 실행 가능해야 한다.
+1. **서브프로젝트는 p1_shared에 의존할 수 있으나, p1_shared는 서브프로젝트에 의존하지 않는다.**
+2. **인터페이스 우선**: p1_shared 모듈의 public API(메서드 시그니처)를 먼저 정의하고 변경 시 버전 태깅.
+3. **독립 테스트 가능**: p1_shared 모듈은 p2·p3 없이 단독으로 단위 테스트 실행 가능해야 한다.
 4. **하드코딩 금지**: 모든 설정값(URL, 포트, 경로 등)은 `.env` 또는 생성자 인수로 주입.
 5. **DB 관련 구현 시 context7 MCP 필수**: `psycopg2`, `TimescaleDB`, `pg_dump/pg_restore` 등 DB 관련 기능 구현 전 반드시 context7 MCP로 최신 공식 문서를 조회하고 정확한 사용법을 확인한 후 구현한다.
 
@@ -22,7 +22,7 @@
 ## 2. 모듈 구성
 
 ```
-shared/
+p1_shared/
 ├── api/
 │   ├── kis_api_core.py        # KIS API 코어 (토큰 캐시 공유)
 │   ├── kiwoom_api_core.py     # Kiwoom API 코어 (KR 전용)
@@ -54,7 +54,7 @@ shared/
 
 KDMS와 USDMS 양쪽에 `kis_rest.py`, `kis_api_core.py`가 각각 독립적으로 구현되어 있다.
 동일 KIS 계정을 사용할 경우 **토큰이 중복 발급**되어 API 호출 한도가 낭비된다.
-`shared/KisApiCore`로 통합하면 토큰 캐시를 공유하여 이를 방지한다.
+`p1_shared/KisApiCore`로 통합하면 토큰 캐시를 공유하여 이를 방지한다.
 
 #### 인터페이스
 
@@ -90,13 +90,13 @@ class KisApiCore:
 #### 토큰 캐시 공유 흐름
 
 ```
-p1_kdms/collectors/kis_kr_client.py
+p2_kdms/collectors/kis_kr_client.py
     └── KisApiCore(token_cache_path="~/.cache/tdms/kis_token.json")
             └── TokenManager.get_valid_token()
                     ├── 캐시 파일 존재 + 유효 → 캐시 반환
                     └── 만료 또는 없음 → issue_new_token() → 캐시 저장
 
-p2_usdms/collectors/kis_us_client.py
+p3_usdms/collectors/kis_us_client.py
     └── KisApiCore(token_cache_path="~/.cache/tdms/kis_token.json")  ← 동일 캐시
             └── TokenManager.get_valid_token()
                     └── 캐시 유효 → 재발급 없이 캐시 반환  ← 토큰 공유
@@ -105,7 +105,7 @@ p2_usdms/collectors/kis_us_client.py
 #### 서브클래스 패턴
 
 ```python
-# p1_kdms/collectors/kis_kr_client.py
+# p2_kdms/collectors/kis_kr_client.py
 class KisKrClient(KisApiCore):
     """KIS 한국 시장 전용 엔드포인트."""
 
@@ -116,7 +116,7 @@ class KisKrClient(KisApiCore):
     def get_financial_data(self, stk_cd: str) -> dict:
         ...
 
-# p2_usdms/collectors/kis_us_client.py
+# p3_usdms/collectors/kis_us_client.py
 class KisUsClient(KisApiCore):
     """KIS 미국 시장 전용 엔드포인트."""
 
@@ -179,8 +179,8 @@ class TokenManager:
 
 #### 배경
 
-p1·p2 원본 모두 `psycopg2.pool.ThreadedConnectionPool`을 사용하나 패턴이 다르다.
-`get_cursor()` context manager 패턴(p2 방식)을 표준으로 채택하여 통일한다.
+p2·p3 원본 모두 `psycopg2.pool.ThreadedConnectionPool`을 사용하나 패턴이 다르다.
+`get_cursor()` context manager 패턴(p3 방식)을 표준으로 채택하여 통일한다.
 
 #### 인터페이스
 
@@ -219,11 +219,11 @@ class DbConnectionPool:
     def close_all(self): ...
 ```
 
-#### 사용 패턴 (p1, p2 공통)
+#### 사용 패턴 (p2, p3 공통)
 
 ```python
-# p1_kdms/repositories/ohlcv_repo.py
-from shared.db.connection import DbConnectionPool
+# p2_kdms/repositories/ohlcv_repo.py
+from p1_shared.db.connection import DbConnectionPool
 
 class OhlcvRepo:
     def __init__(self, pool: DbConnectionPool):
@@ -290,7 +290,7 @@ class BackupManager:
 
     def __init__(
         self,
-        container_name: str,      # Docker 컨테이너명 (예: "p1_kdms_db")
+        container_name: str,      # Docker 컨테이너명 (예: "p2_kdms_db")
         db_name: str,              # DB명 (예: "kdms_db")
         db_user: str,
         backup_dir: str,           # 백업 파일 저장 디렉토리
@@ -364,22 +364,22 @@ backups/
 
 ```bash
 # 백업 실행
-python -m shared.ops.backup_manager backup --target kdms --tag daily
+python -m p1_shared.ops.backup_manager backup --target kdms --tag daily
 
 # 검증
-python -m shared.ops.backup_manager verify \
+python -m p1_shared.ops.backup_manager verify \
   --file backups/kdms/daily/checkpoint_20260428_030000.dump
 
 # 복구 (순서 보장 + 사전 백업)
-python -m shared.ops.backup_manager restore \
+python -m p1_shared.ops.backup_manager restore \
   --target kdms \
   --file backups/kdms/pre_update/checkpoint_20260428_150000.dump
 
 # 볼륨 실물 파일 확인
-python -m shared.ops.backup_manager check-volume --target kdms
+python -m p1_shared.ops.backup_manager check-volume --target kdms
 
 # 이력 조회
-python -m shared.ops.backup_manager list --target kdms
+python -m p1_shared.ops.backup_manager list --target kdms
 ```
 
 ---
@@ -388,7 +388,7 @@ python -m shared.ops.backup_manager list --target kdms
 
 #### 배경
 
-KDMS 원본에 `log_utils.py` (WebSocket 큐 핸들러)가 있다. p1·p2·p3 모두 동일한 로깅 설정을 공유해야 p3_manager에서 통합 로그를 수집할 수 있다.
+KDMS 원본에 `log_utils.py` (WebSocket 큐 핸들러)가 있다. p2·p3·p4 모두 동일한 로깅 설정을 공유해야 p4_manager에서 통합 로그를 수집할 수 있다.
 
 #### 인터페이스
 
@@ -398,7 +398,7 @@ def get_logger(name: str, ws_queue: asyncio.Queue | None = None) -> logging.Logg
     공통 로거 팩토리.
     - Rich 콘솔 핸들러 (컬러 출력)
     - 파일 핸들러 (logs/{name}_{date}.log, rotate daily)
-    - WebSocket 큐 핸들러 (ws_queue 제공 시, p3_manager 실시간 스트리밍용)
+    - WebSocket 큐 핸들러 (ws_queue 제공 시, p4_manager 실시간 스트리밍용)
     """
     ...
 
@@ -645,20 +645,20 @@ class SyncManager:
 
 ```bash
 # 개발PC → 서버PC full 동기화 (kdms)
-python -m shared.ops.sync_manager sync \
+python -m p1_shared.ops.sync_manager sync \
   --source dev --target server --db kdms --mode full
 
 # 서버PC → 개발PC diff 동기화 (usdms, 2026-04-01 이후)
-python -m shared.ops.sync_manager sync \
+python -m p1_shared.ops.sync_manager sync \
   --source server --target dev --db usdms --mode diff --since 2026-04-01
 
 # 특정 테이블만 동기화
-python -m shared.ops.sync_manager sync \
+python -m p1_shared.ops.sync_manager sync \
   --source server --target dev --db usdms \
   --mode table --tables us_ticker_master us_daily_price
 
 # 계획만 확인 (dry-run)
-python -m shared.ops.sync_manager sync \
+python -m p1_shared.ops.sync_manager sync \
   --source dev --target server --db kdms --mode full --dry-run
 ```
 
@@ -703,7 +703,7 @@ class StartupValidator:
           ❌ 행 수 부족: daily_ohlcv 현재 0행 (예상: 1,000,000행 이상)
              → 조치: Docker 볼륨 경로 확인 후 pg_restore 실행
              → 볼륨 경로: /var/lib/docker/volumes/kdms_pgdata/_data/
-             → 복구 명령: python -m shared.ops.backup_manager restore --target kdms
+             → 복구 명령: python -m p1_shared.ops.backup_manager restore --target kdms
         """
         ...
 ```
@@ -711,9 +711,9 @@ class StartupValidator:
 #### FastAPI lifespan 연동 패턴
 
 ```python
-# p1_kdms/main.py
+# p2_kdms/main.py
 from contextlib import asynccontextmanager
-from shared.ops.startup_validator import StartupValidator
+from p1_shared.ops.startup_validator import StartupValidator
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -735,22 +735,22 @@ async def lifespan(app: FastAPI):
 
 ### 4.1 프로젝트 내 패키지로 참조
 
-`shared/`는 별도 PyPI 패키지로 배포하지 않고, 각 서브프로젝트에서 **상대 경로 또는 editable install**로 참조한다.
+`p1_shared/`는 별도 PyPI 패키지로 배포하지 않고, 각 서브프로젝트에서 **상대 경로 또는 editable install**로 참조한다.
 
 ```
 nf3_tdms/
-├── shared/
+├── p1_shared/
 │   ├── __init__.py
 │   └── pyproject.toml        # 패키지 정의
 │
-├── p1_kdms/
-│   └── requirements.txt      # "-e ../shared" 항목 포함
-└── p2_usdms/
-    └── requirements.txt      # "-e ../shared" 항목 포함
+├── p2_kdms/
+│   └── requirements.txt      # "-e ../p1_shared" 항목 포함
+└── p3_usdms/
+    └── requirements.txt      # "-e ../p1_shared" 항목 포함
 ```
 
 ```toml
-# shared/pyproject.toml
+# p1_shared/pyproject.toml
 [project]
 name = "tdms-shared"
 version = "1.0.0"
@@ -763,45 +763,45 @@ dependencies = [
 
 ```bash
 # 각 서브프로젝트 환경에서 shared 설치
-pip install -e ../shared
+pip install -e ../p1_shared
 ```
 
 ### 4.2 Docker 멀티스테이지 빌드에서 공유
 
 ```dockerfile
-# p1_kdms/backend.Dockerfile
+# p2_kdms/backend.Dockerfile
 FROM python:3.12-slim AS base
 
 # shared 모듈 복사 후 설치
-COPY ../shared /app/shared
-RUN pip install -e /app/shared
+COPY ../p1_shared /app/p1_shared
+RUN pip install -e /app/p1_shared
 
-# p1 의존성 설치
+# p2 의존성 설치
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY . /app/p1_kdms
-WORKDIR /app/p1_kdms
+COPY . /app/p2_kdms
+WORKDIR /app/p2_kdms
 ```
 
 ---
 
 ## 5. 버전 관리 정책
 
-shared 모듈은 p1·p2가 모두 의존하므로 **하위 호환성** 유지가 필수다.
+shared 모듈은 p2·p3가 모두 의존하므로 **하위 호환성** 유지가 필수다.
 
 | 변경 유형 | 버전 업 | 절차 |
 |---|---|---|
 | 버그 수정 | Patch (1.0.x) | 테스트 통과 후 즉시 배포 |
 | 기능 추가 (하위 호환) | Minor (1.x.0) | 기존 인터페이스 유지, 새 메서드 추가 |
-| 인터페이스 변경 (breaking) | Major (x.0.0) | p1·p2 동시 업데이트 계획 수립 후 적용 |
+| 인터페이스 변경 (breaking) | Major (x.0.0) | p2·p3 동시 업데이트 계획 수립 후 적용 |
 
 ---
 
 ## 6. 테스트 전략
 
 ```
-shared/tests/
+p1_shared/tests/
 ├── test_token_manager.py      # 토큰 캐시 유효성 확인, 갱신 트리거
 ├── test_db_connection.py      # get_cursor() 정상 동작, 예외 시 rollback
 ├── test_backup_manager.py     # dump 파일 생성, 헤더 검증, 보관 정책, 볼륨 경로 확인
@@ -813,8 +813,8 @@ shared/tests/
 ```
 
 ```bash
-# shared 단독 테스트 실행
-cd shared
+# p1_shared 단독 테스트 실행
+cd p1_shared
 pytest tests/ -v
 ```
 
@@ -822,7 +822,7 @@ pytest tests/ -v
 
 ## 7. 구현 단계 (Phase)
 
-### Phase 1 — 핵심 인프라 (p1·p2 구현 착수 전 필수)
+### Phase 1 — 핵심 인프라 (p2·p3 구현 착수 전 필수)
 - [ ] `utils/env_detector.py`: PC 환경 자동 감지 + .env 프로파일 분기
 - [ ] `db/connection.py`: `get_cursor()` context manager
 - [ ] `ops/logger.py`: 공통 로거 팩토리 + WebSocket 핸들러
@@ -833,14 +833,14 @@ pytest tests/ -v
 - [ ] `api/token_manager.py`: 파일 기반 토큰 캐시
 - [ ] `api/kis_api_core.py`: KIS 토큰 공유 코어
 - [ ] `api/kiwoom_api_core.py`: Kiwoom 코어
-- [ ] p1·p2에서 기존 `kis_rest.py`, `kiwoom_rest.py` 교체 테스트
+- [ ] p2·p3에서 기존 `kis_rest.py`, `kiwoom_rest.py` 교체 테스트
 
 ### Phase 3 — 운영 도구
 - [ ] `ops/backup_manager.py`: 백업·복구·검증·비로미 벼륨 경로 명세 (강건 복원 포함)
 - [ ] `ops/startup_validator.py`: Docker 재기동 시 DB 기동 검증 + 조치 안내
 - [ ] `utils/date_utils.py`: 한국/미국 영업일 유틸리티
-- [ ] CLI 진입점 (`python -m shared.ops.backup_manager`)
-- [ ] p3_manager 백업 서비스 연동 테스트
+- [ ] CLI 진입점 (`python -m p1_shared.ops.backup_manager`)
+- [ ] p4_manager 백업 서비스 연동 테스트
 
 ### Phase 4 — DB 동기화 도구
 - [ ] `ops/sync_manager.py`: full/diff/table 3가지 모드 구현
@@ -854,10 +854,10 @@ pytest tests/ -v
 
 | 이슈 | 내용 | 대응 |
 |---|---|---|
-| KIS 계정 공유 여부 | p1·p2가 동일 계정이어야 토큰 캐시 공유 효과 있음 | 운영자 확인 필요 (tdms_PRD Q1) |
+| KIS 계정 공유 여부 | p2·p3가 동일 계정이어야 토큰 캐시 공유 효과 있음 | 운영자 확인 필요 (tdms_PRD Q1) |
 | Docker 내 캐시 경로 | 컨테이너마다 `~/.cache/` 경로가 다름 → 토큰 공유 불가 | 캐시 경로를 볼륨으로 마운트하거나 Redis 등 공유 저장소 사용 고려 |
 | psycopg2 스레드 안전성 | `ThreadedConnectionPool`은 스레드 안전하나, 커넥션 자체는 스레드 공유 금지 | `get_cursor()` 사용 시 커넥션을 스레드 경계 밖으로 전달 금지 |
-| shared 인터페이스 변경 | p1·p2 동시에 영향 → 한쪽만 업데이트 시 버전 불일치 | Major 변경 시 p1·p2 동시 배포 계획 필수 |
+| p1_shared 인터페이스 변경 | p2·p3 동시에 영향 → 한쪽만 업데이트 시 버전 불일치 | Major 변경 시 p2·p3 동시 배포 계획 필수 |
 | **kdms DB 유실 현황** | 서버PC kdms DB 유실 상태. 개발PC DB를 소스로 하여 서버PC로 full 동기화 후 Backfill 진행 | Phase 4: kdms 인계 절차 수행 (`sync --source dev --target server --mode full`) |
 | **full 동기화 방향 오설 위험** | 소스/대상 방향 실수 시 운영 DB 데이터 영구 유실 가능 | `FullSyncSafetyChecker` 필수 통과 조건: 크기 비교 + 커버리지 확인 + `CONFIRM-FULL-SYNC` 재확인 |
 | SSH 키 관리 | `sync_manager`의 SSH 키 경로를 `.env`에 주입. Git 커밋 절대 금지 | `SSH_KEY_PATH=~/.ssh/tdms_sync_rsa` (`.gitignore`에 포함) |
@@ -865,6 +865,6 @@ pytest tests/ -v
 
 ---
 
-*p1_kdms 상세: `docs/p1_kdms/p1_kdms_PRD.md`*
-*p2_usdms 상세: `docs/p2_usdms/p2_usdms_PRD.md`*
-*p3_manager 상세: `docs/p3_manager/p3_manager_PRD.md`*
+*p2_kdms 상세: `docs/p2_kdms/p2_kdms_PRD.md`*
+*p3_usdms 상세: `docs/p3_usdms/p3_usdms_PRD.md`*
+*p4_manager 상세: `docs/p4_manager/p4_manager_PRD.md`*
