@@ -9,7 +9,7 @@
 
 ## § 1. 목표
 
-`p1_shared` 패키지의 뼈대(pyproject.toml)와 5개 공통 모듈(예외·재시도·날짜·로거)을 구현하여, p2·p3가 `pip install -e ../p1_shared` 한 줄로 공통 기반을 즉시 사용할 수 있게 한다.
+`p1_shared` 패키지의 뼈대(pyproject.toml)와 5개 공통 모듈(예외·재시도·날짜·로거)을 구현하여, p2·p3가 `tdms_core/p1_shared`를 editable install로 즉시 사용할 수 있게 한다.
 
 **구현 범위:**
 - IN:
@@ -31,8 +31,9 @@
 ### 신규 생성 파일
 
 ```
-/home/roid2/pjt/nf3/01_nf3_tdms/p1_shared/
+/home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p1_shared/
 ├── pyproject.toml
+├── requirements.txt          # 의존성 관리 (uv pip install -r requirements.txt)
 ├── __init__.py
 ├── db/
 │   ├── __init__.py
@@ -524,7 +525,24 @@ def test_get_logger_with_queue_adds_ws_handler():
 ## § 5. 구현 참고사항
 
 - **기술 스택**: Python 3.12, `holidays` 라이브러리 (KR/US 공휴일), `rich` (콘솔 출력), `pytest-asyncio` (비동기 테스트), `pytest-mock` (mocker fixture)
-- **pyproject.toml 의존성**:
+- **가상환경**: `tdms_p1_env` (의존성관리지침 §2 참조)
+  ```bash
+  # 최초 1회 환경 생성 (없는 경우)
+  conda create -n tdms_p1_env python=3.12 -y
+  conda run -n tdms_p1_env uv pip install -r requirements.txt
+  ```
+- **requirements.txt** (`tdms_core/p1_shared/requirements.txt`):
+  ```
+  psycopg2-binary>=2.9
+  requests>=2.32
+  python-dotenv>=1.1
+  holidays>=0.46
+  rich>=13.0
+  pytest
+  pytest-asyncio
+  pytest-mock
+  ```
+- **pyproject.toml**: 패키지 메타데이터 및 editable install 정의용. 의존성 설치는 requirements.txt를 통해 수행:
   ```toml
   [project]
   name = "tdms-shared"
@@ -536,19 +554,30 @@ def test_get_logger_with_queue_adds_ws_handler():
       "holidays>=0.46",
       "rich>=13.0",
   ]
-  [project.optional-dependencies]
-  dev = ["pytest", "pytest-asyncio", "pytest-mock"]
   ```
+- **에이전트 명령 실행 규칙**: `conda activate`는 비대화형 셸에서 동작하지 않으므로 반드시 `conda run -n tdms_p1_env <명령>` 형식을 사용한다 (의존성관리지침 §7 참조)
 - **holidays 라이브러리 사용법**: `holidays.KR()`, `holidays.US()` 로 해당 연도 공휴일 집합 생성
 - **로거 중복 핸들러 주의**: `get_logger()` 호출 시 동일 name으로 반복 호출하면 핸들러가 중복 등록될 수 있음 → `if not logger.handlers:` 조건 처리 또는 `logger.handlers.clear()` 후 재설정
 - **WebSocketQueueHandler 스레드 안전성**: `queue.put_nowait()`는 스레드 안전하나, `asyncio.Queue`는 이벤트 루프에 귀속됨 — 로거가 별도 스레드에서 호출될 경우 `loop.call_soon_threadsafe()` 고려
-- **관련 문서**: `docs/p1_shared/p1_shared_PRD.md` §3.6, §3.7, §3.8, §4.1
+- **관련 문서**: `docs/p1_shared/p1_shared_PRD.md` §3.6, §3.7, §3.8, §4.1 / `docs/p1_shared/의존성관리지침.md`
 
 ---
 
 ## § 6. 완료 기준
 
-- [ ] § 4의 테스트 케이스 20개 전체 통과 (`cd p1_shared && pytest tests/ -v`)
-- [ ] `pip install -e .` 후 `import p1_shared` 성공
+- [ ] `tdms_p1_env` 가상환경 생성 및 의존성 설치 완료
+  ```bash
+  conda create -n tdms_p1_env python=3.12 -y
+  conda run -n tdms_p1_env uv pip install -r tdms_core/p1_shared/requirements.txt
+  ```
+- [ ] § 4의 테스트 케이스 20개 전체 통과
+  ```bash
+  conda run -n tdms_p1_env pytest tdms_core/p1_shared/tests/ -v
+  ```
+- [ ] editable install 후 `import p1_shared` 성공
+  ```bash
+  conda run -n tdms_p1_env uv pip install -e tdms_core/p1_shared/
+  conda run -n tdms_p1_env python -c "import p1_shared; print('OK')"
+  ```
 - [ ] `docs/p1_shared/p1_shared_pjt_tasks.md`의 T-001 상태를 `완료`로 업데이트
 - [ ] `docs/p1_shared/tasks/task-001_workthrough.md` 작성
