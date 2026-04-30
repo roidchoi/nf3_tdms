@@ -525,7 +525,7 @@ def test_get_logger_with_queue_adds_ws_handler():
 ## § 5. 구현 참고사항
 
 - **기술 스택**: Python 3.12, `holidays` 라이브러리 (KR/US 공휴일), `rich` (콘솔 출력), `pytest-asyncio` (비동기 테스트), `pytest-mock` (mocker fixture)
-- **가상환경**: `tdms_p1_env` (의존성관리지침 §2 참조)
+- **가상환경**: `tdms_p1_env` (`/tdms-env-policy` 워크플로우 §2 참조)
   ```bash
   # 최초 1회 환경 생성 (없는 경우)
   conda create -n tdms_p1_env python=3.12 -y
@@ -555,11 +555,11 @@ def test_get_logger_with_queue_adds_ws_handler():
       "rich>=13.0",
   ]
   ```
-- **에이전트 명령 실행 규칙**: `conda activate`는 비대화형 셸에서 동작하지 않으므로 반드시 `conda run -n tdms_p1_env <명령>` 형식을 사용한다 (의존성관리지침 §7 참조)
+- **에이전트 명령 실행 규칙**: `conda activate`는 비대화형 셸에서 동작하지 않으므로 반드시 `conda run -n tdms_p1_env <명령>` 형식을 사용한다 (`/tdms-env-policy` 워크플로우 §4 참조)
 - **holidays 라이브러리 사용법**: `holidays.KR()`, `holidays.US()` 로 해당 연도 공휴일 집합 생성
 - **로거 중복 핸들러 주의**: `get_logger()` 호출 시 동일 name으로 반복 호출하면 핸들러가 중복 등록될 수 있음 → `if not logger.handlers:` 조건 처리 또는 `logger.handlers.clear()` 후 재설정
 - **WebSocketQueueHandler 스레드 안전성**: `queue.put_nowait()`는 스레드 안전하나, `asyncio.Queue`는 이벤트 루프에 귀속됨 — 로거가 별도 스레드에서 호출될 경우 `loop.call_soon_threadsafe()` 고려
-- **관련 문서**: `docs/p1_shared/p1_shared_PRD.md` §3.6, §3.7, §3.8, §4.1 / `docs/p1_shared/의존성관리지침.md`
+- **관련 문서**: `docs/p1_shared/p1_shared_PRD.md` §3.6, §3.7, §3.8, §4.1 / `/tdms-env-policy` 워크플로우
 
 ---
 
