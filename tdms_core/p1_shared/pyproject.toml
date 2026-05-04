@@ -20,3 +20,8 @@ dev = [
     "pytest-asyncio>=0.23",
     "pytest-mock>=3.14",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: 실 DB 접속이 필요한 통합 테스트"
+]
