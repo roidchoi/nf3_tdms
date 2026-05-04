@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "p1_shared"
+version = "1.0.0"
+description = "TDMS Shared Core Modules"
+dependencies = [
+    "psycopg2-binary>=2.9",
+    "requests>=2.32",
+    "python-dotenv>=1.1",
+    "holidays>=0.46",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.14",
+]

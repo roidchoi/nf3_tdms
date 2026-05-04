@@ -53,7 +53,7 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-001 | 패키지 기반 + 공통 유틸 + 로거 | `pyproject.toml` 패키지 정의 및 editable install 검증, `db/exceptions.py` 공통 예외, `utils/retry.py` (sync/async 지수 백오프 재시도 데코레이터), `utils/date_utils.py` (KR/US 영업일 유틸), `ops/logger.py` (Rich 콘솔 + 파일 로테이션 + `WebSocketQueueHandler`), 각 모듈 단위 테스트 | 대기 | High | - | - | - |
+| T-001 | 패키지 기반 + 공통 유틸 + 로거 | `pyproject.toml` 패키지 정의 및 editable install 검증, `db/exceptions.py` 공통 예외, `utils/retry.py` (sync/async 지수 백오프 재시도 데코레이터), `utils/date_utils.py` (KR/US 영업일 유틸), `ops/logger.py` (Rich 콘솔 + 파일 로테이션 + `WebSocketQueueHandler`), 각 모듈 단위 테스트 | 완료 | High | - | - | - |
 | T-002 | 환경 감지 모듈 | `utils/env_detector.py` — `TDMS_ENV` 명시 → hostname → IP 순서 감지, `.env` 환경별 프로파일 로드(`load_env_profile()`), `get_peer_host()`, `.env` 템플릿 작성, 단위 테스트 | 대기 | High | T-001 | - | - |
 | T-003 | DB 커넥션 풀 | `db/connection.py` — `DbConnectionPool(psycopg2.pool.ThreadedConnectionPool 래퍼)`, `get_cursor()` context manager (예외 시 rollback·커넥션 반환 보장), `close_all()`, 스레드 안전성 검증, 단위 테스트 | 대기 | High | T-001 | - | - |
 
