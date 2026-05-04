@@ -62,7 +62,7 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
 | T-004 | 토큰 매니저 + Kiwoom API 코어 | `api/token_manager.py` — 파일 기반 토큰 캐시, `get_valid_token()`, `is_valid()` (만료 5분 전 처리), `save_token()`. `api/kiwoom_api_core.py` — `kdms_origin/kiwoom_rest.py` 기반 리팩토링, `TokenManager` 연동, `get_headers()`, `request()`, 단위 테스트 | 완료 | Medium | T-001 | - | - |
-| T-005 | KIS API 코어 | `api/kis_api_core.py` — 토큰 캐시 공유 코어(`token_cache_path` 동일 경로로 p2·p3 간 공유), `get_headers()`, `request()` (401 시 자동 갱신 + 1회 재시도), `base_url` 실전/모의 자동 선택, 서브클래스(`KisKrClient`, `KisUsClient`) 패턴 검증, 단위 테스트 | 대기 | Medium | T-004 | - | - |
+| T-005 | KIS API 코어 | `api/kis_api_core.py` — 토큰 캐시 공유 코어(`token_cache_path` 동일 경로로 p2·p3 간 공유), `get_headers()`, `request()` (401 시 자동 갱신 + 1회 재시도), `base_url` 실전/모의 자동 선택, 서브클래스(`KisKrClient`, `KisUsClient`) 패턴 검증, 단위 테스트 | 완료 | Medium | T-004 | - | - |
 
 ### Phase 3: 운영 도구
 
@@ -123,9 +123,9 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 | 구분 | 수량 |
 |------|------|
 | 전체 | 9개 |
-| 완료 | 4개 |
+| 완료 | 5개 |
 | 진행 중 | 0개 |
-| 대기 | 5개 |
+| 대기 | 4개 |
 
 ---
 
