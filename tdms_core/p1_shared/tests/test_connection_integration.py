@@ -4,24 +4,27 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
-DEV_IP = os.getenv("DEV_IP", "192.168.35.205")
-SERVER_IP = os.getenv("SERVER_IP", "192.168.35.97")
+from p1_shared.utils.env_detector import EnvDetector
+
+detector = EnvDetector()
+DEV_HOST = detector.get_db_host("dev")
+SERVER_HOST = detector.get_db_host("server")
 
 DEV_KDMS_DSN = (
     f"postgresql://{os.getenv('DEV_KDMS_DB_USER')}:{os.getenv('DEV_KDMS_DB_PASSWORD')}"
-    f"@{DEV_IP}:{os.getenv('DEV_KDMS_DB_PORT', 5432)}/{os.getenv('DEV_KDMS_DB_NAME')}"
+    f"@{DEV_HOST}:{os.getenv('DEV_KDMS_DB_PORT', 5432)}/{os.getenv('DEV_KDMS_DB_NAME')}"
 )
 DEV_USDMS_DSN = (
     f"postgresql://{os.getenv('DEV_USDMS_DB_USER')}:{os.getenv('DEV_USDMS_DB_PASSWORD')}"
-    f"@{DEV_IP}:{os.getenv('DEV_USDMS_DB_PORT', 5435)}/{os.getenv('DEV_USDMS_DB_NAME')}"
+    f"@{DEV_HOST}:{os.getenv('DEV_USDMS_DB_PORT', 5435)}/{os.getenv('DEV_USDMS_DB_NAME')}"
 )
 SERVER_KDMS_DSN = (
     f"postgresql://{os.getenv('DEV_KDMS_DB_USER')}:{os.getenv('DEV_KDMS_DB_PASSWORD')}"
-    f"@{SERVER_IP}:{os.getenv('DEV_KDMS_DB_PORT', 5432)}/{os.getenv('DEV_KDMS_DB_NAME')}"
+    f"@{SERVER_HOST}:{os.getenv('DEV_KDMS_DB_PORT', 5432)}/{os.getenv('DEV_KDMS_DB_NAME')}"
 )
 SERVER_USDMS_DSN = (
     f"postgresql://{os.getenv('DEV_USDMS_DB_USER')}:{os.getenv('DEV_USDMS_DB_PASSWORD')}"
-    f"@{SERVER_IP}:{os.getenv('DEV_USDMS_DB_PORT', 5435)}/{os.getenv('DEV_USDMS_DB_NAME')}"
+    f"@{SERVER_HOST}:{os.getenv('DEV_USDMS_DB_PORT', 5435)}/{os.getenv('DEV_USDMS_DB_NAME')}"
 )
 
 

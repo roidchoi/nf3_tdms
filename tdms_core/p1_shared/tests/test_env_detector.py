@@ -260,3 +260,78 @@ def test_get_local_ips_excludes_loopback_and_wsl_range():
     for ip in ips:
         assert not ip.startswith("127.")
         assert not ip.startswith("172.")
+
+
+def test_get_db_host_returns_localhost_for_self(monkeypatch):
+    """
+    [목적] 접속 대상(target_env)이 자신과 일치하면 localhost를 반환함을 검증
+    """
+    from p1_shared.utils.env_detector import EnvDetector
+    monkeypatch.setenv("TDMS_ENV", "dev")
+    monkeypatch.setenv("DEV_IP", "192.168.35.205")
+    
+    detector = EnvDetector()
+    assert detector.get_db_host("dev") == "127.0.0.1"
+
+
+def test_get_db_host_returns_external_ip_for_peer(monkeypatch):
+    """
+    [목적] 접속 대상이 다른 PC이면 해당 PC의 외부 IP를 반환함을 검증
+    """
+    from p1_shared.utils.env_detector import EnvDetector
+    monkeypatch.setenv("TDMS_ENV", "dev")
+    monkeypatch.setenv("SERVER_IP", "192.168.35.97")
+    
+    detector = EnvDetector()
+    assert detector.get_db_host("server") == "192.168.35.97"
+
+
+def test_verify_dev_ip_sync_logs_warning_on_mismatch(monkeypatch, mocker):
+    """
+    [목적] 호스트 실제 외부망 IP와 .env 설정이 다를 때 경고 로그를 출력함을 검증
+    """
+    from p1_shared.utils.env_detector import EnvDetector
+
+    monkeypatch.setenv("TDMS_ENV", "dev")
+    monkeypatch.setenv("DEV_IP", "192.168.35.205")
+    
+    mocker.patch("platform.release", return_value="microsoft-standard-WSL2")
+    
+    mock_result = mocker.Mock()
+    mock_result.returncode = 0
+    mock_result.stdout = "192.168.35.201\n"
+    mocker.patch("subprocess.run", return_value=mock_result)
+
+    detector = EnvDetector()
+    
+    logger = mocker.Mock()
+    detector.verify_dev_ip_sync(logger)
+    
+    logger.warning.assert_called_once()
+    msg = logger.warning.call_args[0][0]
+    assert "192.168.35.205" in msg
+    assert "192.168.35.201" in msg
+
+
+def test_verify_dev_ip_sync_does_not_log_on_match(monkeypatch, mocker):
+    """
+    [목적] 호스트 실제 외부망 IP와 .env 설정이 같으면 경고 로그를 출력하지 않음을 검증
+    """
+    from p1_shared.utils.env_detector import EnvDetector
+
+    monkeypatch.setenv("TDMS_ENV", "dev")
+    monkeypatch.setenv("DEV_IP", "192.168.35.201")
+    
+    mocker.patch("platform.release", return_value="microsoft-standard-WSL2")
+    
+    mock_result = mocker.Mock()
+    mock_result.returncode = 0
+    mock_result.stdout = "192.168.35.201\n"
+    mocker.patch("subprocess.run", return_value=mock_result)
+
+    detector = EnvDetector()
+    
+    logger = mocker.Mock()
+    detector.verify_dev_ip_sync(logger)
+    
+    logger.warning.assert_not_called()
