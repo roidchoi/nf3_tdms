@@ -75,7 +75,7 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-008 | DB 동기화 매니저 | `ops/sync_manager.py` — `FullSyncSafetyChecker` (DB 크기·커버리지 비교, 이상 조건 4종 감지, `CONFIRM-FULL-SYNC` 30초 타임아웃 재확인), `SyncManager.sync()` full/diff/table 3가지 모드 (rsync SSH 전송, `section_order` 복원), `dry_run` 계획 출력, CLI 진입점, 단위 테스트 | 대기 | Medium | T-002, T-003, T-006 | - | - |
+| T-008 | DB 동기화 매니저 | `ops/sync_manager.py` — `FullSyncSafetyChecker` (DB 크기·커버리지 비교, 이상 조건 4종 감지, `CONFIRM-FULL-SYNC` 30초 타임아웃 재확인), `SyncManager.sync()` full/diff/table 3가지 모드 (rsync SSH 전송, `section_order` 복원), `dry_run` 계획 출력, CLI 진입점, 단위 테스트 | 완료 | Medium | T-002, T-003, T-006 | 2026-05-06 | 2026-05-06 |
 | T-009 | DB 인계 실행 | 실제 환경에서 DB 인계 검증 실행: ① kdms — 개발PC → 서버PC full 동기화 (`sync --source dev --target server --db kdms --mode full`), ② usdms — 서버PC → 개발PC full 동기화 (`sync --source server --target dev --db usdms --mode full`). `FullSyncSafetyChecker` 통과 확인 및 `StartupValidator` 결과 검증까지 완료 | 대기 | Medium | T-008 | - | - |
 
 **상태값:** `대기` / `진행 중` / `완료` / `보류`
@@ -123,9 +123,9 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 | 구분 | 수량 |
 |------|------|
 | 전체 | 9개 |
-| 완료 | 7개 |
+| 완료 | 8개 |
 | 진행 중 | 0개 |
-| 대기 | 2개 |
+| 대기 | 1개 |
 
 ---
 
