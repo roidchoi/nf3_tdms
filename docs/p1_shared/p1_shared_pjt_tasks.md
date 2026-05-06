@@ -68,7 +68,7 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-006 | 백업 매니저 | `ops/backup_manager.py` — `pg_dump -Fc` 백업, `verify()` (pg_restore --list 헤더 파싱), `restore()` 강건 복원 (`pre-data → data → post-data` section_order 단계별 적용, `pre_backup=True` 기본값), `check_volume_exists()` Docker 볼륨 실물 파일 확인, `list_backups()`, `cleanup_old()` 보관 정책, CLI 진입점(`python -m p1_shared.ops.backup_manager`), 단위 테스트 | 대기 | High | T-002, T-003 | - | - |
+| T-006 | 백업 매니저 | `ops/backup_manager.py` — `pg_dump -Fc` 백업, `verify()` (pg_restore --list 헤더 파싱), `restore()` 강건 복원 (`pre-data → data → post-data` section_order 단계별 적용, `pre_backup=True` 기본값), `check_volume_exists()` Docker 볼륨 실물 파일 확인, `list_backups()`, `cleanup_old()` 보관 정책, CLI 진입점(`python -m p1_shared.ops.backup_manager`), 단위 테스트 | 완료 | High | T-002, T-003 | - | - |
 | T-007 | DB 기동 검증기 | `ops/startup_validator.py` — DB 접속 테스트, 핵심 테이블 존재·행수 검증, `check_volume_exists()` 연동, Hypertable 청크 상태 확인, `print_report()` 실패 항목별 구체적 조치 안내 출력, FastAPI lifespan 연동 패턴 검증, 단위 테스트 | 대기 | High | T-003, T-006 | - | - |
 
 ### Phase 4: DB 동기화
@@ -123,9 +123,9 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 | 구분 | 수량 |
 |------|------|
 | 전체 | 9개 |
-| 완료 | 5개 |
+| 완료 | 6개 |
 | 진행 중 | 0개 |
-| 대기 | 4개 |
+| 대기 | 3개 |
 
 ---
 
