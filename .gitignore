@@ -17,3 +17,7 @@ graphify-out/
 
 # 시스템 파일
 .DS_Store
+
+# Database Physical Data
+data/
+*.tar.gz

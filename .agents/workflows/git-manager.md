@@ -48,7 +48,58 @@ Angular/Conventional Commits 규칙을 따르되, **모든 내용은 한국어�
     ```
   - **실행 명령**: `git commit -m "타입: 제목" -m "- 원인: 내용" -m "- 내용: 내용"`
 
-## 5. 병합 및 동기화 (Merge & Sync)
+## 5. 커밋 전 필수 점검 절차 (Pre-Commit Checklist)
+
+구현 완료 후 커밋 시 파일 누락을 방지하기 위해 아래 절차를 **반드시** 따릅니다.
+
+### Step 1: 전체 변경 파일 목록 확인
+커밋 전에 반드시 다음 명령으로 변경된 모든 파일을 파악합니다.
+`git add`는 아직 하지 말고 확인만 먼저 합니다:
+
+```bash
+git status            # Untracked + Modified + Staged 전체 표시
+git diff --name-only  # 추적 중인 Modified 파일만 표시
+```
+
+### Step 2: 파일 분류 및 처리 결정
+확인된 파일들을 다음 기준으로 분류합니다:
+
+| 분류 | 기준 | 처리 |
+|------|------|------|
+| **당연히 포함** | 현재 세션에서 직접 생성/수정한 코드, 테스트, 문서 | 즉시 `git add` |
+| **연관 파일** | 현재 Task의 spec, walkthrough 등 세션과 연관된 문서 | 즉시 `git add` — **누락 시 경고** |
+| **무관/미진행 파일** | 이전 세션 잔여물, 다른 Task 파일 등 | 사용자에게 확인 후 결정 |
+
+> **핵심 규칙**: `git add <파일1> <파일2>` 방식으로 파일을 개별 명시하면 **Untracked 파일이 빠질 위험**이 있습니다.
+> 분류가 끝났다면 `git add docs/ tdms_core/` 처럼 **경로 단위로 추가**하거나 `git add -A`를 사용하여 누락을 방지하십시오.
+
+### Step 3: 미관련 파일 발견 시 사용자 확인 요청
+분류 결과 "무관/미진행 파일"이 발견된 경우, 커밋 전 다음 형식으로 사용자에게 확인을 요청합니다:
+
+```
+커밋 전 확인 요청
+
+현재 세션(T-XXX)과 직접 관련이 없거나 이번 세션에서 변경되지 않은 파일이 감지되었습니다:
+
+  [미관련 파일 목록]
+  - 파일명 1 (이유: ...)
+  - 파일명 2 (이유: ...)
+
+선택지:
+  A. 이번 커밋에 함께 포함
+  B. 별도 커밋으로 분리
+  C. 스테이징 제외 (나중에 처리)
+
+어떻게 처리할까요?
+```
+
+### Step 4: Task 구현 커밋 시 자동 포함 대상
+구현 Task 커밋 시에는 다음 파일들이 포함되었는지 반드시 체크합니다:
+- `docs/<subproject>/tasks/task-{id}_spec.md` — 구현 명세서 (Untracked 여부 주의!)
+- `docs/<subproject>/tasks/task-{id}_walkthrough.md` — 완료 후 워크스루
+- `docs/<subproject>/<subproject>_pjt_tasks.md` — 상태 업데이트 파일
+
+## 6. 병합 및 동기화 (Merge & Sync)
 가장 깔끔한 히스토리 관리를 위해 **"Rebase 후 `--no-ff` 병합"**을 기본 전략으로 사용합니다.
 
 - **Pull (원격 브랜치 동기화)**:
@@ -65,7 +116,7 @@ Angular/Conventional Commits 규칙을 따르되, **모든 내용은 한국어�
   4. 원격 저장소에 푸시합니다.
      `git push origin main`
 
-## 6. 문제 발생 대처 가이드 (Troubleshooting & Rollback)
+## 7. 문제 발생 대처 가이드 (Troubleshooting & Rollback)
 에이전트는 문제가 발생했을 때 당황하지 않고 다음 가이드에 따라 침착하게 해결을 돕습니다.
 
 - **충돌(Conflict) 해결**:
@@ -82,7 +133,7 @@ Angular/Conventional Commits 규칙을 따르되, **모든 내용은 한국어�
 - **실수 복구 (Reflog)**:
   - 잘못된 Reset이나 Rebase를 복구해야 할 때 `git reflog` 명령을 실행하여 이전 HEAD 상태의 해시를 찾은 뒤, `git reset --hard <해시>`로 복구합니다.
 
-## 7. OS 및 쉘 호환성 가이드 (Compatibility)
+## 8. OS 및 쉘 호환성 가이드 (Compatibility)
 - **Windows 환경 주의사항**: 
   - Windows PowerShell 환경에서는 명령어 체이닝 연산자(`&&`)가 작동하지 않을 수 있습니다. (PowerShell 7 미만 버전)
   - **권장 사항**: 모든 Git 명령어는 `run_command`를 통해 **하나씩 개별적으로 실행**하십시오.

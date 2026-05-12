@@ -1,4 +1,4 @@
-# p1_kdms PRD — 한국 시장 데이터 백엔드
+# p2_kdms PRD — 한국 시장 데이터 백엔드
 
 > **버전**: v1.0 | **작성일**: 2026-04-28
 > **참조 원본**: `migration_pjt/kdms_origin/` (KDMS v7.0)
@@ -9,14 +9,14 @@
 
 ## 1. 목적 및 범위
 
-p1_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재구현한다.
-프론트엔드(Vue3 SPA)는 `p3_manager`가 담당하므로 이 문서에서 제외한다.
+p2_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재구현한다.
+프론트엔드(Vue3 SPA)는 `p4_manager`가 담당하므로 이 문서에서 제외한다.
 
 ### 핵심 목표
 1. 기존 운영 중인 `kdms_db` 데이터를 **단절 없이 인계**받아 수집 재개
 2. 원본의 검증된 비즈니스 로직 보존 + 가독성·유지보수성 중심 리팩토링
-3. `p2_usdms`와 유사 기능의 구현 방향을 통일하여 상호 참조 유지보수 확보
-4. `p3_manager`가 REST API로 제어·조회할 수 있는 완결된 백엔드 제공
+3. `p3_usdms`와 유사 기능의 구현 방향을 통일하여 상호 참조 유지보수 확보
+4. `p4_manager`가 REST API로 제어·조회할 수 있는 완결된 백엔드 제공
 
 ---
 
@@ -27,7 +27,7 @@ p1_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 | DB 볼륨 | 기존 `kdms_pgdata` Docker 볼륨 그대로 재사용 (`external: true`) |
 | DB 이름 | `kdms_db` (변경 없음) |
 | DB 포트 | `5432` (변경 없음) |
-| 인계 전 백업 | `BackupManager --target kdms --tag pre_p1_migration` 실행 필수 |
+| 인계 전 백업 | `BackupManager --target kdms --tag pre_p2_migration` 실행 필수 |
 | 스키마 호환 | 신규 init.sql과 기존 스키마 diff 확인 후 마이그레이션 스크립트 적용 |
 
 ---
@@ -96,7 +96,7 @@ p1_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 | GET | `/api/data/financials` | 재무제표 (PIT 지원) |
 | POST | `/api/data/screening` | 재무 스크리닝 |
 | GET | `/api/data/market-cap` | 시가총액 |
-| GET | `/api/data/preview/{table}` | 테이블 미리보기 (p3_manager용) |
+| GET | `/api/data/preview/{table}` | 테이블 미리보기 (p4_manager용) |
 
 #### 헬스 및 시스템 (`/api/health`, `/api/admin`)
 
@@ -123,7 +123,7 @@ p1_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 | `backfill_minute` | 토 10:20 | 분봉 백필 + 시총 갭 복구 | `backfill_task.py` |
 
 - **스케줄러**: `AsyncIOScheduler` (FastAPI lifespan 연동, BackgroundScheduler 사용 금지)
-- **p3_manager 연동**: `/api/admin/tasks/{task_id}/run` 으로 수동 즉시 실행 가능
+- **p4_manager 연동**: `/api/admin/tasks/{task_id}/run` 으로 수동 즉시 실행 가능
 
 ---
 
@@ -173,15 +173,15 @@ p1_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 | `daily_update.py` / `daily_task.py` 중복 | 레거시 스크립트와 태스크 로직 중복 | 레거시 제거, `tasks/daily_task.py` 단일 소스 |
 | 예외 처리 | `except Exception` 광범위 catch | 구체적 예외 타입 명시, 재시도 로직 분리 |
 | 하드코딩 설정값 | 코드 내 직접 작성된 시간, 임계값 | `.env` / `config.yaml` 외부화 |
-| `kiwoom_rest.py` 토큰 관리 | 인스턴스별 독립 토큰 캐시 | `shared/KiwoomApiCore` 의 `TokenManager`로 통합 |
+| `kiwoom_rest.py` 토큰 관리 | 인스턴스별 독립 토큰 캐시 | `p1_shared/KiwoomApiCore` 의 `TokenManager`로 통합 |
 
-### 5.3 p2_usdms와 통일할 구현 패턴
+### 5.3 p3_usdms와 통일할 구현 패턴
 
 | 기능 | KDMS 현재 | USDMS 현재 | 통일 방향 |
 |---|---|---|---|
-| DB 커서 | `ThreadedConnectionPool` + 수동 acquire/release | `get_cursor()` context manager | **USDMS 패턴 채택** (context manager) |
-| 헬스체크 | `run_diagnostics.py` 분리 실행 | `DailyRoutine._detect_anomalies()` 루틴 내 통합 | **루틴 내 통합** (p2 패턴) |
-| 블랙리스트 | 없음 (실패 시 그냥 skip) | `BlacklistManager` (사유 코드 체계) | **USDMS 패턴 도입** |
+| DB 커서 | `ThreadedConnectionPool` + 수동 acquire/release | `get_cursor()` context manager | **p3_usdms 패턴 채택** (context manager) |
+| 헬스체크 | `run_diagnostics.py` 분리 실행 | `DailyRoutine._detect_anomalies()` 루틴 내 통합 | **루틴 내 통합** (p3 패턴) |
+| 블랙리스트 | 없음 (실패 시 그냥 skip) | `BlacklistManager` (사유 코드 체계) | **p3_usdms 패턴 도입** |
 | 운영 진입점 | 최상위 루트에 py 파일 산재 | `ops/` 폴더로 집중 | **`ops/` 폴더 구조** 채택 |
 
 ---
@@ -189,7 +189,7 @@ p1_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 ## 6. 프로젝트 디렉토리 구조 (목표)
 
 ```
-p1_kdms/
+p2_kdms/
 ├── main.py                    # FastAPI 앱, lifespan, 라우터 등록
 ├── config.py                  # 환경변수 로딩 (pydantic-settings)
 │
@@ -208,14 +208,14 @@ p1_kdms/
 │   └── backfill_task.py       # 분봉 백필 + 시총 갭 복구
 │
 ├── collectors/                # 데이터 소스 연동
-│   ├── kiwoom_client.py       # shared/KiwoomApiCore 래퍼
-│   ├── kis_kr_client.py       # shared/KisApiCore → KR 전용 엔드포인트
+│   ├── kiwoom_client.py       # p1_shared/KiwoomApiCore 래퍼
+│   ├── kis_kr_client.py       # p1_shared/KisApiCore → KR 전용 엔드포인트
 │   ├── krx_loader.py          # pykrx 시총 수집 (스레드 실행)
 │   ├── factor_calculator.py   # 수정계수 계산
 │   └── target_selector.py     # 분봉 대상 종목 선정
 │
 ├── repositories/              # DB 쿼리 레이어 (리팩토링 신규)
-│   ├── base.py                # 커넥션 풀 + get_cursor() (shared 위임)
+│   ├── base.py                # 커넥션 풀 + get_cursor() (p1_shared 위임)
 │   ├── ohlcv_repo.py          # OHLCV CRUD
 │   ├── factor_repo.py         # 수정계수 CRUD
 │   ├── financial_repo.py      # 재무 데이터 CRUD
@@ -269,7 +269,7 @@ POSTGRES_PASSWORD=your_password
 DB_POOL_MIN=5
 DB_POOL_MAX=20
 
-# KIS API (shared 모듈과 토큰 캐시 공유)
+# KIS API (p1_shared 모듈과 토큰 캐시 공유)
 KIS_APP_KEY=xxx
 KIS_APP_SECRET=xxx
 KIS_ACCOUNT_NO=xxx
@@ -350,10 +350,10 @@ volumes:
 - [ ] `ops/` 진입점 정리 (레거시 스크립트 제거)
 - [ ] Blacklist 패턴 도입 (수집 실패 종목 관리)
 
-### Phase 4 — p3_manager 연동
+### Phase 4 — p4_manager 연동
 - [ ] `/api/admin` 엔드포인트 완성 (태스크 실행/스케줄/WebSocket)
 - [ ] `/api/health` 완성 (갭 탐지, 마일스톤)
-- [ ] p3_manager 연동 테스트
+- [ ] p4_manager 연동 테스트
 
 ---
 
@@ -370,4 +370,4 @@ volumes:
 ---
 
 *서브프로젝트 상세 구현은 이 문서를 기준으로 진행한다.*
-*공통 모듈(`shared/`) 설계 상세는 `docs/shared/shared_PRD.md` 참조.*
+*공통 모듈(`p1_shared/`) 설계 상세는 `docs/p1_shared/p1_shared_PRD.md` 참조.*
