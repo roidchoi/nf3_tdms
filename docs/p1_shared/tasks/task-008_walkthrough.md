@@ -1,40 +1,38 @@
-# Task-008 Walkthrough: DB 동기화 매니저 (SyncManager + FullSyncSafetyChecker)
+# Task-008 Walkthrough: 물리적 DB 동기화 파이프라인 (db_sync.py)
 
 ## 1. 개요
-- **Task ID**: T-008
-- **목표**: 개발PC ↔ 서버PC 간 양방향 DB 동기화 기능 및 안전 장치 구현
+- **Task ID**: T-008 (T-009 통합 흡수)
+- **목표**: 대용량 시계열 DB(TimescaleDB)의 안전하고 완벽한 양방향 동기화를 위한 완전 자동화 파이프라인 구축
 - **상태**: 완료
+- **핵심 변화**: 과거 `pg_dump` 기반 논리적 동기화의 한계(외래키 에러, 메모리 한계, 타임아웃, 익스텐션 충돌 등)를 극복하기 위해, **데이터 폴더 자체를 물리적으로 복사하는 스톱-앤-카피(Stop-and-Copy)** 방식으로 전면 재설계했습니다. 과거 사용자가 수동으로 진행해야 했던 `Task-009`를 스크립트 기반 자동화(`db_sync.py`)로 완벽히 대체하여 통합 흡수했습니다.
 
-## 2. 주요 변경 사항 및 파일 역할
+## 2. 주요 구현 내용 및 파일 역할
 
-### `p1_shared/ops/sync_manager.py` (신규)
-- `FullSyncSafetyChecker`: 
-  - DB 크기, 최근 데이터 날짜(dt)를 비교하여 개발/서버 간 잘못된 덮어쓰기 등 이상 조건을 감지합니다.
-  - 소스/대상 DB의 테이블 목록 및 컬럼 구조를 쿼리하여 스키마 불일치 여부를 탐지합니다.
-  - 이상 감지 시 사용자에게 콘솔을 통해 `CONFIRM-FULL-SYNC`를 입력하도록 30초 타임아웃을 주어 안전성을 강화했습니다.
-- `SyncManager`: 
-  - `sync()` 메서드를 통해 `full`, `diff`, `table` 3가지 모드의 동기화를 수행합니다.
-  - `dry_run` 모드를 지원하여 실제 동기화 명령을 실행하지 않고 계획만 확인 가능합니다.
-  - T-002(`EnvDetector`)와 T-006(`BackupManager`)를 연동하여 상대 IP를 조회하고, `full` 모드 시 `pre_sync` 태그로 전송 전 백업을 자동 실행합니다.
+### `p1_shared/ops/db_sync.py` (전면 개편)
+물리 동기화의 안정성을 보장하기 위해 5단계 파이프라인으로 구성되었습니다.
+1. **Preflight 점검**: SSH 접속 가능 여부를 확인합니다.
+2. **컨테이너 중지 (Maintenance Mode)**: 데이터 쓰기를 원천 차단하여 무결성을 보장하기 위해, 양측 PC의 DB 컨테이너(`kdms_db`, `usdms_db` 등)와 연관 앱 컨테이너를 일시 중지합니다.
+3. **물리 데이터 전송 (SSH Pipeline)**: 중간 디스크 소모(`tar` 파일 생성)를 생략합니다. `tar -czf` 스트림을 SSH 파이프로 넘겨, 수신 측에서 즉시 해제(`tar -xzf`)하여 속도와 효율을 극대화했습니다.
+4. **권한 교정 (Permission Fix)**: 컨테이너 내부 UID(70)와 호스트 UID(1000)의 불일치로 인한 탐색기 접근 불가 및 PostgreSQL 기동 에러를 막기 위해, 수신 후 자동으로 `sudo chown -R 1000:1000`을 실행합니다.
+5. **재기동 (Resume)**: 전송과 권한 세팅이 완료되면 중지했던 양측 컨테이너를 정상 기동합니다.
 
-### `tests/test_sync_manager.py` (신규)
-- 세션 A (SafetyChecker) 및 세션 B (SyncManager) 단위 테스트 총 19개 작성.
-- 실제 DB나 네트워크 접속 없이 동작하도록 `psycopg2`, `subprocess`, `builtins.input` 등을 철저히 Mocking하여 독립적으로 검증했습니다.
-- Test-Driven Development (TDD) 방식으로 명세의 시나리오를 100% 반영했습니다.
+### `tests/test_db_sync.py` (전면 개편)
+실제 데이터 파괴를 방지하기 위해 로컬 셸 실행(`subprocess.run`)과 원격 셸 실행(`ssh ...`)을 Mocking하여, 5단계의 명령어 생성 로직과 흐름을 엄격하게 검증했습니다.
 
-## 3. 설계상 주요 결정사항
+## 3. 검증 방법 및 사용법 (T-009 통합)
 
-- **스키마 불일치 대응**: 
-  - `full` 모드는 `pg_dump -Fc`가 스키마와 데이터를 통째로 덮어쓰므로 스키마 불일치 경고를 띄워도 무방하여 사용자 동의 절차를 거쳐 진행합니다.
-  - `diff`, `table` 모드는 데이터만 이동하기 때문에, 스키마 불일치 시 INSERT 오류로 인한 데이터 오염 위험이 매우 높습니다. 따라서 `diff`/`table` 모드 시 스키마 불일치가 발견되면 즉각 전송을 중단하고 경고 메시지를 반환합니다.
+향후 갱신된 데이터를 서버와 개발PC 간에 동기화할 때는 아래 명령어를 사용하십시오. 
+이 단일 명령어가 기존 T-009의 수동 인계 절차를 모두 대신합니다.
 
-- **안전장치 무력화 방지 (Mock 분리 설계)**:
-  - 테스트 코드는 Mocking된 환경을 사용하지만, 실제 `compare` 로직에서는 예외 처리를 촘촘히 두어 DB 접속 실패나 쿼리 실패 등에 대해 모두 안전 검증 실패(is_safe=False)로 취급하도록 강건하게 설계했습니다.
+```bash
+# 개발PC(로컬)의 KDMS 데이터를 서버로 밀어넣을 때 (Push)
+conda run -n tdms_p1_env python -m p1_shared.ops.db_sync --db kdms --direction push
 
-## 4. 테스트 결과 요약
-- `test_sync_manager.py` 내 19개 테스트 항목 전체 통과 (All Green)
-- 기존 `p1_shared` 테스트 스위트와 통합하여 총 **138개 테스트 모두 통과** (회귀 없음)
+# 서버의 USDMS 데이터를 개발PC(로컬)로 가져올 때 (Pull)
+conda run -n tdms_p1_env python -m p1_shared.ops.db_sync --db usdms --direction pull
+```
 
-## 5. 다음 Task 진행 시 주의사항
-- 다음 태스크인 **T-009 (DB 인계 실행)** 에서는 단위 테스트용 Mock을 사용하지 않고, 실제 개발PC와 서버PC 간의 통신과 DB 데이터 복원이 일어납니다.
-- T-009 진행 전, 대상 PC의 SSH 접속 가능 상태와 `.env`에 정의된 `SSH_USER` 및 `SSH_KEY_PATH`가 올바른지 사전에 반드시 점검해야 합니다.
+> **⚠️ 주의사항**
+> 이 명령어는 대상 DB의 물리 폴더 전체를 덮어쓰는 파괴적인 작업이므로, 실행 시 "yes"를 입력해야만 진행됩니다. 스케줄러를 통한 자동화 적용 시에는 `--yes` 플래그를 추가하여 사용할 수 있습니다.
+
+상세한 원리와 사용법 트러블슈팅 가이드는 `docs/p1_shared/ops/db_sync_guide.md` 문서를 참조하시기 바랍니다.

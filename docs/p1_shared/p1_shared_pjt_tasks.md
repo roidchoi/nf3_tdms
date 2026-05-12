@@ -75,8 +75,8 @@ T-004 (TokenManager + KiwoomApiCore)                      │
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-008 | DB 동기화 매니저 | `ops/sync_manager.py` — `FullSyncSafetyChecker` (DB 크기·커버리지 비교, 이상 조건 4종 감지, `CONFIRM-FULL-SYNC` 30초 타임아웃 재확인), `SyncManager.sync()` full/diff/table 3가지 모드 (rsync SSH 전송, `section_order` 복원), `dry_run` 계획 출력, CLI 진입점, 단위 테스트 | 완료 | Medium | T-002, T-003, T-006 | 2026-05-06 | 2026-05-06 |
-| T-009 | DB 인계 실행 | 실제 환경에서 DB 인계 검증 실행: ① kdms — 개발PC → 서버PC full 동기화 (`sync --source dev --target server --db kdms --mode full`), ② usdms — 서버PC → 개발PC full 동기화 (`sync --source server --target dev --db usdms --mode full`). `FullSyncSafetyChecker` 통과 확인 및 `StartupValidator` 결과 검증까지 완료 | 대기 | Medium | T-008 | - | - |
+| T-008 | 물리적 DB 동기화 도구 | `ops/db_sync.py` — 논리적 동기화 한계 극복을 위한 완전 자동화 물리 동기화 (Stop-and-Copy, SSH Pipe 전송, 권한 자동 교정), `tests/test_db_sync.py` 단위 테스트 | 완료 | Medium | T-002, T-006 | 2026-05-06 | 2026-05-12 |
+| T-009 | DB 인계 실행 (폐기) | T-008 도구로 완전 자동화되어 수동 인계 절차가 불필요해짐에 따라 스펙 폐기 및 T-008로 통합/흡수됨 | 폐기 | Medium | T-008 | 2026-05-07 | 2026-05-12 |
 
 **상태값:** `대기` / `진행 중` / `완료` / `보류`
 
