@@ -12,4 +12,6 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-05-14] Task완료+초기화 | p1_wiki 전체 구축 — T-001~T-008 완료 기반. interfaces 5개, decisions 2개, errors 2개, runbook, codebase_map, environment 신규 생성. MoC를 Graphify God Node 기준으로 재구성.
+
 ## [{YYYY-MM-DD}] 초기화 | pjt_wiki 초기 구조 생성

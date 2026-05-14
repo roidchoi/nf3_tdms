@@ -1,51 +1,57 @@
 # 프로젝트 개요 (overview.md)
 
-> **프로젝트**: {PROJECT_NAME} **마지막 업데이트**: {YYYY-MM-DD} (Task-{ID}) **역할**: Type A(기획 의도)와 Type C(현재 현실) 사이의 가교
+> **프로젝트**: NF3 TDMS (Total Data Management System)
+> **마지막 업데이트**: 2026-05-14 (p1_shared 완료)
+> **역할**: 전체 Sub Project 현황 및 아키텍처 요약
 
 ---
 
 ## 1. 전체 진행도
 
-|Sub Project|목적|상태|진행도|
+| Sub Project | 목적 | 상태 | 진행도 |
 |---|---|---|---|
-|P1_{Name}|{한줄 목적}|✅완성 / 🔄진행중 / ⬜미착수|{N}%|
-|P2_{Name}|{한줄 목적}|✅완성 / 🔄진행중 / ⬜미착수|{N}%|
+| **p1_shared** | 공통 인프라 라이브러리 (API 클라이언트, DB 풀, 백업, 동기화) | ✅완성 | 100% (T-001~T-008) |
+| **p2_kdms** | 한국 주식 데이터 수집·저장 백엔드 | ⬜미착수 | 0% |
+| **p3_usdms** | 미국 주식 데이터 수집·저장 백엔드 | ⬜미착수 | 0% |
+| **p4_manager** | 통합 관리 레이어 | ⬜미착수 | 0% |
 
-**전체**: Task {완료수}/{전체수} 완료 ({진행도}%)
+**전체**: Task 8/N 완료 (p1_shared Phase 완료)
 
 ---
 
 ## 2. 현재 활성 작업
 
-- **진행중 Sub Project**: P{n}_{Name}
-- **현재 Task**: Task-{ID} — {Task명}
-- **다음 예정 Task**: Task-{ID} — {Task명}
+- **완료 Sub Project**: p1_shared
+- **완료 Task**: T-001~T-008 전체
+- **다음 예정**: p2_kdms 또는 p3_usdms 구현 시작
 
 ---
 
-## 3. PRD 목표 vs 현재 현실 (Gap 분석)
-
-> nf-lint 실행 시 Claude가 갱신한다.
-
-|PRD 목표|현재 상태|Gap|
-|---|---|---|
-|{목표 요약}|{현재 구현 상태}|{차이 또는 "없음"}|
-
----
-
-## 4. 시스템 전체 데이터 흐름 (요약)
+## 3. 시스템 전체 데이터 흐름
 
 ```
-{P1 역할} → {중간 저장소} → {P2 역할} → {최종 출력}
+[KIS API / Kiwoom API]
+      │ KisApiCore / KiwoomApiCore (p1_shared)
+      ▼
+[p2_kdms 수집] ──→ [kdms_db (TimescaleDB, port 5432)]
+[p3_usdms 수집] ──→ [usdms_db (TimescaleDB, port 5435)]
+      │
+      ▼ BackupManager / PhysicalSyncManager (p1_shared)
+[개발PC ↔ 서버PC 동기화]
+      │
+      ▼ audit_fast / audit_deep / audit_usdms (p1_shared)
+[무결성 감사]
 ```
-
-상세: `parent_wiki/architecture.md` 참조
 
 ---
 
-## 5. 주요 이정표
+## 4. 주요 이정표
 
-|날짜|내용|
+| 날짜 | 내용 |
 |---|---|
-|{YYYY-MM-DD}|프로젝트 시작|
-|{YYYY-MM-DD}|{주요 완료 항목}|
+| 2026-04-28 | NF3 TDMS 프로젝트 시작, PRD 작성 |
+| 2026-04-30 | p1_shared PRD 확정, Task 계획 수립 |
+| 2026-05-06 | T-001~T-007 구현 완료 |
+| 2026-05-07 | KDMS 37GB 마이그레이션 (논리→물리 복제 전환) |
+| 2026-05-12 | T-008 PhysicalSyncManager 구현 완료, T-009 폐기 |
+| 2026-05-14 | p1_wiki 지식화 완료 |

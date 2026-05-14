@@ -1,64 +1,94 @@
-# pjt_wiki Index
+# pjt_wiki Index (MoC)
 
-> **프로젝트**: {PROJECT_NAME} **마지막 업데이트**: {YYYY-MM-DD} (Task-{ID}) **총 등록 파일**: {N}개
+> **프로젝트**: NF3 TDMS (Total Data Management System)
+> **마지막 업데이트**: 2026-05-14 (T-001~T-008 전체 완료)
+> **총 등록 파일**: 15개
 
 ---
 
 ## 사용 지침
 
-이 파일은 Claude가 새 세션에서 가장 먼저 읽는 파일이다. 전체 wiki를 읽지 않아도 "어디에 무엇이 있는지" 파악하는 용도. 실제 내용은 각 파일에서 읽는다.
+이 파일은 Claude가 새 세션에서 가장 먼저 읽는 파일이다. 전체 wiki를 읽지 않아도 "어디에 무엇이 있는지" 파악하는 용도.
 
 ---
 
-## parent_wiki
+## parent_wiki (전체 공통)
 
-|파일|내용 요약|마지막 업데이트|
+| 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-|overview.md|{전체 진행도 및 현재 상태 한줄 요약}|Task-{ID}|
-|architecture.md|{시스템 구조 한줄 요약}|Task-{ID}|
-|decisions.md|{Parent 의사결정 건수 및 최근 결정 요약}|Task-{ID}|
-|environment.md|{공통 환경 정보 한줄 요약}|Task-{ID}|
+| `overview.md` | 전체 Sub Project 구성 및 진행도 (템플릿) | — |
+| `architecture.md` | 시스템 아키텍처 (템플릿) | — |
+| `decisions.md` | 공통 의사결정 (템플릿) | — |
+| `environment.md` | 공통 환경 (템플릿) | — |
 
 ---
 
-## p{n}_wiki (Sub Project별 반복)
+## p1_wiki (p1_shared 공통 인프라)
 
-### p1_wiki
+> **역할**: p2_kdms, p3_usdms, p4_manager가 공통으로 의존하는 핵심 라이브러리
+> **상태**: ✅ T-001~T-008 모두 완료 | 전체 테스트 통과
 
-|파일|내용 요약|마지막 업데이트|
+### 코어 문서
+
+| 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-|errors.md|{등록 건수}건. {가장 중요한 에러 ID} 필독|Task-{ID}|
-|interfaces.md|{주요 DB/함수 한줄 요약}|Task-{ID}|
-|codebase_map.md|{현재 구조 한줄 요약}|Task-{ID}|
-|decisions.md|{의사결정 건수}건|Task-{ID}|
-|environment.md|{환경 한줄 요약}|Task-{ID}|
-|operations/|{operations 파일 현황}|Task-{ID}|
+| `codebase_map.md` | 21개 소스 파일 구조, 모듈 상태, 테스트 현황 | T-008 |
+| `environment.md` | tdms_p1_env Conda, 패키지 버전, .env 변수, Docker 구성 | T-008 |
+| `operations/runbook.md` | DB 동기화/감사/백업/검증/테스트 실행 명령 모음 | T-008 |
 
-### p2_wiki
+### interfaces/ (God Node 우선 — 연결도 순)
 
-|파일|내용 요약|마지막 업데이트|
+| 파일 | 핵심 클래스 | edges | 내용 요약 |
+|---|---|---|---|
+| `env_detector.md` | EnvDetector | **97** | 개발PC/서버PC 자동 감지, .env 프로파일 로드 |
+| `db_connection_pool.md` | DbConnectionPool | **80** | psycopg2 커넥션 풀, get_cursor() context manager |
+| `backup_manager.md` | BackupManager | **58** | pg_dump 백업, pre-data→data→post-data 강건 복원 |
+| `startup_validator.md` | StartupValidator | **48** | Docker 재기동 후 5종 검증, FastAPI lifespan 패턴 |
+| `physical_sync_manager.md` | PhysicalSyncManager | **20** | tar+SSH 물리 동기화, 5단계 파이프라인 |
+
+### decisions/ (핵심 기술 의사결정)
+
+| 파일 | 결정 요약 | 발생 Task |
 |---|---|---|
-|errors.md|{등록 건수}건. {가장 중요한 에러 ID} 필독|Task-{ID}|
-|interfaces.md|{주요 DB/함수 한줄 요약}|Task-{ID}|
-|codebase_map.md|{현재 구조 한줄 요약}|Task-{ID}|
-|decisions.md|{의사결정 건수}건|Task-{ID}|
-|environment.md|{환경 한줄 요약}|Task-{ID}|
-|operations/|{operations 파일 현황}|Task-{ID}|
+| `dec-001_physical_sync.md` | 논리 복원 실패 → 물리 Stop-and-Copy 채택 | T-008 |
+| `dec-002_pg_restore_section_order.md` | FK 순서 문제 → pre-data→data→post-data 복원 | T-006 |
+
+### errors/ (해결된 에러 기록)
+
+| 파일 | 에러 요약 | Severity |
+|---|---|---|
+| `p1-err-001_volume_uid_mismatch.md` | 물리 복제 후 UID 불일치 → chown 1000:1000 | High |
+| `p1-err-002_logical_restore_failure.md` | pg_restore 하이퍼테이블 충돌 → 물리 복제로 전환 | High |
 
 ---
 
 ## 빠른 참조 — 현재 가장 중요한 항목
 
-> 이 섹션은 nf-lint 실행 시 Claude가 자동 갱신한다.
-
 ### ⚠️ 필독 에러
 
-- [{SUB}_ERR-{N}] {에러 요약} → {파일경로}#섹션
+- [P1-ERR-001] Docker 볼륨 UID 불일치 → `p1_wiki/errors/p1-err-001_volume_uid_mismatch.md`
+- [P1-ERR-002] pg_restore 논리 복원 실패 → `p1_wiki/errors/p1-err-002_logical_restore_failure.md`
 
 ### 📐 최근 변경된 인터페이스
 
-- {함수/테이블명}: {변경 요약} → {파일경로}#섹션
+- `PhysicalSyncManager`: T-008에서 T-009 흡수, tar+SSH 파이프라인 확정 → `p1_wiki/interfaces/physical_sync_manager.md`
+- `SyncManager`: **폐기 예정** — 실운영 사용 금지, PhysicalSyncManager 사용
 
 ### 🔄 진행중인 작업
 
-- Task-{ID}: {작업명} ({Sub Project})
+- p1_shared: ✅ 완료 (T-001~T-008)
+- 다음: p2_kdms, p3_usdms, p4_manager 구현 예정
+
+---
+
+## Graphify 지식 그래프 연동
+
+> `graphify-out/GRAPH_REPORT.md` 참조 (464 nodes, 1183 edges, 17 communities)
+
+| Community | 핵심 노드 | 설명 |
+|---|---|---|
+| DB Connection & Startup Validation | DbConnectionPool, StartupValidator | 74 nodes |
+| Environment Detection & Auditing | EnvDetector, audit_* | 64 nodes |
+| Backup Manager Operations | BackupManager | 53 nodes |
+| Physical DB Sync Pipeline | PhysicalSyncManager | 25 nodes |
+| Sync Manager (Legacy Logical) | SyncManager (**폐기 예정**) | 38 nodes |
