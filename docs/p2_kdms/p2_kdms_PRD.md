@@ -1,9 +1,14 @@
 # p2_kdms PRD — 한국 시장 데이터 백엔드
 
-> **버전**: v1.0 | **작성일**: 2026-04-28
+> **버전**: v1.1 | **최초 작성**: 2026-04-28 | **최종 수정**: 2026-05-14
 > **참조 원본**: `migration_pjt/kdms_origin/` (KDMS v7.0)
 > **상위 PRD**: `docs/parent/tdms_PRD.md`
-> **참조 위키**: `pjt_wiki/migration-pjt/ref_kdms_wiki/`
+> **참조 위키**: `pjt_wiki/migration-pjt/ref_kdms_wiki/`, `pjt_wiki/p1_wiki/`
+>
+> **p1_shared 위키 핵심 참조**:
+> - 인터페이스: `pjt_wiki/p1_wiki/interfaces/` (EnvDetector, DbConnectionPool, BackupManager, StartupValidator, PhysicalSyncManager)
+> - 의사결정: `pjt_wiki/p1_wiki/decisions/` (물리 동기화 채택, pg_restore 섹션 분리)
+> - 운영 런북: `pjt_wiki/p1_wiki/operations/runbook.md`
 
 ---
 
@@ -27,8 +32,24 @@ p2_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 | DB 볼륨 | 기존 `kdms_pgdata` Docker 볼륨 그대로 재사용 (`external: true`) |
 | DB 이름 | `kdms_db` (변경 없음) |
 | DB 포트 | `5432` (변경 없음) |
-| 인계 전 백업 | `BackupManager --target kdms --tag pre_p2_migration` 실행 필수 |
+| 인계 전 백업 | `BackupManager` Python 클래스로 실행 필수 (아래 코드 참조) |
 | 스키마 호환 | 신규 init.sql과 기존 스키마 diff 확인 후 마이그레이션 스크립트 적용 |
+
+**인계 전 백업 실행 코드** (`pjt_wiki/p1_wiki/interfaces/backup_manager.md` 참조):
+```python
+from p1_shared.ops.backup_manager import BackupManager
+
+mgr = BackupManager(
+    container_name="kdms_timescaledb",  # docker-compose 서비스명과 일치해야 함
+    db_name="kdms_db",
+    db_user="roid",
+    backup_dir="./backups/kdms",
+    volume_name="kdms_pgdata",
+)
+dump_path = mgr.backup(tag="pre_p2_migration")
+print(f"백업 완료: {dump_path}")
+```
+> ⚠️ `BackupManager`는 CLI 도구가 아닌 Python 클래스입니다. `--target` 형태의 인자는 존재하지 않습니다.
 
 ---
 
@@ -38,11 +59,12 @@ p2_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 
 #### F-01: 일일 시세 수집 (OHLCV)
 - **수집 대상**: 전체 KOSPI + KOSDAQ 상장 종목
-- **데이터 소스**: Kiwoom REST API (1차), KIS REST API (보조)
+- **데이터 소스**: **KIS REST API (단일)** — Kiwoom 수정주가 오류 확인으로 수정계수 계산을 KIS로 전환한 이력에 따라, 원시 OHLCV 수집도 KIS로 통일함
 - **저장 테이블**: `daily_ohlcv` (raw, 미수정 — 수정주가 저장 금지)
 - **수집 주기**: 평일 장 마감 후 1회 (기본 17:10 KST)
 - **원본 참조**: `kdms_origin/tasks/daily_task.py` → `sync_factors_and_prices()`
 - **리팩토링 포인트**: 수집 실패 종목을 gap 목록으로 별도 기록하여 다음 실행 시 자동 재시도
+- **Kiwoom 역할 변경**: `kiwoom_client.py`는 분봉 수집(F-05) 전용으로 역할 축소
 
 #### F-02: 주가 수정계수 계산 및 관리
 - **대상 이벤트**: 액면분할, 주식배당, 무상증자 등 주가 불연속 이벤트
@@ -173,7 +195,7 @@ p2_kdms는 KDMS 원본의 **백엔드 기능**을 정제·리팩토링하여 재
 | `daily_update.py` / `daily_task.py` 중복 | 레거시 스크립트와 태스크 로직 중복 | 레거시 제거, `tasks/daily_task.py` 단일 소스 |
 | 예외 처리 | `except Exception` 광범위 catch | 구체적 예외 타입 명시, 재시도 로직 분리 |
 | 하드코딩 설정값 | 코드 내 직접 작성된 시간, 임계값 | `.env` / `config.yaml` 외부화 |
-| `kiwoom_rest.py` 토큰 관리 | 인스턴스별 독립 토큰 캐시 | `p1_shared/KiwoomApiCore` 의 `TokenManager`로 통합 |
+| `kiwoom_rest.py` 토큰 관리 | 인스턴스별 독립 토큰 캐시 | `p1_shared/KiwoomApiCore` 의 `TokenManager`로 통합 (분봉 전용) |
 
 ### 5.3 p3_usdms와 통일할 구현 패턴
 
@@ -208,14 +230,15 @@ p2_kdms/
 │   └── backfill_task.py       # 분봉 백필 + 시총 갭 복구
 │
 ├── collectors/                # 데이터 소스 연동
-│   ├── kiwoom_client.py       # p1_shared/KiwoomApiCore 래퍼
-│   ├── kis_kr_client.py       # p1_shared/KisApiCore → KR 전용 엔드포인트
+│   ├── kis_kr_client.py       # p1_shared/KisApiCore → KR 전용 엔드포인트 (OHLCV + 수정계수)
+│   ├── kiwoom_client.py       # p1_shared/KiwoomApiCore 래퍼 — 분봉 수집(F-05) 전용
 │   ├── krx_loader.py          # pykrx 시총 수집 (스레드 실행)
-│   ├── factor_calculator.py   # 수정계수 계산
+│   ├── factor_calculator.py   # 수정계수 계산 (KIS 기준)
 │   └── target_selector.py     # 분봉 대상 종목 선정
 │
 ├── repositories/              # DB 쿼리 레이어 (리팩토링 신규)
 │   ├── base.py                # 커넥션 풀 + get_cursor() (p1_shared 위임)
+│   │                          # EnvDetector.get_db_host("kdms")로 환경별 DSN 자동 결정
 │   ├── ohlcv_repo.py          # OHLCV CRUD
 │   ├── factor_repo.py         # 수정계수 CRUD
 │   ├── financial_repo.py      # 재무 데이터 CRUD
@@ -259,12 +282,32 @@ p2_kdms/
 
 ## 8. 환경 변수 (.env)
 
+> **⚠️ 변수 계층 구분**: `.env` 파일에는 두 계층의 변수가 공존한다.
+> - **Layer A (p1_shared `EnvDetector` 전용)**: 개발PC/서버PC 환경 감지 및 DB 호스트 자동 결정에 사용. 루트 `.env` 하나로 양측 PC에서 공통 사용.
+> - **Layer B (Docker Compose / 앱 내부)**: 컨테이너 내부 DB 접속 및 서비스 설정에 사용.
+
 ```bash
-# Database
-POSTGRES_HOST=db
-POSTGRES_PORT=5432
+# ── Layer A: p1_shared EnvDetector 전용 ──────────────────────────────────────
+# 환경 감지 (TDMS_ENV 설정 시 hostname/IP 감지 건너뜀)
+TDMS_ENV=dev                          # 'dev' | 'server' (명시적 지정, 최우선)
+DEV_HOSTNAME=ROID-PC                  # 개발PC 호스트명
+SERVER_HOSTNAME=EDM-LAB-MD02          # 서버PC 호스트명
+DEV_IP=192.168.35.205                 # 개발PC 내부망 IP
+SERVER_IP=192.168.35.97               # 서버PC 내부망 IP
+
+# DB 접속 (EnvDetector.get_db_host()가 환경별 호스트 자동 결정)
+DEV_KDMS_DB_USER=roid
+DEV_KDMS_DB_PASSWORD=your_password
+DEV_KDMS_DB_PORT=5432
+DEV_KDMS_DB_NAME=kdms_db
+
+# DB 동기화 (PhysicalSyncManager)
+SSH_KEY_PATH=~/.ssh/tdms_sync_rsa
+
+# ── Layer B: Docker Compose 내부 / FastAPI 앱 설정 ────────────────────────────
+# Database (컨테이너 초기화용 — Layer A와 값이 일치해야 함)
 POSTGRES_DB=kdms_db
-POSTGRES_USER=kdms_user
+POSTGRES_USER=roid
 POSTGRES_PASSWORD=your_password
 DB_POOL_MIN=5
 DB_POOL_MAX=20
@@ -297,10 +340,11 @@ MARKET_CAP_GAP_LOOKBACK_DAYS=30
 ```yaml
 # docker-compose.yml (핵심)
 services:
-  db:
+  kdms_timescaledb:              # ← BackupManager(container_name="kdms_timescaledb")와 반드시 일치
     image: timescale/timescaledb-ha:pg16
+    container_name: kdms_timescaledb
     volumes:
-      - kdms_pgdata:/home/postgres/pgdata/data   # 외부 볼륨
+      - kdms_pgdata:/home/postgres/pgdata/data   # 외부 볼륨 (PGDATA 경로 확인 필수)
     ports:
       - "5432:5432"
     environment:
@@ -315,7 +359,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      - kdms_timescaledb
     env_file: .env
     volumes:
       - ./logs:/app/logs          # 로그 파일 마운트
@@ -323,17 +367,23 @@ services:
 
 volumes:
   kdms_pgdata:
-    external: true               # ← DB 볼륨 보호 핵심
+    external: true               # ← DB 볼륨 보호 핵심 (docker-compose down -v 시 삭제 방지)
 ```
+
+> ⚠️ **컨테이너명 통일 필수**: `BackupManager`, `StartupValidator`, `PhysicalSyncManager` 모두 `container_name`을 직접 참조한다. `service`명(yaml 키)과 `container_name`이 다를 경우 반드시 `container_name: kdms_timescaledb` 를 명시적으로 설정할 것.
 
 ---
 
 ## 10. 구현 단계 (Phase)
 
 ### Phase 1 — DB 인계 및 기본 수집 재개 (최우선)
-- [ ] Docker Compose에 `external: true` 볼륨 설정
-- [ ] 기존 `kdms_db` 볼륨 연결 확인 및 백업
+- [ ] Docker Compose에 `external: true` 볼륨 설정 + `container_name: kdms_timescaledb` 명시
+- [ ] 기존 `kdms_db` 볼륨 연결 확인 및 `BackupManager`로 인계 전 백업 (`tag="pre_p2_migration"`)
 - [ ] FastAPI 앱 기본 구조 + `repositories/` 레이어 구성
+  - `repositories/base.py`: `EnvDetector.get_db_host("kdms")`로 환경별 DSN 자동 결정
+- [ ] **FastAPI `lifespan`에 `StartupValidator` 연동** — DB 5종 검증 후 `is_healthy=False` 시 기동 차단
+  - `p1_wiki/interfaces/startup_validator.md` FastAPI lifespan 패턴 참조
+  - `expected_tables=["daily_ohlcv", "stock_info", ...]`, `min_row_counts={"daily_ohlcv": 1_000_000}` 설정
 - [ ] 일일 OHLCV 수집 (`F-01`) 재개 — 수집 연속성 확인
 - [ ] 시가총액 수집 (`F-04`) 재개
 
@@ -364,8 +414,11 @@ volumes:
 | KIS `start_date` 무시 | 페이지네이션 시 `end_date` 역방향 이동 방식 필수 | `kis_kr_client.py`에 명시적 주석 + 테스트 |
 | pykrx 비동기 미지원 | 동기 함수 → event loop 블로킹 발생 | `asyncio.run_in_executor(None, ...)` 래핑 |
 | AsyncIOScheduler 필수 | `BackgroundScheduler` 사용 시 FastAPI event loop 충돌 | 코드 리뷰 체크리스트 항목 추가 |
-| Docker 볼륨 유실 위험 | `docker-compose down -v` 실행 시 볼륨 삭제 가능 | `external: true` + 팀 운영 가이드 공유 |
+| Docker 볼륨 유실 위험 | `docker-compose down -v` 실행 시 볼륨 삭제 가능 | `external: true` + `container_name` 명시 + 팀 운영 가이드 공유 |
 | 수정계수 이원화 | KIS/Kiwoom 팩터가 미세하게 다를 수 있음 | `price_source` 컬럼으로 구분 관리, 불일치 시 로그 경고 |
+| **Docker 볼륨 복제 후 UID 불일치** | 물리 복제(PhysicalSyncManager) 후 수신 측 볼륨 소유자 UID가 불일치하여 DB 기동 실패 | `PhysicalSyncManager.fix_permissions()` 자동 교정(1000:1000). 수동 시 `docker run --rm -v kdms_pgdata:/data alpine chown -R 1000:1000 /data` — `p1_wiki/errors/p1-err-001` 참조 |
+| **TimescaleDB 논리 복원 불가 (대용량)** | `pg_restore` 기반 논리 복원은 37GB+ TimescaleDB에서 하이퍼테이블 메타데이터 충돌 및 `out of shared memory` 발생 | **물리 복제(`PhysicalSyncManager`) 사용 필수**. 소용량 복원 시에도 `BackupManager.restore(section_order=True)` 필수 — `p1_wiki/errors/p1-err-002`, `p1_wiki/decisions/dec-001/002` 참조 |
+| TimescaleDB 버전 불일치 | 개발PC(2.14.2)와 서버PC 버전 차이 시 논리 복원 완전 불가 | Docker 이미지 Digest 고정 (`timescale/timescaledb-ha:pg16` 태그 대신 sha256 Digest 명시) |
 
 ---
 
