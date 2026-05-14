@@ -1,0 +1,30 @@
+services:
+  kdms_timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: kdms_timescaledb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-roid}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: kdms_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - kdms_pgdata:/var/lib/postgresql/data
+    restart: always
+
+  kdms_backend:
+    build:
+      context: ../..
+      dockerfile: tdms_core/p2_kdms/backend.Dockerfile
+    container_name: kdms_backend
+    env_file:
+      - .env
+    depends_on:
+      - kdms_timescaledb
+    volumes:
+      - ../../backups/kdms:/app/backups/kdms
+    restart: always
+
+volumes:
+  kdms_pgdata:
+    external: true

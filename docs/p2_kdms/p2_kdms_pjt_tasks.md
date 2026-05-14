@@ -58,7 +58,7 @@ T-003 (시총 + 일일 스케줄)    │
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-001 | 프로젝트 기반 구조 및 DB 인계 | Docker Compose(`container_name: kdms_timescaledb`, `external:true`), FastAPI 골격(`main.py`, `config.py`), `repositories/base.py`(EnvDetector DSN 자동 결정), `StartupValidator` lifespan 연동, BackupManager 인계 전 백업 실행 | 대기 | High | - | - | - |
+| T-001 | 프로젝트 기반 구조 및 DB 인계 | Docker Compose(`container_name: kdms_timescaledb`, `external:true`), FastAPI 골격(`main.py`, `config.py`), `repositories/base.py`(EnvDetector DSN 자동 결정), `StartupValidator` lifespan 연동, BackupManager 인계 전 백업 실행 | 완료 | High | - | 2026-05-14 | 2026-05-14 |
 | T-002 | 일일 OHLCV + 종목 마스터 수집 (KIS) | `collectors/kis_kr_client.py`(KisApiCore 래퍼, `start_date` 무시 페이지네이션 처리), `repositories/ohlcv_repo.py`, `repositories/master_repo.py`, `tasks/daily_task.py` 1차 구현(OHLCV + 종목마스터), `/api/data/stocks` | 대기 | High | T-001 | - | - |
 | T-003 | 시가총액 수집 + 일일 스케줄 자동화 | `collectors/krx_loader.py`(pykrx → run_in_executor 동기→비동기 래핑), `repositories/market_cap_repo.py`, `daily_task.py`에 F-04 통합, `AsyncIOScheduler` lifespan 연동 + `daily_update(17:10)` 스케줄 등록, `/api/admin/tasks/{id}/run` 수동 실행 엔드포인트 | 대기 | High | T-002 | - | - |
 
@@ -116,9 +116,9 @@ T-003 (시총 + 일일 스케줄)    │
 | 구분 | 수량 |
 |------|------|
 | 전체 | 9개 |
-| 완료 | 0개 |
+| 완료 | 1개 |
 | 진행 중 | 0개 |
-| 대기 | 9개 |
+| 대기 | 8개 |
 
 ---
 

@@ -1,0 +1,7 @@
+fastapi>=0.121.0
+pydantic-settings
+psycopg2-binary==2.9.12
+uvicorn
+pytest
+pytest-mock
+httpx
