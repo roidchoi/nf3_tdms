@@ -89,3 +89,19 @@ conda run -n tdms_p1_env python -m p1_shared.ops.auditors.audit_usdms
 
 ### Q. 스크립트 실행 중 에러가 나면 어떻게 복구하나요?
 물리적 복제가 실패했을 경우(네트워크 단절 등), 해당 폴더(`data/kdms_db`)의 데이터가 불완전해져 컨테이너가 켜지지 않을 수 있습니다. 이때는 스크립트 실행 전 스케줄러가 남겨둔 `.dump` 백업 파일을 통해 수동 복원(`BackupManager` 활용)을 진행해야 합니다.
+
+---
+
+## 5. 완전 자동화 설정 (비밀번호 입력 무인화)
+
+`db_sync.py`는 내부적으로 권한 충돌 문제를 해결하기 위해 `sudo tar`, `sudo chown` 등의 관리자 명령어를 사용합니다. 이로 인해 스크립트 실행 중 터미널에서 비밀번호를 요구하는 프롬프트가 발생할 수 있으며, Cron과 같은 스케줄러를 통한 무인 백그라운드 실행 시 방해가 될 수 있습니다.
+
+비밀번호 입력 단계를 완전히 생략하고 100% 자동화를 구축하려면, **로컬 PC와 서버 PC 양쪽에서 아래 명령어를 단 1회만 실행**해 두십시오.
+
+```bash
+echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/tar, /usr/bin/rm, /usr/bin/chown, /usr/bin/docker" | sudo tee /etc/sudoers.d/tdms_sync
+```
+
+### 💡 작동 원리
+위 명령어는 호스트 운영체제의 `sudoers` 정책에 `tdms_sync`라는 예외 규칙을 추가합니다. 
+동기화에 필수적인 4가지 명령어(`tar`, `rm`, `chown`, `docker`)에 한해서만 현재 로그인한 사용자(예: `roid2`)가 비밀번호 없이 `sudo`를 즉시 실행할 수 있도록 허용합니다. 이를 통해 스크립트는 어떠한 중간 멈춤이나 프롬프트 없이 백그라운드에서 신속하게 양방향 DB 동기화를 완료할 수 있습니다.

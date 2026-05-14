@@ -15,12 +15,23 @@ def run_simple_audit():
     peer_ip = env.get_peer_host()
     local_ip = os.getenv("DEV_IP", "127.0.0.1") if env.detect() == "dev" else os.getenv("SERVER_IP", "127.0.0.1")
 
-    # USDMS 포트는 5433 고정
-    db_user = os.getenv("POSTGRES_USER", "postgres")
-    db_pw = os.getenv("POSTGRES_PASSWORD", "password")
-
-    dev_db = {"host": local_ip, "port": 5433, "user": db_user, "password": db_pw, "dbname": "usdms_db"}
-    srv_db = {"host": peer_ip, "port": 5433, "user": db_user, "password": db_pw, "dbname": "usdms_db"}
+    # DEV 환경 (로컬) 설정
+    dev_db = {
+        "host": local_ip, 
+        "port": int(os.getenv("DEV_USDMS_DB_PORT", 5433)), 
+        "user": os.getenv("DEV_USDMS_DB_USER", "postgres"), 
+        "password": os.getenv("DEV_USDMS_DB_PASSWORD"), 
+        "dbname": os.getenv("DEV_USDMS_DB_NAME", "usdms_db")
+    }
+    
+    # SERVER 환경 (원격) 설정
+    srv_db = {
+        "host": peer_ip, 
+        "port": int(os.getenv("SERVER_USDMS_DB_PORT", 5435)), 
+        "user": os.getenv("SERVER_USDMS_DB_USER", "postgres"), 
+        "password": os.getenv("SERVER_USDMS_DB_PASSWORD"), 
+        "dbname": os.getenv("SERVER_USDMS_DB_NAME", "usdms_db")
+    }
 
     try:
         dev_conn = psycopg2.connect(**dev_db)

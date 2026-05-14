@@ -51,13 +51,22 @@ def main():
     peer_ip = env.get_peer_host()
     local_ip = os.getenv("DEV_IP", "127.0.0.1") if env.detect() == "dev" else os.getenv("SERVER_IP", "127.0.0.1")
 
-    # .env 환경 변수 기반으로 설정 구성
-    db_name = os.getenv("POSTGRES_DB", "kdms_db")
-    db_user = os.getenv("POSTGRES_USER", "roid")
-    db_pw = os.getenv("POSTGRES_PASSWORD", "password")
-
-    dev_conf = {"host": local_ip, "port": 5432, "dbname": db_name, "user": db_user, "password": db_pw, "label": "로컬PC"}
-    srv_conf = {"host": peer_ip, "port": 5432, "dbname": db_name, "user": db_user, "password": db_pw, "label": "원격PC"}
+    dev_conf = {
+        "host": local_ip, 
+        "port": int(os.getenv("DEV_KDMS_DB_PORT", 5432)), 
+        "dbname": os.getenv("DEV_KDMS_DB_NAME", "kdms_db"), 
+        "user": os.getenv("DEV_KDMS_DB_USER", "roid"), 
+        "password": os.getenv("DEV_KDMS_DB_PASSWORD"), 
+        "label": "로컬PC"
+    }
+    srv_conf = {
+        "host": peer_ip, 
+        "port": int(os.getenv("SERVER_KDMS_DB_PORT", 5432)), 
+        "dbname": os.getenv("SERVER_KDMS_DB_NAME", "kdms_db"), 
+        "user": os.getenv("SERVER_KDMS_DB_USER", "roid"), 
+        "password": os.getenv("SERVER_KDMS_DB_PASSWORD"), 
+        "label": "원격PC"
+    }
 
     dev_stats = get_db_stats_light(**dev_conf)
     srv_stats = get_db_stats_light(**srv_conf)

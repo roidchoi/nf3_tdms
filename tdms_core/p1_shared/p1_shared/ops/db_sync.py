@@ -77,34 +77,60 @@ class PhysicalSyncManager:
         self._run_remote(remote_host, cmd)
 
     def transfer_data(self) -> bool:
-        logger.info("3. 물리 데이터 전송 시작 (tar + SSH Pipeline)")
+        logger.info("3. 물리 데이터 전송 시작 (Safe 2-Step Transfer)")
         
         db_path = f"{self.config.data_path}/{self.config.db_name}_db"
+        tmp_tar = f"/tmp/{self.config.db_name}_sync.tar.gz"
         
+        # subprocess.run 대신 터미널(TTY) 제어권을 넘겨 sudo 비밀번호를 입력받을 수 있게 함
+        def run_interactive(cmd):
+            logger.debug(f"Interactive exec: {cmd}")
+            return subprocess.call(cmd, shell=True)
+
         if self.config.direction == "pull":
             # 서버 -> 로컬
-            logger.info("   - 서버 데이터를 로컬로 가져옵니다 (Pull)...")
-            cmd = (
-                f"ssh -i {self.config.ssh_key_path} -o StrictHostKeyChecking=no "
+            logger.info("   [1/3] 서버에서 데이터를 압축합니다 (비밀번호 입력 필요)...")
+            cmd_pack = (
+                f"ssh -t -i {self.config.ssh_key_path} -o StrictHostKeyChecking=no "
                 f"{self.config.ssh_user}@{self.config.source_ip} "
-                f"\"sudo tar -czf - -C {db_path} .\" | sudo tar -xzf - -C {db_path}"
+                f"\"sudo tar -czf {tmp_tar} -C {db_path} . && sudo chmod 644 {tmp_tar}\""
             )
+            if run_interactive(cmd_pack) != 0: return False
+
+            logger.info("   [2/3] 로컬로 압축 파일을 다운로드합니다...")
+            cmd_fetch = f"scp -i {self.config.ssh_key_path} {self.config.ssh_user}@{self.config.source_ip}:{tmp_tar} {tmp_tar}"
+            if run_interactive(cmd_fetch) != 0: return False
+
+            logger.info("   [3/3] 로컬에 압축을 해제합니다...")
+            cmd_unpack = f"sudo tar -xzf {tmp_tar} -C {db_path}"
+            if run_interactive(cmd_unpack) != 0: return False
+
+            # 임시 파일 정리
+            run_interactive(f"sudo rm {tmp_tar}")
+            run_interactive(f"ssh -t -i {self.config.ssh_key_path} {self.config.ssh_user}@{self.config.source_ip} \"sudo rm {tmp_tar}\"")
+
         else:
             # 로컬 -> 서버
-            logger.info("   - 로컬 데이터를 서버로 밀어넣습니다 (Push)...")
-            cmd = (
-                f"sudo tar -czf - -C {db_path} . | "
-                f"ssh -i {self.config.ssh_key_path} -o StrictHostKeyChecking=no "
-                f"{self.config.ssh_user}@{self.config.target_ip} "
-                f"\"sudo tar -xzf - -C {db_path}\""
-            )
+            logger.info("   [1/3] 로컬에서 데이터를 압축합니다 (비밀번호 입력 필요)...")
+            cmd_pack = f"sudo tar -czf {tmp_tar} -C {db_path} ."
+            if run_interactive(cmd_pack) != 0: return False
 
-        logger.debug(f"Transfer cmd: {cmd}")
-        res = self._run_local(cmd)
-        if res.returncode != 0:
-            logger.error(f"데이터 전송 실패: {res.stderr}")
-            return False
-            
+            logger.info("   [2/3] 서버로 압축 파일을 업로드합니다...")
+            cmd_push = f"scp -i {self.config.ssh_key_path} {tmp_tar} {self.config.ssh_user}@{self.config.target_ip}:{tmp_tar}"
+            if run_interactive(cmd_push) != 0: return False
+
+            logger.info("   [3/3] 서버에 압축을 해제합니다...")
+            cmd_unpack = (
+                f"ssh -t -i {self.config.ssh_key_path} -o StrictHostKeyChecking=no "
+                f"{self.config.ssh_user}@{self.config.target_ip} "
+                f"\"sudo tar -xzf {tmp_tar} -C {db_path}\""
+            )
+            if run_interactive(cmd_unpack) != 0: return False
+
+            # 임시 파일 정리
+            run_interactive(f"sudo rm {tmp_tar}")
+            run_interactive(f"ssh -t -i {self.config.ssh_key_path} {self.config.ssh_user}@{self.config.target_ip} \"sudo rm {tmp_tar}\"")
+
         logger.info("   - 전송 완료")
         return True
 
