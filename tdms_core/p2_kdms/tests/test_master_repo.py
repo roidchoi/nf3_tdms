@@ -67,12 +67,11 @@ def test_stocks_endpoint_returns_200_with_stock_list(mocker):
 
     from p2_kdms.main import app
     # DI override (FastAPI dependency_overrides 사용)
-    from p2_kdms.routers.data import get_master_repo
+    from routers.data import get_master_repo
     app.dependency_overrides[get_master_repo] = lambda: mock_master_repo
 
     client = TestClient(app)
     response = client.get("/api/data/stocks")
-
     assert response.status_code == 200
     body = response.json()
     assert len(body) == 1

@@ -82,3 +82,127 @@ class OhlcvRepo:
         """
         with self.pool.get_cursor() as cursor:
             cursor.execute(query, (stk_cd, target_date, reason))
+
+    def refresh_adjusted_ohlcv_batch(self, start_date: date, end_date: date, price_source: str = 'KIS') -> int:
+        """
+        수정계수를 기반으로 누적곱 계산을 처리하는 SQL CTE를 활용해
+        daily_ohlcv_adjusted 물리 테이블을 일괄 갱신합니다.
+        
+        Args:
+            start_date: 갱신 시작일
+            end_date: 갱신 종료일
+            price_source: 수정계수 출처
+        Returns:
+            int: 갱신(UPSERT) 처리된 행 수
+        """
+        query = """
+            WITH raw_data AS (
+                SELECT dt, stk_cd, open, high, low, close, volume
+                FROM daily_ohlcv
+                WHERE dt BETWEEN %s AND %s
+            ),
+            calculated_factors AS (
+                SELECT 
+                    r.dt,
+                    r.stk_cd,
+                    r.open as open_prc,
+                    r.high as high_prc,
+                    r.low as low_prc,
+                    r.close as cls_prc,
+                    r.volume as vol,
+                    COALESCE(
+                        (SELECT EXP(SUM(LN(f.price_ratio))) 
+                         FROM price_adjustment_factors f 
+                         WHERE f.stk_cd = r.stk_cd 
+                           AND f.price_source = %s 
+                           AND f.event_dt > r.dt), 
+                        1.0
+                    ) as cum_price_factor,
+                    COALESCE(
+                        (SELECT EXP(SUM(LN(f.volume_ratio))) 
+                         FROM price_adjustment_factors f 
+                         WHERE f.stk_cd = r.stk_cd 
+                           AND f.price_source = %s 
+                           AND f.event_dt > r.dt), 
+                        1.0
+                    ) as cum_volume_factor
+                FROM raw_data r
+            )
+            INSERT INTO daily_ohlcv_adjusted (dt, stk_cd, open_prc, high_prc, low_prc, cls_prc, vol, adj_factor, updated_at)
+            SELECT 
+                dt,
+                stk_cd,
+                ROUND(open_prc * cum_price_factor)::INTEGER,
+                ROUND(high_prc * cum_price_factor)::INTEGER,
+                ROUND(low_prc * cum_price_factor)::INTEGER,
+                ROUND(cls_prc * cum_price_factor)::INTEGER,
+                ROUND(vol * cum_volume_factor)::BIGINT,
+                cum_price_factor,
+                CURRENT_TIMESTAMP
+            FROM calculated_factors
+            ON CONFLICT (dt, stk_cd) DO UPDATE SET
+                open_prc = EXCLUDED.open_prc,
+                high_prc = EXCLUDED.high_prc,
+                low_prc = EXCLUDED.low_prc,
+                cls_prc = EXCLUDED.cls_prc,
+                vol = EXCLUDED.vol,
+                adj_factor = EXCLUDED.adj_factor,
+                updated_at = CURRENT_TIMESTAMP
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (start_date, end_date, price_source, price_source))
+            return cursor.rowcount
+
+    def get_daily_ohlcv(self, stk_cd: str, start_date: date, end_date: date) -> list[dict]:
+        """
+        특정 종목의 지정 기간 내 원본 OHLCV 데이터를 오름차순으로 조회합니다.
+        """
+        query = """
+            SELECT stk_cd, dt, open, high, low, close, volume
+            FROM daily_ohlcv
+            WHERE stk_cd = %s AND dt BETWEEN %s AND %s
+            ORDER BY dt ASC
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (stk_cd, start_date, end_date))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "stk_cd": r[0],
+                    "dt": r[1],
+                    "open": int(r[2]),
+                    "high": int(r[3]),
+                    "low": int(r[4]),
+                    "close": int(r[5]),
+                    "volume": int(r[6])
+                }
+                for r in rows
+            ]
+
+    def get_adjusted_ohlcv_direct(self, stk_cd: str, start_date: date, end_date: date) -> list[dict]:
+        """
+        특정 종목의 지정 기간 내 물리 테이블(daily_ohlcv_adjusted) 수정주가 데이터를 오름차순으로 조회합니다.
+        """
+        query = """
+            SELECT stk_cd, dt, open_prc, high_prc, low_prc, cls_prc, vol, adj_factor
+            FROM daily_ohlcv_adjusted
+            WHERE stk_cd = %s AND dt BETWEEN %s AND %s
+            ORDER BY dt ASC
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (stk_cd, start_date, end_date))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "stk_cd": r[0],
+                    "dt": r[1],
+                    "open": int(r[2]),
+                    "high": int(r[3]),
+                    "low": int(r[4]),
+                    "close": int(r[5]),
+                    "volume": int(r[6]),
+                    "adj_factor": float(r[7])
+                }
+                for r in rows
+            ]
+

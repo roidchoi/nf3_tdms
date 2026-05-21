@@ -56,6 +56,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+from routers.data import router as data_router
+app.include_router(data_router)
+
 @app.get("/")
 def read_root():
     return {"message": "KDMS API is running"}
+
