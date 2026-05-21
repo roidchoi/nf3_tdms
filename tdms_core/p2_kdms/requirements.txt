@@ -5,3 +5,6 @@ uvicorn
 pytest
 pytest-mock
 httpx
+pandas
+lxml
+-e ../p1_shared

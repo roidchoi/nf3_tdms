@@ -19,9 +19,9 @@ KIS REST API를 통해 전체 상장 종목의 일봉 OHLCV와 종목 마스터�
   - `tasks/daily_task.py` — OHLCV + 종목마스터 수집 조율 (1차)
   - `routers/data.py` — `/api/data/stocks` 엔드포인트
 - OUT:
-  - 시가총액 수집, APScheduler 연동 (T-003)
-  - 수정계수 수집·역산 API (T-004)
-  - 수정주가 저장 (PRD 명시 금지 — raw만 저장)
+  - 시가총액 수집, APScheduler 연동 (T-006)
+  - 수정계수 수집·역산 API (T-003)
+  - 수정주가 저장 테이블(`daily_ohlcv_adjusted`) 개설 및 CTE 기반 최근 N일 배치 갱신 (`refresh_adjusted_ohlcv_batch`) (-> T-003 수정계수 계산 및 저장의 구현 범위로 편입)
 
 ---
 
@@ -67,6 +67,10 @@ class KisKrClient:
         """
         특정 종목의 target_date 일봉 데이터를 수집.
 
+        ⚠️ KIS API 파라미터 제약조건:
+           KIS API는 `adj_price='1'`이 원본(Raw) 주가, `adj_price='0'`이 수정(Adjusted) 주가입니다. (Kiwoom과 반대)
+           T-002에서는 Raw(원본) 시세만 수집하므로 반드시 `adj_price='1'`로 요청을 전송해야 합니다.
+
         ⚠️ KIS `start_date` 무시 특이동작:
            end_date=target_date로 요청 후 응답에서 target_date 행만 필터링.
 
@@ -80,10 +84,22 @@ class KisKrClient:
 
     def fetch_stock_master(self) -> list[dict]:
         """
-        전체 KOSPI + KOSDAQ 상장 종목 마스터 수집.
+        KIS 마스터 파일(ZIP)을 직접 다운로드하여 KOSPI 및 KOSDAQ 상장 종목 마스터 수집.
+
+        수집 소스:
+          - KOSPI: https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip
+          - KOSDAQ: https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip
+
+        파싱 및 정규화 규칙:
+          - 메모리 상에서 zip 압축 해제 후 cp949 인코딩으로 각 라인 파싱.
+          - 단축코드: rf1[0:9].strip()의 마지막 6자리 숫자만 추출하여 stk_cd로 정규화 (예: 'A005930' -> '005930')
+          - 종목명: KOSPI는 rf1[21:].strip(), KOSDAQ은 rf1[21:].strip()으로 추출
+          - 상장일자: KOSPI는 Part2의 50번째 컬럼(8바이트), KOSDAQ은 45번째 컬럼(8바이트)에서 추출하여 YYYY-MM-DD date 객체 또는 string으로 변환
+          - 상장주수: KOSPI는 51번째 컬럼(15바이트), KOSDAQ은 46번째 컬럼(15바이트)에서 추출.
+                    특히 KOSDAQ의 경우 상장주수 단위가 '천주'이므로 반드시 1,000을 곱하여 실제 주식수 단위로 저장.
 
         Returns:
-            list[dict]: [{"stk_cd", "stk_nm", "market", "is_active", "listed_dt"}, ...]
+            list[dict]: [{"stk_cd", "stk_nm", "market", "is_active", "listed_dt", "listed_shares"}, ...]
         """
         ...
 
@@ -124,7 +140,7 @@ class MasterRepo:
         stock_info에 upsert. PK: stk_cd, ON CONFLICT DO UPDATE.
 
         Args:
-            records: [{"stk_cd", "stk_nm", "market", "is_active", "listed_dt"}, ...]
+            records: [{"stk_cd", "stk_nm", "market", "is_active", "listed_dt", "listed_shares"}, ...]
         Returns:
             int: upserted 행 수
         """
@@ -176,9 +192,9 @@ class DailyTask:
 
 def test_fetch_daily_ohlcv_returns_target_date_row_only(mocker):
     """
-    [목적] KIS API 응답에서 target_date에 해당하는 행만 반환하는지 검증.
-    [유도] end_date=target_date로 요청 후 응답 리스트에서 필터링하는 로직 구현 유도.
-           start_date 무시 특이동작 대응의 핵심.
+    [목적] KIS API 응답에서 target_date에 해당하는 행만 반환하며, 반드시 원본 가격(adj_price='1')을 요청하는지 검증.
+    [유도] end_date=target_date, adj_price='1'로 요청 후 응답 리스트에서 필터링하는 로직 구현 유도.
+           start_date 무시 대응 및 KIS API 파라미터 규칙 준수 보장.
     """
     mock_core = mocker.MagicMock()
     mock_core.get.return_value = {
@@ -200,6 +216,12 @@ def test_fetch_daily_ohlcv_returns_target_date_row_only(mocker):
     assert result["close"] == 70500
     assert result["volume"] == 1000000
 
+    # KIS API에 원본 주가(adj_price='1')가 전달되었는지 검증
+    # fetch_daily_ohlcv 내부에서 api_core.get을 호출할 때 adj_price='1'이 포함되어야 함
+    mock_core.get.assert_called_once()
+    called_kwargs = mock_core.get.call_args[1]
+    assert called_kwargs.get("adj_price") == "1"
+
 
 def test_fetch_daily_ohlcv_returns_none_when_date_not_in_response(mocker):
     """
@@ -218,6 +240,25 @@ def test_fetch_daily_ohlcv_returns_none_when_date_not_in_response(mocker):
     result = client.fetch_daily_ohlcv("005930", date(2026, 5, 14))
 
     assert result is None
+
+
+def test_fetch_stock_master_downloads_and_parses_mst(mocker):
+    """
+    [목적] KIS 마스터 ZIP 파일을 다운로드하여 단축코드, 종목명, 상장일자, 상장주식을 올바르게 파싱 및 정규화하는지 검증.
+    [유도] urllib.request.urlretrieve 또는 requests.get을 mocking하여 가상의 ZIP 데이터를 제공하고,
+           KOSDAQ 종목의 경우 상장주수에 1000을 정상 곱하는지 검증.
+    """
+    # urllib 또는 HTTP Client 모의 객체 설정
+    mock_retrieve = mocker.patch("urllib.request.urlretrieve")
+    mock_zip = mocker.patch("zipfile.ZipFile")
+    
+    # KOSPI / KOSDAQ 파싱을 위한 dummy mst 내용 모의 설정
+    # (실제 구현 시 zipfile.ZipFile을 mocking하여 open()이 CP949로 인코딩된 스트링을 반환하도록 유도)
+    client = KisKrClient(api_core=mocker.MagicMock())
+    
+    # 이 테스트는 fetch_stock_master()가 정상적으로 다운로드, 압축 해제, 라인 파싱을 수행하여
+    # 리스트에 KOSPI와 KOSDAQ 종목 정보를 누적하는지 검증합니다.
+    pass
 
 
 # tests/test_ohlcv_repo.py
@@ -515,7 +556,7 @@ def test_stocks_endpoint_returns_200_with_stock_list(mocker):
 ## § 5. 구현 참고사항
 
 - **KIS API `start_date` 무시**: PRD §3.1 F-02 주의사항 — `end_date=target_date`로 설정 후 응답 리스트에서 `stck_bsop_date == target_date.strftime("%Y%m%d")` 행만 필터링. 원본 `kdms_origin/collectors/kis_rest.py` 페이지네이션 로직 참조.
-- **수정주가 저장 금지**: `daily_ohlcv`에는 raw(미수정) 데이터만 저장. 수정주가 역산은 T-004에서 조회 시 계산.
+- **수정주가 저장 금지**: `daily_ohlcv`에는 raw(미수정) 데이터만 저장합니다. KIS API 호출 시 반드시 `adj_price='1'`로 원본(Raw) 가격을 요청하도록 해야 합니다. (`adj_price='0'`은 수정주가이며, 수정주가 저장 테이블(`daily_ohlcv_adjusted`) 개설 및 CTE 기반 최근 N일 배치 갱신 작업은 T-003(수정계수 계산 및 저장) 단계에서 구현합니다.)
 - **gap 기록 테이블**: `system_milestones` 또는 전용 `collection_gaps` 테이블 구현 Agent 판단에 위임. 단, `ohlcv_repo.record_gap(stk_cd, date, reason)` 인터페이스는 위에 정의된 대로 유지.
 - **FastAPI 의존성 주입 패턴**: `routers/data.py`의 `get_master_repo()`를 Depends로 주입. `app.dependency_overrides`로 테스트에서 Mock 교체.
 - **p1_shared 참조**:

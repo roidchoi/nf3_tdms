@@ -384,15 +384,14 @@ volumes:
 - [ ] **FastAPI `lifespan`에 `StartupValidator` 연동** — DB 5종 검증 후 `is_healthy=False` 시 기동 차단
   - `p1_wiki/interfaces/startup_validator.md` FastAPI lifespan 패턴 참조
   - `expected_tables=["daily_ohlcv", "stock_info", ...]`, `min_row_counts={"daily_ohlcv": 1_000_000}` 설정
-- [ ] 일일 OHLCV 수집 (`F-01`) 재개 — 수집 연속성 확인
-- [ ] 시가총액 수집 (`F-04`) 재개
+- [ ] 일일 OHLCV 수집 (`F-01`) 및 종목 마스터 관리 (`F-06`) 재개 — 수집 연속성 확인
 
-### Phase 2 — 핵심 수집 기능 완성
-- [ ] 수정계수 수집 및 역산 API (`F-02`)
+### Phase 2 — 핵심 수집 기능 및 전체 스케줄 완성
+- [ ] 주가 수정계수 수집 및 역산 API (`F-02`)
 - [ ] PIT 재무제표 수집 (`F-03`)
 - [ ] 분봉 수집 (`F-05`)
-- [ ] 종목 마스터 관리 (`F-06`)
-- [ ] APScheduler 자동화 스케줄 연결
+- [ ] 시가총액 수집 (`F-04`) 재개
+- [ ] APScheduler 자동화 스케줄 연결 및 통합 등록 (일일 업데이트, 재무 데이터, 분봉 백필)
 
 ### Phase 3 — API 및 리팩토링
 - [ ] 데이터 조회 엔드포인트 완성 (수정주가 역산 포함)
