@@ -65,8 +65,8 @@ T-009 (p4_manager 연동)
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
 | T-003 | 수정계수 수집 + 역산 API 및 물리 테이블 반영 (KIS) | `collectors/factor_calculator.py`(누적곱 알고리즘), `repositories/factor_repo.py`, `price_adjustment_factors` CRUD, `/api/data/factors`, `/api/data/ohlcv/daily/adjusted`, `daily_ohlcv_adjusted` 물리 갱신 및 조회 API 완성 | 완료 | High | T-002 | 2026-05-21 | 2026-05-21 |
-| T-004 | PIT 재무제표 수집 | `tasks/financial_task.py`(KIS `fetch_all_financial_data`), `repositories/financial_repo.py`, `financial_statements` / `financial_ratios` CRUD (PIT Key: `retrieved_at`) | 대기 | Medium | T-003 | - | - |
-| T-005 | 분봉 수집 (Kiwoom) | `collectors/kiwoom_client.py`(KiwoomApiCore 래퍼 — 분봉 전용), `collectors/target_selector.py`(직전 분기 평균 거래대금 상위N), `tasks/backfill_task.py`(분봉 백필 + 시총 갭 복구 30일) | 대기 | Medium | T-002 | - | - |
+| T-004 | PIT 재무제표 수집 | `tasks/financial_task.py`(KIS `fetch_all_financial_data`), `repositories/financial_repo.py`, `financial_statements` / `financial_ratios` CRUD (PIT Key: `retrieved_at`) | 완료 | Medium | T-003 | 2026-05-21 | 2026-05-21 |
+| T-005 | 분봉 수집 (Kiwoom) | `collectors/kiwoom_client.py`(KiwoomApiCore 래퍼 — 분봉 전용), `collectors/target_selector.py`(직전 분기 평균 거래대금 상위N), `tasks/backfill_task.py`(분봉 백필 + 시총 갭 복구 2025년 11월 이전부터 현재까지) | 진행중 | Medium | T-002 | 2026-05-21 | - |
 | T-006 | 시가총액 수집 + 전체 스케줄 자동화 완성 | `collectors/krx_loader.py`(pykrx → run_in_executor), `repositories/market_cap_repo.py`, `daily_task.py`에 F-04 통합, `AsyncIOScheduler` lifespan 연동 + 전체 자동화 스케줄(`daily_update(17:10)`, `financial_update(토 09:00)`, `backfill_minute(토 10:20)`) 등록 및 완성, `/api/admin/tasks/{id}/run` 수동 실행 엔드포인트 | 대기 | High | T-004, T-005 | - | - |
 
 ### Phase 3: API 완성
