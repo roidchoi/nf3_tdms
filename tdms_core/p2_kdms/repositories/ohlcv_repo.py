@@ -206,3 +206,90 @@ class OhlcvRepo:
                 for r in rows
             ]
 
+    def get_minute_target_history(self, quarter: str, market: str, table_name: str = 'minute_target_history') -> list[dict]:
+        """지정된 minute_target_history 테이블에서 특정 분기/시장의 대상 종목을 조회합니다."""
+        query = f"""
+            SELECT quarter, market, symbol, avg_trade_value, rank
+            FROM {table_name}
+            WHERE quarter = %s AND market = %s
+            ORDER BY rank ASC;
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (quarter, market))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "quarter": r[0],
+                    "market": r[1],
+                    "symbol": r[2],
+                    "avg_trade_value": float(r[3]) if r[3] is not None else 0.0,
+                    "rank": int(r[4]) if r[4] is not None else 0
+                }
+                for r in rows
+            ]
+
+    def upsert_minute_target_history(self, targets: list[dict], table_name: str = 'minute_target_history') -> None:
+        """target_selector 결과를 지정된 minute_target_history 테이블에 저장합니다."""
+        if not targets:
+            return
+        query = f"""
+            INSERT INTO {table_name} (quarter, market, symbol, avg_trade_value, rank)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (quarter, market, symbol) DO UPDATE SET
+                avg_trade_value = EXCLUDED.avg_trade_value,
+                rank = EXCLUDED.rank;
+        """
+        data = [
+            (t['quarter'], t['market'], t['symbol'], t['avg_trade_value'], t['rank'])
+            for t in targets
+        ]
+        with self.pool.get_cursor() as cursor:
+            cursor.executemany(query, data)
+
+    def upsert_minute_ohlcv(self, data: list[dict], table_name: str = 'minute_ohlcv') -> int:
+        """분봉 데이터를 지정된 minute_ohlcv 테이블에 일괄 UPSERT합니다."""
+        if not data:
+            return 0
+        from psycopg2.extras import execute_values
+        columns = list(data[0].keys())
+        conflict_keys = ['dt_tm', 'stk_cd']
+        update_columns = [col for col in columns if col not in conflict_keys]
+        update_clause = ", ".join([f"{col} = EXCLUDED.{col}" for col in update_columns])
+        query = f"""
+            INSERT INTO {table_name} ({', '.join(columns)})
+            VALUES %s
+            ON CONFLICT ({', '.join(conflict_keys)}) DO UPDATE SET
+                {update_clause};
+        """
+        values = [[item.get(col) for col in columns] for item in data]
+        with self.pool.get_cursor() as cursor:
+            execute_values(cursor, query, values)
+            return cursor.rowcount
+
+    def fetch_ohlcv_for_factor_calc(self, stk_cd: str, table_name_raw: str = 'daily_ohlcv', table_name_adj: str = 'daily_ohlcv_adjusted') -> 'pd.DataFrame':
+        """
+        수정계수 역산을 위해 특정 종목의 원본 및 수정 일봉 시세를 조회하고
+        두 데이터가 모두 존재하는 날짜(교집합)를 기준으로 병합하여 반환합니다.
+        """
+        import pandas as pd
+        raw_query = f"SELECT dt, close FROM {table_name_raw} WHERE stk_cd = %s"
+        adj_query = f"SELECT dt, cls_prc FROM {table_name_adj} WHERE stk_cd = %s"
+        
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(raw_query, (stk_cd,))
+            raw_rows = cursor.fetchall()
+            df_raw = pd.DataFrame(raw_rows, columns=['dt', 'raw_close']) if raw_rows else pd.DataFrame(columns=['dt', 'raw_close'])
+            
+            cursor.execute(adj_query, (stk_cd,))
+            adj_rows = cursor.fetchall()
+            df_adj = pd.DataFrame(adj_rows, columns=['dt', 'adj_close']) if adj_rows else pd.DataFrame(columns=['dt', 'adj_close'])
+            
+        if df_raw.empty or df_adj.empty:
+            return pd.DataFrame(columns=['dt', 'adj_close', 'raw_close'])
+            
+        df = pd.merge(df_adj, df_raw, on='dt', how='inner')
+        df = df.sort_values(by='dt', ascending=True).reset_index(drop=True)
+        return df
+
+
+

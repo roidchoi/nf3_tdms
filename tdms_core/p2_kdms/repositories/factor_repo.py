@@ -1,6 +1,7 @@
 # repositories/factor_repo.py
 
 from typing import List, Dict, Any
+from datetime import date
 from p1_shared.db.connection import DbConnectionPool
 
 class FactorRepo:
@@ -85,3 +86,41 @@ class FactorRepo:
                             factor_dict[col] = row[i]
                 results.append(factor_dict)
             return results
+
+    def get_recent_event_stocks_map(self, days: int, price_source: str = 'KIS', table_name: str = 'price_adjustment_factors') -> dict[str, list[date]]:
+        """
+        최근 N일 이내에 특정 소스의 수정계수 팩터가 발생한 종목 코드 및 이벤트 날짜 매핑 데이터를 조회합니다.
+        """
+        from datetime import date, timedelta
+        start_date = date.today() - timedelta(days=days)
+        query = f"""
+            SELECT stk_cd, event_dt
+            FROM {table_name}
+            WHERE event_dt >= %s AND price_source = %s
+            ORDER BY stk_cd, event_dt;
+        """
+        event_map = {}
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (start_date, price_source))
+            rows = cursor.fetchall()
+            for r in rows:
+                stk_cd = r[0]
+                event_dt = r[1]
+                if stk_cd not in event_map:
+                    event_map[stk_cd] = []
+                event_map[stk_cd].append(event_dt)
+            return event_map
+
+    def delete_adjustment_factors_by_dates(self, stk_cd: str, obsolete_event_dates: list[date], price_source: str = 'KIS', table_name: str = 'price_adjustment_factors') -> None:
+        """
+        특정 종목에 대해 불필요해진 이벤트 날짜들의 팩터를 일괄 삭제합니다.
+        """
+        if not obsolete_event_dates:
+            return
+        query = f"""
+            DELETE FROM {table_name}
+            WHERE stk_cd = %s AND price_source = %s AND event_dt = ANY(%s)
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (stk_cd, price_source, obsolete_event_dates))
+

@@ -94,16 +94,8 @@ async def lifespan(app: FastAPI):
         name='financial_update'
     )
 
-    # 분봉 백필 태스크: 매주 토요일 03:00 KST
-    scheduler.add_job(
-        func=lambda: run_backfill_minute_data(job_statuses, test_mode=False),
-        trigger='cron',
-        day_of_week='sat',
-        hour=3,
-        minute=0,
-        id='backfill_minute_data',
-        name='backfill_minute_data'
-    )
+    # 분봉 백필 태스크: 수동 트리거 및 백업용으로 유지하며, 주간 자동 크론은 제거됨.
+
 
     # 스케줄러 시작
     scheduler.start()

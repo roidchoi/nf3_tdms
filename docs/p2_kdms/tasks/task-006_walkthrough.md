@@ -1,12 +1,12 @@
-# T-006 시가총액 수집 파이프라인 및 스케줄러 자동화 완료 보고
+# T-006 시가총액 수집 파이프라인, 스케줄러 자동화 및 데이터 파이프라인 안정성 고도화 완료 보고
 
-본 문서에서는 P2 KDMS 프로젝트의 **시가총액 수집 파이프라인 구축 및 비동기 스케줄러 통합(T-006)** 구현 내용을 요약합니다.
+본 문서에서는 P2 KDMS 프로젝트의 **시가총액 수집 파이프라인 구축 및 비동기 스케줄러 통합(T-006)**의 기능 구현과 이에 따른 **데이터 수집 파이프라인 신뢰성 고도화(휴장일 조기 종료, 팩터 정화 루프 이식, 분봉 일일 수집 통합)** 작업 내용을 요약합니다.
 
 ---
 
 ## 1. 구현 요약
 
-전체 아키텍처는 한국거래소(KRX) 웹스크래핑을 전면 배제하고, KIS API 및 공공데이터포털(금융위원회 주식시세정보 API)을 병용하는 하이브리드 수집 전략을 탑재하였습니다.
+전체 아키텍처는 한국거래소(KRX) 웹스크래핑을 전면 배제하고, KIS API 및 공공데이터포털(금융위원회 주식시세정보 API)을 병용하는 하이브리드 수집 전략을 탑재하였으며, 무결성과 신뢰성을 위해 3대 데이터 파이프라인 Gap 보완책을 추가 구현하였습니다.
 
 ### 💡 주요 기능별 구현 내역
 
@@ -20,9 +20,13 @@
    - `psycopg2.extras.execute_values`를 통한 벌크 UPSERT 연산으로 `daily_market_cap` 테이블에 빠르게 적재합니다.
    - `trading_calendar` 테이블을 대조하여 데이터가 누락된 과거 영업일을 오름차순으로 역산합니다.
 
-3. **데일리 태스크 연동 (`DailyTask`)**
+3. **데일리 태스크 연동 및 고도화 (`DailyTask`)**
    - [daily_task.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/tasks/daily_task.py)
-   - 매일 KIS OpenAPI로부터 다운로드받은 상장종목 마스터(`listed_shares`)와 당일 수집된 종가(`close`)를 곱해 일별 시가총액을 정밀 역산하며, 수집 완료 시 벌크 적재를 실행합니다.
+   - **휴장일 조기 종료 (Early Exit)**: `is_kr_trading_day` 유틸리티를 적용해 비영업일에 불필요한 KIS API 통신 및 마스터 갱신 작업을 조기 스킵하고 리턴합니다.
+   - **팩터 정화 (Clean-up Loop 1 & 2)**:
+     - **Loop 1 (이벤트 사후 소멸 보정)**: KIS API 계산결과 팩터 날짜와 기존 DB 팩터 날짜를 45일 범위 정합성이 맞는 경우 비교하여, 사후 정정으로 인해 소멸된 날짜를 DB에서 동적으로 삭제합니다.
+     - **Loop 2 (오류 추정 종목 정리)**: 루프 1을 거친 뒤에도 여전히 오차가 잔존하거나 API 오류가 추정되어 맵에 남아있는 종목들의 전체 시세 데이터를 로드하여 재계산(참 팩터 리스트 추출)한 뒤 불필요한 팩터를 완벽히 정리합니다.
+   - **분봉 데이터 일일 수집 통합**: 당일 영업일 수집의 마지막 단계로 `_collect_daily_minute_data`를 기동하여, 분기 상위 대상 종목의 당일자 분봉 데이터를 키움 OpenAPI에서 실시간으로 가져와 일일 업서트합니다. (Rate Limit 제어를 위해 0.2초 sleep 딜레이 적용)
 
 4. **과거 시가총액 백필 자동화 (`run_backfill_market_cap`)**
    - [backfill_task.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/tasks/backfill_task.py)
@@ -31,54 +35,49 @@
 
 5. **비동기 스케줄러 (`AsyncIOScheduler`) 기동 및 어드민 연동**
    - [main.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/main.py) 및 [admin.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/routers/admin.py)
-   - FastAPI lifespan 이벤트를 활용해 서울 시간대 기준 `AsyncIOScheduler`를 가동하고 Cron 스케줄 3종을 등록합니다.
-     - **평일 17:00 KST**: 데일리 시세 & 시가총액 수집
-     - **매일 19:00 KST**: 분기 재무 데이터 갱신
-     - **매주 토요일 03:00 KST**: 분봉 데이터 백필
+   - FastAPI lifespan 이벤트를 활용해 서울 시간대 기준 `AsyncIOScheduler`를 가동하고 스케줄을 자동 기동합니다.
+   - **주간 분봉 크론 스케줄러 제거**: 일일 수집으로 이관됨에 따라 매주 토요일 구동되던 크론 등록을 해제하여 리소스를 최적화하였습니다.
    - 수동 조작 및 상태 관찰용 어드민 라우터 API(`POST /tasks/{task_id}/run`, `GET /tasks/status`)를 바인딩하여 무중단 배치 조작 환경을 완성하였습니다.
 
 ---
 
-## 2. 코드 변경 사항 (Diffs)
+## 2. 주요 코드 변경 사항
 
-### [NEW] collectors/pub_data_client.py
-```python
-# 공공데이터 API 클라이언트 구현
-```
+### 1) repositories/ohlcv_repo.py
+- [ohlcv_repo.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/repositories/ohlcv_repo.py)
+- `get_minute_target_history`: 특정 분기 및 시장의 분봉 수집 대상 종목 조회.
+- `upsert_minute_target_history`: 분기 대상 종목 정보를 `minute_target_history` 테이블에 UPSERT.
+- `upsert_minute_ohlcv`: 분봉 데이터의 효율적 대량 업서트를 구현.
+- `fetch_ohlcv_for_factor_calc`: 원본 주가와 수정 주가의 병합 데이터를 정밀 조회해 Loop 2 오차 검증 지원.
 
-### [NEW] repositories/market_cap_repo.py
-```python
-# 시가총액 저장소 구현
-```
+### 2) repositories/factor_repo.py
+- [factor_repo.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/repositories/factor_repo.py)
+- `get_recent_event_stocks_map`: 최근 N일 이내에 발생한 수정계수 종목 및 날짜 맵 반환.
+- `delete_adjustment_factors_by_dates`: 사후 소멸된 불필요 수정계수를 데이터베이스에서 삭제.
 
-### [NEW] routers/admin.py
-```python
-# 어드민 태스크 제어 API 라우터 구현
-```
+### 3) tasks/daily_task.py
+- [daily_task.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/tasks/daily_task.py)
+- 휴장일(영업일 여부)을 판별하여 비영업일에는 프로세스를 중단하는 조기 종료 기능 장착.
+- 루프 1(이벤트 정정 소멸 감지 및 DB 삭제) 및 루프 2(전체 기간 재검증을 통한 오류 보정)를 순차적으로 실행해 팩터 청소 로직 구체화.
+- `_collect_daily_minute_data`를 내장하여 일일 배치 주기의 마지막 단계로 분봉 수집 연동.
 
 ---
 
 ## 3. 테스트 및 검증 결과
 
-테스트 스위트 [test_market_cap_scheduler.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/tests/test_market_cap_scheduler.py)를 생성하여 다음 6가지의 핵심 시나리오를 검증하였습니다:
-1. `test_pub_data_client_fetch_market_cap_success` — 성공적인 API 파싱 및 단축코드 정규화
-2. `test_pub_data_client_handles_api_error` — HTTP 500 등 API 예외 대응 및 빈 결과 반환
-3. `test_market_cap_repo_upsert_stores_properly` — 벌크 업서트 데이터베이스 트랜잭션 수행
-4. `test_daily_task_calculates_and_stores_market_cap` — 데일리 시세 수집 후 시가총액 자동 계산/저장
-5. `test_backfill_market_cap_runs_and_updates_status` — 진척율 관리 및 과거 영업일 감지 백필 프로세스 작동
-6. `test_admin_run_task_triggers_scheduler_job` — 어드민 라우터를 통한 즉시 실행(1회성 date 트리거) 스케줄 추가 검증
+테스트 스위트 [test_market_cap_scheduler.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p2_kdms/tests/test_market_cap_scheduler.py)에 다음과 같이 신규 고도화 기능 검증을 위한 모의 유닛 테스트 3종을 신설하였습니다:
+1. `test_daily_task_early_exit_on_holiday` — 한국 휴장일(주말 등) 입력 시 KIS API 호출을 전면 스킵하고 종료되는지 검증.
+2. `test_daily_task_factor_cleanup_and_loop2` — Loop 1의 동적 사후 소멸 날짜 삭제와 Loop 2의 전체 기간 재검증 기반 참 팩터 필터링 및 팩터 삭제 로직 동작 검증.
+3. `test_daily_task_collects_minute_data` — 분기 상위 종목 타겟팅을 조회해 Kiwoom OpenAPI 클라이언트를 거쳐 분봉 데이터 수집 및 업서트 수행 흐름 검증.
 
 ### 🧪 pytest 실행 결과 (All Green)
 ```bash
-$ PYTHONPATH=tdms_core/p1_shared:tdms_core/p2_kdms:tdms_core pytest tdms_core/p2_kdms/tests -v
+$ PYTHONPATH=tdms_core/p1_shared:tdms_core/p2_kdms pytest tdms_core/p2_kdms/ -v
 ...
-tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_pub_data_client_fetch_market_cap_success PASSED
-tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_pub_data_client_handles_api_error PASSED
-tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_market_cap_repo_upsert_stores_properly PASSED
-tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_daily_task_calculates_and_stores_market_cap PASSED
-tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_backfill_market_cap_runs_and_updates_status PASSED
-tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_admin_run_task_triggers_scheduler_job PASSED
+tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_daily_task_early_exit_on_holiday PASSED
+tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_daily_task_factor_cleanup_and_loop2 PASSED
+tdms_core/p2_kdms/tests/test_market_cap_scheduler.py::test_daily_task_collects_minute_data PASSED
 ...
-============================== 56 passed in 1.45s ==============================
+============================== 59 passed in 1.47s ==============================
 ```
-기존에 `as_of` 파라미터 불일치로 실패했던 1개 테스트 케이스까지 포함하여 **전체 56개 테스트 케이스가 무결하게 통과(All Green)**함을 검증하였습니다.
+보완된 스케줄러, 레포지토리 및 일일 수집 파이프라인의 모든 코드가 기존 56건 및 신규 3건을 포함하여 **전체 59개 테스트 케이스가 무결하게 통과(All Green)**함을 검증하였습니다.
