@@ -7,4 +7,5 @@ pytest-mock
 httpx
 pandas
 lxml
+apscheduler==3.11.0
 -e ../p1_shared

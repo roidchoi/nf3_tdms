@@ -8,6 +8,33 @@ from typing import List, Dict, Any
 
 # 중앙화된 데이터 변환 규칙 정의
 DATA_MAPPER = {
+    'kiwoom': {
+        'stock_info': { # ka10099
+            'code': 'stk_cd',
+            'name': 'stk_nm',
+            'regDay': 'list_dt'
+        },
+        'daily_ohlcv': { # ka10081
+            'stk_cd': 'stk_cd',
+            'dt': 'dt',
+            'cur_prc': 'cls_prc',
+            'open_pric': 'open_prc',
+            'high_pric': 'high_prc',
+            'low_pric': 'low_prc',
+            'trde_qty': 'vol',
+            'trde_prica': 'amt',
+            'trde_tern_rt': 'turn_rt'
+        },
+        'minute_ohlcv': { # ka10080
+            'stk_cd': 'stk_cd',
+            'cntr_tm': 'dt_tm',
+            'cur_prc': 'cls_prc',
+            'open_pric': 'open_prc',
+            'high_pric': 'high_prc',
+            'low_pric': 'low_prc',
+            'trde_qty': 'vol'
+        }
+    },
     'kis': {
         'daily_ohlcv': {
             'stk_cd':           'stk_cd',
@@ -108,6 +135,19 @@ def transform_data(api_data: list[dict], source: str, data_type: str) -> list[di
                         value = datetime.strptime(str(value), '%Y%m%d').date()
                 except (ValueError, TypeError): 
                     raise ValueError(f"일봉 날짜({value}) 형식 오류")
+            elif data_type == 'minute_ohlcv' and api_key == 'cntr_tm':
+                try:
+                    if value:
+                        naive_dt = datetime.strptime(str(value), '%Y%m%d%H%M%S')
+                        value = naive_dt.replace(tzinfo=kst)
+                except (ValueError, TypeError):
+                    raise ValueError(f"분봉 시간({value}) 형식 오류")
+            elif data_type == 'stock_info' and api_key == 'regDay':
+                try:
+                    if value:
+                        value = datetime.strptime(str(value), '%Y%m%d').date()
+                except (ValueError, TypeError):
+                    raise ValueError(f"상장일({value}) 형식 오류")
             
             # --- 2. 지능형 숫자 타입 변환 ---
             if db_key not in NON_NUMERIC_COLS and isinstance(value, str):

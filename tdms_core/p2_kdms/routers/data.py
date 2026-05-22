@@ -154,7 +154,7 @@ def get_adjusted_ohlcv_from_physical(
 @router.get("/financials", response_model=Dict[str, Any])
 def get_pit_financials(
     stk_cd: str = Query(..., description="종목 코드"),
-    as_of: str = Query(None, description="특정 PIT 조회 시점 (ISO 형식: YYYY-MM-DDTHH:MM:SS+TZ 또는 YYYY-MM-DD)"),
+    as_of: str = Query(None, alias="as_of_date", description="특정 PIT 조회 시점 (ISO 형식: YYYY-MM-DDTHH:MM:SS+TZ 또는 YYYY-MM-DD)"),
     div_cls_code: str = Query("1", description="결산 구분 ('1' 분기, '0' 연간)"),
     financial_repo: FinancialRepo = Depends(get_financial_repo)
 ):
