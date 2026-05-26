@@ -1,6 +1,6 @@
 # Sub Project 기술 의사결정 (decisions.md)
 
-> **Sub Project**: P{n}_{Name} **범위**: 이 Sub Project 내부에만 영향을 미치는 결정 **마지막 업데이트**: {YYYY-MM-DD} (Task-{ID})
+> **Sub Project**: p4_manager **범위**: 이 Sub Project 내부에만 영향을 미치는 결정 **마지막 업데이트**: 2026-05-26 (Task-초기화)
 
 ---
 

@@ -75,4 +75,4 @@ P2 입력 기대 형식:
   {타입}: {컬럼 목록}
 ```
 
-상세: `p1_wiki/interfaces.md#{섹션}`, `p2_wiki/interfaces.md#{섹션}` 참조
+상세: `p1_shared_wiki/interfaces/` 및 `p2_kdms_wiki/interfaces/` 참조

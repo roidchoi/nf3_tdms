@@ -1,15 +1,15 @@
 # Sub Project 개발/운영 환경 (environment.md)
 
-> **Sub Project**: P{n}_{Name} **마지막 업데이트**: {YYYY-MM-DD} **타입**: Type E (배경/환경 지식) **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
+> **Sub Project**: p3_usdms **마지막 업데이트**: 2026-05-26 **타입**: Type E (배경/환경 지식) **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
 
 ---
 
 ## 1. 가상환경
 
-- **환경명**: `{conda_env_name}`
-- **생성 방법**: `conda create -n {env_name} python={version}`
-- **활성화**: `conda activate {env_name}`
-- **requirements**: `{Sub_Project}/requirements.txt`
+- **환경명**: `tdms_p3_env`
+- **생성 방법**: `conda create -n tdms_p3_env python=3.12`
+- **활성화**: `conda activate tdms_p3_env`
+- **requirements**: `tdms_core/p3_usdms/requirements.txt`
 
 ---
 
@@ -35,7 +35,7 @@
 
 |파일|경로|git 포함|주요 내용|
 |---|---|---|---|
-|`.env`|`{Sub_Project}/.env`|❌|{변수명 목록}|
+|`.env`|`tdms_core/p3_usdms/.env`|❌|{변수명 목록}|
 |`config/{파일}.yaml`|`{경로}`|✅|{설명}|
 
 ---
