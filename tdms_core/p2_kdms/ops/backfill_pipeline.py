@@ -89,10 +89,8 @@ def run_backfill(start_date: date = None, end_date: date = None):
             account_no=os.getenv("KIS_ACCOUNT_NO", ""),
             is_mock=False
         )
-        logger.info("Forcing KIS OAuth token issuance...")
-        kis_core._issue_new_token()
         kis_client = KisKrClient(kis_core)
-        logger.info("KIS API client initialized and OAuth token issued successfully.")
+        logger.info("KIS API client initialized successfully.")
     except Exception as err:
         logger.critical(f"Failed to initialize KIS client: {err}")
         return

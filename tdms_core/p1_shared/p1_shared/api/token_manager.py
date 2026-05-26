@@ -8,9 +8,10 @@ class TokenManager:
     토큰을 JSON 파일로 저장하고, 만료 여부를 판단하여 반환한다.
     """
 
-    def __init__(self, cache_path: str, token_type: str) -> None:
+    def __init__(self, cache_path: str, token_type: str, min_buffer_hours: float = 5.0) -> None:
         self.cache_path = Path(cache_path)
         self.token_type = token_type
+        self.min_buffer = timedelta(hours=min_buffer_hours)
 
     def get_valid_token(self) -> str | None:
         """
@@ -40,7 +41,7 @@ class TokenManager:
     def is_valid(self) -> bool:
         """
         현재 캐시된 토큰의 유효성 확인.
-        만료 시각 5분 전을 만료로 처리(조기 갱신 버퍼).
+        설정된 버퍼(기본 5시간) 이상 남아있을 때만 유효함.
         """
         if not self.cache_path.exists():
             return False
@@ -49,6 +50,6 @@ class TokenManager:
             data = json.loads(self.cache_path.read_text())
             expires_at = datetime.fromisoformat(data["expires_at"])
             now = datetime.now(timezone.utc)
-            return (expires_at - now) > timedelta(minutes=5)
+            return (expires_at - now) > self.min_buffer
         except (json.JSONDecodeError, KeyError, ValueError):
             return False

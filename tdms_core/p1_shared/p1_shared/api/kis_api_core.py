@@ -73,10 +73,9 @@ class KisApiCore:
         
         if expires_dt_str:
             expires_at = datetime.strptime(expires_dt_str, "%Y-%m-%d %H:%M:%S")
-            # KIS 시간은 기본적으로 KST 기준일 수 있으므로 UTC로 변환하거나, 
-            # 명세에 따라 replace(tzinfo=timezone.utc)를 사용합니다.
-            # 스펙 참고: datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            # KIS 시간은 기본적으로 KST 기준(UTC+9)이므로 타임존 오프셋을 KST로 설정합니다.
+            kst = timezone(timedelta(hours=9))
+            expires_at = expires_at.replace(tzinfo=kst)
         else:
             # Fallback if expires_dt is missing
             expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
