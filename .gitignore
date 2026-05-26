@@ -21,3 +21,6 @@ graphify-out/
 # Database Physical Data
 data/
 *.tar.gz
+
+# Logs
+logs/

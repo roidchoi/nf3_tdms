@@ -215,12 +215,26 @@ class DailyTask:
         for market in ["KOSPI", "KOSDAQ"]:
             try:
                 rows = self.ohlcv_repo.get_minute_target_history(quarter, market)
+                
+                # 해당 분기의 타겟 리스트가 없는 경우, 동적으로 대상 선정하여 DB 적재 후 수집 진행
+                if not rows:
+                    logger.info(f"No target stocks found for {quarter} {market} in minute_target_history. Generating dynamically...")
+                    from collectors.target_selector import TargetSelector
+                    selector = TargetSelector(self.ohlcv_repo.pool)
+                    top_n = 200 if market == "KOSPI" else 400
+                    new_targets = selector.select_top_n_stocks(quarter=quarter, top_n=top_n, market=market)
+                    if new_targets:
+                        self.ohlcv_repo.upsert_minute_target_history(new_targets)
+                        rows = self.ohlcv_repo.get_minute_target_history(quarter, market)
+                        logger.info(f"Dynamically generated and saved {len(new_targets)} targets for {quarter} {market}.")
+                
                 if rows:
                     target_stocks.extend([r["symbol"] for r in rows if r.get("symbol")])
             except Exception as err:
-                logger.error(f"Failed to fetch target stocks for market {market}: {err}")
+                logger.error(f"Failed to fetch or select target stocks for market {market}: {err}")
 
         if not target_stocks:
+
             logger.warning(f"No minute targets found for {quarter}. Fetching active stocks as fallback.")
             try:
                 active_stocks = self.master_repo.get_all_active_stocks()
@@ -300,9 +314,10 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             appsecret = profile.get("kis_appsecret") or os.environ.get("KIS_APPSECRET", "")
 
             api_core = KisApiCore(
-                appkey=appkey,
-                appsecret=appsecret,
-                is_dev=is_dev
+                app_key=appkey,
+                app_secret=appsecret,
+                account_no=os.environ.get("KIS_ACCOUNT_NO", ""),
+                is_mock=not is_dev
             )
             kis_client = KisKrClient(api_core=api_core)
             # 운영 모드 분봉 키움 클라이언트

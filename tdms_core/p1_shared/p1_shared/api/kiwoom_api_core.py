@@ -9,7 +9,7 @@ class KiwoomApiCore:
     TokenManager를 통해 토큰 캐시를 관리하며, 요청 시 자동으로 유효한 헤더를 구성한다.
     """
 
-    BASE_URL = "https://openapi.kiwoom.com"
+    BASE_URL = "https://api.kiwoom.com"
 
     def __init__(
         self,

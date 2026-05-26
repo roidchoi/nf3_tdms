@@ -37,7 +37,7 @@ class KiwoomClient(KiwoomApiCore):
         )
         
         # 실전/모의에 따라 Base URL 설정
-        self.BASE_URL = "https://mockapi.kiwoom.com" if mock else "https://openapi.kiwoom.com"
+        self.BASE_URL = "https://mockapi.kiwoom.com" if mock else "https://api.kiwoom.com"
         self.rate_limit_interval = 0.2  # 초당 5회 제한을 지키기 위한 0.2초 딜레이
         
     def get_minute_chart(

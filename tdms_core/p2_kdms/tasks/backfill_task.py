@@ -38,7 +38,8 @@ class DatabaseManager:
         return self.pool.get_conn()
 
     def _release_connection(self, conn):
-        self.pool.put_conn(conn)
+        if conn is not None:
+            self.pool.put_conn(conn)
 
     def upsert_ohlcv_data(self, table_name: str, data: list[dict]):
         if not data:
@@ -76,12 +77,19 @@ class DatabaseManager:
             self._release_connection(conn)
 
 
-def run_backfill_minute_data(job_statuses: Dict[str, Any], test_mode: bool = False):
+def run_backfill_minute_data(
+    job_statuses: Dict[str, Any], 
+    test_mode: bool = False,
+    start_date: date = None,
+    end_date: date = None
+):
     """
     분봉 데이터 백필 실행 함수
     
     :param job_statuses: 전역 상태 딕셔너리
     :param test_mode: 테스트 모드 여부
+    :param start_date: 백필 시작 날짜 (기본값: 지난 8일전)
+    :param end_date: 백필 종료 날짜 (기본값: 어제)
     """
     job_id = "backfill_minute_data"
     start_time = datetime.now()
@@ -107,12 +115,15 @@ def run_backfill_minute_data(job_statuses: Dict[str, Any], test_mode: bool = Fal
         logger.info(f"[{job_id}] DatabaseManager 초기화...")
         db = DatabaseManager()
         
-        # 지난 8일간 ~ 어제
-        start_date = date.today() - timedelta(days=8)
-        end_date = date.today() - timedelta(days=1)
+        # 지정되지 않은 경우 기본값으로 지난 8일간 ~ 어제 적용
+        if start_date is None:
+            start_date = date.today() - timedelta(days=8)
+        if end_date is None:
+            end_date = date.today() - timedelta(days=1)
         logger.info(f"[{job_id}] 백필 대상 기간: {start_date} ~ {end_date}")
         
         job_statuses[job_id]["last_log"] = f"대상 기간: {start_date} ~ {end_date}"
+
 
         # Step 0: 대상 종목 선정
         job_statuses[job_id].update({
@@ -290,7 +301,9 @@ def _detect_missing_and_partial_days(
     query_collected = f"""
         SELECT stk_cd, DATE(dt_tm) as dt, COUNT(*) as record_count
         FROM {minute_read_table}
-        WHERE stk_cd = ANY(%s) AND DATE(dt_tm) BETWEEN %s AND %s
+        WHERE stk_cd = ANY(%s) 
+          AND dt_tm >= %s::timestamp 
+          AND dt_tm < (%s::date + INTERVAL '1 day')::timestamp
         GROUP BY 1, 2;
     """
     results = db._execute_query(query_collected, (target_stocks, start_date, end_date), fetch='all')
@@ -441,9 +454,50 @@ def get_target_stocks(db: DatabaseManager, test_mode: bool) -> List[str]:
         target_list = [row['symbol'] for row in results if row.get('symbol')]
         
     if not target_list:
-        logger.warning(f"{quarter} 대상 종목이 {read_table}에 없습니다. 기본값으로 전체 활성 종목을 조회합니다.")
-        # 만약 테이블에 없으면 전체 활성 종목이라도 수집을 시도하도록 안전장치 마련
-        fallback_query = "SELECT DISTINCT stk_cd as symbol FROM stock_info WHERE active = true"
+        logger.warning(f"{quarter} 대상 종목이 {read_table}에 없습니다. 동적으로 대상을 선정하여 DB에 적재합니다.")
+        try:
+            from collectors.target_selector import TargetSelector
+            selector = TargetSelector(db.pool)
+            
+            # KOSPI 200개, KOSDAQ 400개
+            new_targets = []
+            for market in ["KOSPI", "KOSDAQ"]:
+                top_n = 200 if market == "KOSPI" else 400
+                market_targets = selector.select_top_n_stocks(quarter=quarter, top_n=top_n, market=market)
+                if market_targets:
+                    new_targets.extend(market_targets)
+            
+            if new_targets:
+                insert_query = """
+                    INSERT INTO minute_target_history (quarter, market, symbol, avg_trade_value, rank)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (quarter, market, symbol) DO UPDATE SET
+                        avg_trade_value = EXCLUDED.avg_trade_value,
+                        rank = EXCLUDED.rank;
+                """
+                conn = db._get_connection()
+                try:
+                    with conn.cursor() as cur:
+                        for t in new_targets:
+                            cur.execute(insert_query, (t['quarter'], t['market'], t['symbol'], t['avg_trade_value'], t['rank']))
+                    conn.commit()
+                    logger.info(f"동적으로 생성된 {len(new_targets)}개 종목을 {read_table}에 저장 완료했습니다.")
+                except Exception as ie:
+                    conn.rollback()
+                    logger.error(f"동적 타겟 적재 중 오류 발생: {ie}")
+                finally:
+                    db._release_connection(conn)
+                
+                # 저장 후 다시 조회
+                results = db._execute_query(query, (quarter,), fetch='all')
+                if results:
+                    target_list = [row['symbol'] for row in results if row.get('symbol')]
+        except Exception as err:
+            logger.error(f"동적 타겟 선정 중 오류 발생: {err}")
+            
+    if not target_list:
+        logger.warning("동적 타겟 선정 실패 또는 대상 없음. 기본값으로 전체 활성 종목을 조회합니다.")
+        fallback_query = "SELECT DISTINCT stk_cd as symbol FROM stock_info WHERE status = 'listed' AND (delist_dt IS NULL OR delist_dt > CURRENT_DATE)"
         results = db._execute_query(fallback_query, fetch='all')
         if results:
             target_list = [row['symbol'] for row in results if row.get('symbol')]

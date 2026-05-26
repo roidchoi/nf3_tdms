@@ -20,15 +20,15 @@ class MasterRepo:
             return 0
 
         query = """
-            INSERT INTO stock_info (stk_cd, stk_nm, market, is_active, listed_dt, listed_shares, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO stock_info (stk_cd, stk_nm, market_type, status, delist_dt, list_dt, m_vol, update_dt)
+            VALUES (%s, %s, %s, %s, NULL, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (stk_cd) DO UPDATE SET
                 stk_nm = EXCLUDED.stk_nm,
-                market = EXCLUDED.market,
-                is_active = EXCLUDED.is_active,
-                listed_dt = EXCLUDED.listed_dt,
-                listed_shares = EXCLUDED.listed_shares,
-                updated_at = CURRENT_TIMESTAMP
+                market_type = EXCLUDED.market_type,
+                status = EXCLUDED.status,
+                list_dt = EXCLUDED.list_dt,
+                m_vol = EXCLUDED.m_vol,
+                update_dt = CURRENT_TIMESTAMP
         """
         
         data = [
@@ -36,26 +36,30 @@ class MasterRepo:
                 r.get("stk_cd"),
                 r.get("stk_nm"),
                 r.get("market"),
-                r.get("is_active", True),
+                'listed' if r.get("is_active", True) else 'delisted',
                 r.get("listed_dt"),
                 r.get("listed_shares")
             )
             for r in records
         ]
-
+        
         with self.pool.get_cursor() as cursor:
             cursor.executemany(query, data)
             return cursor.rowcount
 
     def get_all_active_stocks(self) -> List[Dict[str, Any]]:
         """
-        is_active=True인 활성 종목 리스트를 반환합니다.
-        테스트와 실제 DB 컬럼 차이를 흡수하기 위해 가변 컬럼 매핑을 사용합니다.
+        상장(listed) 상태이고 상장폐지일이 없는 활성 종목 리스트를 반환합니다.
+        물리 스키마(status, delist_dt, market_type, list_dt, m_vol)를 
+        상위 레이어 인터페이스 형식(market, is_active, listed_dt, listed_shares)으로 변환하여 반환합니다.
         """
         query = """
-            SELECT stk_cd, stk_nm, market, is_active, listed_dt, listed_shares 
+            SELECT stk_cd, stk_nm, market_type as market, 
+                   TRUE as is_active, 
+                   list_dt as listed_dt, 
+                   m_vol as listed_shares 
             FROM stock_info 
-            WHERE is_active = TRUE
+            WHERE status = 'listed' AND (delist_dt IS NULL OR delist_dt > CURRENT_DATE);
         """
         
         columns = ["stk_cd", "stk_nm", "market", "is_active", "listed_dt", "listed_shares"]
@@ -72,4 +76,5 @@ class MasterRepo:
                         stock_dict[col] = row[i]
                 results.append(stock_dict)
             return results
+
 

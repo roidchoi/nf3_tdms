@@ -17,14 +17,19 @@ class MarketCapRepo:
         self.pool = pool
 
     def _get_connection(self):
-        # DbConnectionPool은 컨텍스트 매니저 get_cursor()가 있거나 직접 get_conn()을 가짐
         if hasattr(self.pool, "get_conn"):
             return self.pool.get_conn()
-        return self.pool.connection()
+        elif hasattr(self.pool, "_pool") and hasattr(self.pool._pool, "getconn"):
+            return self.pool._pool.getconn()
+        elif hasattr(self.pool, "connection"):
+            return self.pool.connection()
+        raise AttributeError("Provided database pool has no connection retrieval method.")
 
     def _release_connection(self, conn):
         if hasattr(self.pool, "put_conn"):
             self.pool.put_conn(conn)
+        elif hasattr(self.pool, "_pool") and hasattr(self.pool._pool, "putconn"):
+            self.pool._pool.putconn(conn)
         else:
             conn.close()
 
@@ -106,7 +111,6 @@ class MarketCapRepo:
             with conn.cursor() as cur:
                 cur.execute(query, (start_date, end_date))
                 rows = cur.fetchall()
-                # 리포지토리 튜플 결과물에서 날짜 객체만 추출
                 missing_dates = [row[0] for row in rows]
             logger.info(f"누락 영업일 탐지 완료: {len(missing_dates)}일 (기간: {start_date} ~ {end_date})")
             return missing_dates
@@ -116,3 +120,4 @@ class MarketCapRepo:
         finally:
             if conn:
                 self._release_connection(conn)
+

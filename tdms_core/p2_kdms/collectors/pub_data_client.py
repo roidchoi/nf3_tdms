@@ -74,6 +74,9 @@ class PubDataClient:
                     continue
                     
                 try:
+                    open_prc = int(item.get("mkp", 0) or 0)
+                    high_prc = int(item.get("hipr", 0) or 0)
+                    low_prc = int(item.get("lopr", 0) or 0)
                     cls_prc = int(item.get("clpr", 0) or 0)
                     mkt_cap = int(item.get("mrktTotAmt", 0) or 0)
                     vol = int(item.get("trqu", 0) or 0)
@@ -86,6 +89,9 @@ class PubDataClient:
                 normalized_records.append({
                     "dt": target_date,
                     "stk_cd": stk_cd,
+                    "open": open_prc,
+                    "high": high_prc,
+                    "low": low_prc,
                     "cls_prc": cls_prc,
                     "mkt_cap": mkt_cap,
                     "vol": vol,

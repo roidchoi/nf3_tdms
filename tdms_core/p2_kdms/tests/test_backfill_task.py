@@ -57,14 +57,16 @@ def test_target_selector_selects_top_n_by_volume():
         {"symbol": "035420", "avg_amount": 1000000.0}
     ]
     
-    selector = TargetSelector(db_manager=db_mock)
+    selector = TargetSelector(db=db_mock)
     
-    top_stocks = selector.select_top_n_stocks(quarter="2026Q1", top_n=2)
+    top_stocks = selector.select_top_n_stocks(quarter="2026Q1", top_n=2, market="KOSPI")
     
     assert len(top_stocks) == 2
-    assert "005930" in top_stocks
-    assert "000660" in top_stocks
-    assert "035420" not in top_stocks
+    symbols = [s["symbol"] for s in top_stocks]
+    assert "005930" in symbols
+    assert "000660" in symbols
+    assert "035420" not in symbols
+
 
 
 # 3. KiwoomClient API 에러 예외 격리 검증

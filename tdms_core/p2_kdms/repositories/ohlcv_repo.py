@@ -20,14 +20,14 @@ class OhlcvRepo:
             return 0
 
         query = """
-            INSERT INTO daily_ohlcv (stk_cd, dt, open, high, low, close, volume)
+            INSERT INTO daily_ohlcv (stk_cd, dt, open_prc, high_prc, low_prc, cls_prc, vol)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (stk_cd, dt) DO UPDATE SET
-                open = EXCLUDED.open,
-                high = EXCLUDED.high,
-                low = EXCLUDED.low,
-                close = EXCLUDED.close,
-                volume = EXCLUDED.volume
+                open_prc = EXCLUDED.open_prc,
+                high_prc = EXCLUDED.high_prc,
+                low_prc = EXCLUDED.low_prc,
+                cls_prc = EXCLUDED.cls_prc,
+                vol = EXCLUDED.vol
         """
         
         data = [
@@ -97,7 +97,7 @@ class OhlcvRepo:
         """
         query = """
             WITH raw_data AS (
-                SELECT dt, stk_cd, open, high, low, close, volume
+                SELECT dt, stk_cd, open_prc as open, high_prc as high, low_prc as low, cls_prc as close, vol as volume
                 FROM daily_ohlcv
                 WHERE dt BETWEEN %s AND %s
             ),
@@ -158,7 +158,7 @@ class OhlcvRepo:
         특정 종목의 지정 기간 내 원본 OHLCV 데이터를 오름차순으로 조회합니다.
         """
         query = """
-            SELECT stk_cd, dt, open, high, low, close, volume
+            SELECT stk_cd, dt, open_prc, high_prc, low_prc, cls_prc, vol
             FROM daily_ohlcv
             WHERE stk_cd = %s AND dt BETWEEN %s AND %s
             ORDER BY dt ASC
@@ -272,7 +272,7 @@ class OhlcvRepo:
         두 데이터가 모두 존재하는 날짜(교집합)를 기준으로 병합하여 반환합니다.
         """
         import pandas as pd
-        raw_query = f"SELECT dt, close FROM {table_name_raw} WHERE stk_cd = %s"
+        raw_query = f"SELECT dt, cls_prc FROM {table_name_raw} WHERE stk_cd = %s"
         adj_query = f"SELECT dt, cls_prc FROM {table_name_adj} WHERE stk_cd = %s"
         
         with self.pool.get_cursor() as cursor:
