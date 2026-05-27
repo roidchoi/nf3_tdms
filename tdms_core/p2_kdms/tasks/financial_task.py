@@ -61,13 +61,14 @@ class KisREST:
             env = detector.detect()
             is_dev = (env == "dev")
             
-            appkey = profile.get("kis_appkey") or os.environ.get("KIS_APPKEY", "")
-            appsecret = profile.get("kis_appsecret") or os.environ.get("KIS_APPSECRET", "")
+            appkey = profile.get("kis_app_key") or os.environ.get("KIS_APP_KEY", "")
+            appsecret = profile.get("kis_app_secret") or os.environ.get("KIS_APP_SECRET", "")
+            account_no = profile.get("kis_account_no") or os.environ.get("KIS_ACCOUNT_NO", "")
             
             api_core = KisApiCore(
-                appkey=appkey,
-                appsecret=appsecret,
-                is_dev=is_dev
+                app_key=appkey,
+                app_secret=appsecret,
+                account_no=account_no
             )
             self.client = KisKrClient(api_core=api_core)
 
@@ -149,6 +150,10 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
         loop_start_time = time.time()
         
         for idx, stk_cd in enumerate(target_stocks):
+            # KIS API Rate Limit (초당 20건) 대비 안전성 확보를 위해 종목당 0.5초 지연 추가 (테스트 모드 제외)
+            if not test_mode and idx > 0:
+                time.sleep(0.5)
+                
             # tqdm 스타일 진척률 및 메트릭스 로깅
             if idx % 20 == 0 or idx == total - 1:
                 progress = 20 + (idx / total * 60)  # Phase 2는 20% ~ 80%

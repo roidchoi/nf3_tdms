@@ -339,7 +339,18 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             kiwoom_client=kiwoom_client
         )
         
-        target_date = start_time.date()
+        # 장 종료 전 수집 안전장치: 17:00 KST 기준으로 target_date 결정
+        # - 17:00 이전(장중) 실행 시: 미확정 당일 데이터 오염 방지를 위해 전날까지만 수집
+        # - 17:00 이후(장 종료) 실행 시: 당일 포함 수집
+        MARKET_CLOSE_HOUR = 17
+        if start_time.hour < MARKET_CLOSE_HOUR:
+            target_date = (start_time - timedelta(days=1)).date()
+            logger.info(
+                f"[{job_id}] 장 종료 전 실행 감지 ({start_time.strftime('%H:%M')} KST). "
+                f"수집일 → 전날: {target_date}"
+            )
+        else:
+            target_date = start_time.date()
         result = task.run(target_date)
 
         end_time = datetime.now(KST)

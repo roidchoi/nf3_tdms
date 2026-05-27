@@ -1,5 +1,7 @@
 import requests
 import os
+import time
+import random
 from datetime import datetime, timezone, timedelta
 from p1_shared.api.token_manager import TokenManager
 
@@ -96,7 +98,9 @@ class KisApiCore:
         extra_headers: dict = None,
     ) -> dict:
         """
-        KIS API 요청 실행. 401 응답 시 토큰 자동 갱신 후 1회 재시도.
+        KIS API 요청 실행.
+        - 401 응답 시: 토큰 자동 갱신 후 즉시 재시도.
+        - 429(Rate Limit), 5xx(서버 오류) 또는 네트워크 장애 발생 시: 지수 백오프 기반 최대 3회 재시도.
         """
         if params is None:
             params = {}
@@ -105,26 +109,46 @@ class KisApiCore:
             
         url = f"{self.base_url}{path}"
         
+        max_retries = 3
+        base_delay = 2.0
+        
         def _make_request():
-            # tr_id는 각 API 호출 시마다 다르므로 params, body 대신 필요 시 request signature에서 받거나 생략할 수 있으나,
-            # 스펙에서는 request() 인자에 tr_id가 없음. 내부에서 get_headers()를 호출하려면 tr_id가 필수.
-            # 테스트 케이스를 보면 core.request("GET", "/some/path") 형식으로 호출함.
-            # 테스트에서는 tr_id가 필요없는 경우가 있으므로, 임시로 처리.
-            # wait, test_request_returns_response_json_on_success does not pass tr_id!
-            # so how does request() get headers? 
-            # Let's add kwargs or just pass empty tr_id for headers if not provided.
             headers = self.get_headers(tr_id=tr_id, extra=extra_headers)
             return requests.request(method, url, headers=headers, params=params, json=body)
 
-        try:
-            res = _make_request()
-            res.raise_for_status()
-        except requests.HTTPError as e:
-            if res.status_code == 401:
-                self._issue_new_token()
+        for attempt in range(max_retries + 1):
+            try:
                 res = _make_request()
                 res.raise_for_status()
-            else:
-                raise e
+                return res.json()
+            except requests.exceptions.RequestException as e:
+                # HTTP 에러인 경우 상태 코드로 판단
+                status_code = None
+                if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+                    status_code = e.response.status_code
                 
-        return res.json()
+                # 401 Unauthorized인 경우 토큰을 갱신하고 즉시 1회 재시도 (재시도 카운트 미소모)
+                if status_code == 401:
+                    try:
+                        self._issue_new_token()
+                        res = _make_request()
+                        res.raise_for_status()
+                        return res.json()
+                    except Exception as token_err:
+                        # 토큰 갱신 후에도 실패한 경우 일반 백오프 로직에 태움
+                        e = token_err
+                        if isinstance(token_err, requests.exceptions.HTTPError) and token_err.response is not None:
+                            status_code = token_err.response.status_code
+
+                # 403, 404, 400 등 일반적인 클라이언트 에러는 재시도 없이 즉시 실패
+                if status_code is not None and 400 <= status_code < 500 and status_code not in (401, 429):
+                    raise e
+                
+                # 마지막 시도에서도 실패했으면 예외를 밖으로 던짐
+                if attempt == max_retries:
+                    raise e
+                
+                # 지수 백오프 시간 계산 (Jitter 포함)
+                delay = (base_delay * (2 ** attempt)) + random.uniform(0.0, 1.0)
+                print(f"⚠️ KIS API 요청 실패 (Error: {e}). {delay:.2f}초 후 재시도합니다... (시도 {attempt + 1}/{max_retries})")
+                time.sleep(delay)

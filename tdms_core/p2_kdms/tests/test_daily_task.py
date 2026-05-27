@@ -121,3 +121,86 @@ def test_daily_task_runs_factor_calculation_and_refresh(mocker):
     mock_ohlcv_repo.refresh_adjusted_ohlcv_batch.assert_called_once()
     assert result["collected"] == 1
 
+
+def test_target_date_is_yesterday_when_run_before_market_close(mocker):
+    """
+    [목적] 17:00 KST 이전에 run_daily_update()가 실행되면
+           target_date가 전날(yesterday)로 결정되는지 검증.
+    [유도] 장 중 수동 실행 시 미확정 당일 데이터 오염 방지.
+           start_time.hour < 17 → target_date = start_time.date() - 1일
+    """
+    from datetime import datetime, date, timedelta
+    from zoneinfo import ZoneInfo
+    from tasks.daily_task import run_daily_update
+
+    KST = ZoneInfo("Asia/Seoul")
+    # 09:30 KST (장 중) 시뮬레이션
+    fake_now = datetime(2026, 5, 27, 9, 30, 0, tzinfo=KST)
+    mocker.patch("tasks.daily_task.datetime", wraps=datetime)
+    mocker.patch("tasks.daily_task.datetime").now.return_value = fake_now
+
+    captured_target_date = {}
+
+    def fake_run(target_date):
+        captured_target_date["date"] = target_date
+        return {"collected": 0, "failed": 0, "skipped": 1}
+
+    mock_task = mocker.MagicMock()
+    mock_task.run.side_effect = fake_run
+
+    mocker.patch("tasks.daily_task.create_kdms_pool")
+    mocker.patch("tasks.daily_task.MasterRepo")
+    mocker.patch("tasks.daily_task.OhlcvRepo")
+    mocker.patch("tasks.daily_task.FactorRepo")
+    mocker.patch("tasks.daily_task.MarketCapRepo")
+    mocker.patch("tasks.daily_task.DailyTask", return_value=mock_task)
+    # test_mode=True로 KIS/Kiwoom 클라이언트 초기화 우회
+    job_statuses = {}
+    run_daily_update(job_statuses, test_mode=True)
+
+    expected_date = date(2026, 5, 26)  # 전날
+    assert captured_target_date.get("date") == expected_date, (
+        f"장 중 실행 시 target_date는 전날이어야 함. 실제: {captured_target_date.get('date')}"
+    )
+
+
+def test_target_date_is_today_when_run_after_market_close(mocker):
+    """
+    [목적] 17:00 KST 이후에 run_daily_update()가 실행되면
+           target_date가 당일(today)로 결정되는지 검증.
+    [유도] 장 종료 후 수동 실행 시 당일 확정 데이터 정상 수집.
+           start_time.hour >= 17 → target_date = start_time.date()
+    """
+    from datetime import datetime, date
+    from zoneinfo import ZoneInfo
+    from tasks.daily_task import run_daily_update
+
+    KST = ZoneInfo("Asia/Seoul")
+    # 17:30 KST (장 종료 후) 시뮬레이션
+    fake_now = datetime(2026, 5, 27, 17, 30, 0, tzinfo=KST)
+    mocker.patch("tasks.daily_task.datetime", wraps=datetime)
+    mocker.patch("tasks.daily_task.datetime").now.return_value = fake_now
+
+    captured_target_date = {}
+
+    def fake_run(target_date):
+        captured_target_date["date"] = target_date
+        return {"collected": 0, "failed": 0, "skipped": 1}
+
+    mock_task = mocker.MagicMock()
+    mock_task.run.side_effect = fake_run
+
+    mocker.patch("tasks.daily_task.create_kdms_pool")
+    mocker.patch("tasks.daily_task.MasterRepo")
+    mocker.patch("tasks.daily_task.OhlcvRepo")
+    mocker.patch("tasks.daily_task.FactorRepo")
+    mocker.patch("tasks.daily_task.MarketCapRepo")
+    mocker.patch("tasks.daily_task.DailyTask", return_value=mock_task)
+    job_statuses = {}
+    run_daily_update(job_statuses, test_mode=True)
+
+    expected_date = date(2026, 5, 27)  # 당일
+    assert captured_target_date.get("date") == expected_date, (
+        f"장 종료 후 실행 시 target_date는 당일이어야 함. 실제: {captured_target_date.get('date')}"
+    )
+
