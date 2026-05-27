@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from p1_shared.db.connection import DbConnectionPool
 
 class OhlcvRepo:
@@ -290,6 +290,48 @@ class OhlcvRepo:
         df = pd.merge(df_adj, df_raw, on='dt', how='inner')
         df = df.sort_values(by='dt', ascending=True).reset_index(drop=True)
         return df
+
+    def get_minute_ohlcv(self, stk_cd: str, start_dt_tm: datetime, end_dt_tm: datetime) -> list[dict]:
+        """
+        minute_ohlcv 테이블에서 특정 종목의 분봉 데이터를 기간 조회합니다.
+        """
+        query = """
+            SELECT stk_cd, dt_tm, open, high, low, close, volume
+            FROM minute_ohlcv
+            WHERE stk_cd = %s AND dt_tm BETWEEN %s AND %s
+            ORDER BY dt_tm ASC;
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (stk_cd, start_dt_tm, end_dt_tm))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "stk_cd": r[0],
+                    "dt_tm": r[1],
+                    "open": int(r[2]),
+                    "high": int(r[3]),
+                    "low": int(r[4]),
+                    "close": int(r[5]),
+                    "volume": int(r[6])
+                }
+                for r in rows
+            ]
+
+    def get_blacklisted_stocks(self, threshold_days: int = 5) -> list[str]:
+        """
+        daily_ohlcv_gap 테이블을 조회하여 누적 실패(갭) 횟수가 threshold_days 이상인 종목코드 목록을 반환합니다.
+        """
+        query = """
+            SELECT stk_cd
+            FROM daily_ohlcv_gap
+            GROUP BY stk_cd
+            HAVING COUNT(dt) >= %s;
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (threshold_days,))
+            rows = cursor.fetchall()
+            return [r[0] for r in rows]
+
 
 
 

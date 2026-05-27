@@ -1,6 +1,6 @@
 # Sub Project 기술 의사결정 (decisions.md)
 
-> **Sub Project**: p2_kdms **범위**: 이 Sub Project 내부에만 영향을 미치는 결정 **마지막 업데이트**: 2026-05-26 (Task-초기화)
+> **Sub Project**: p2_kdms **범위**: 이 Sub Project 내부에만 영향을 미치는 결정 **마지막 업데이트**: 2026-05-27
 
 ---
 
@@ -18,4 +18,6 @@
 
 |ID|제목|Task|상태|
 |---|---|---|---|
-|—|(초기 상태)|—|—|
+|[[decisions/dec-001_pit_financial_pattern\|P2DEC-001]]|PIT 재무데이터 버전 관리 전략|T-004|active|
+|[[decisions/dec-002_price_adjustment_dual_strategy\|P2DEC-002]]|수정주가 이중 제공 전략 (On-the-fly + 물리 테이블)|T-003|active|
+|[[decisions/dec-003_support_alphanumeric_stock_codes\|P2DEC-003]]|한국거래소(KRX) 알파벳 혼용 종목코드 지원을 위한 필터 정책 완화|—|active|

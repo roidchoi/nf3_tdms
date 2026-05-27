@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-05-14 (T-001~T-008 전체 완료)
-> **총 등록 파일**: 15개
+> **마지막 업데이트**: 2026-05-27
+> **총 등록 파일**: 16개
 
 ---
 
@@ -92,6 +92,7 @@
 |---|---|---|
 | `dec-001_pit_financial_pattern.md` | PIT 재무: ON CONFLICT 없이 INSERT → DISTINCT ON 버전 선택 | T-004 |
 | `dec-002_price_adjustment_dual_strategy.md` | 수정주가: On-the-fly + 물리 테이블 이중 제공 | T-003 |
+| `dec-003_support_alphanumeric_stock_codes.md` | 종목코드: 한국거래소(KRX) 알파벳 혼용 종목코드 지원을 위한 수집기 필터 완화 | — |
 
 ---
 

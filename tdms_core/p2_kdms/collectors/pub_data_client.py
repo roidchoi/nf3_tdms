@@ -68,9 +68,9 @@ class PubDataClient:
                 if not srtn_cd:
                     continue
                     
-                # A005930 등 접두어 제거하고 뒤의 6자리 숫자만 추출
+                # A005930 등 접두어 제거하고 뒤의 6자리 코드만 추출 (알파벳 혼용 코드 대응)
                 stk_cd = srtn_cd[-6:]
-                if not re.match(r"^\d{6}$", stk_cd):
+                if not re.match(r"^[0-9A-Z]{6}$", stk_cd):
                     continue
                     
                 try:

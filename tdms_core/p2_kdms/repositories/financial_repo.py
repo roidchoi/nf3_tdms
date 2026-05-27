@@ -186,3 +186,100 @@ class FinancialRepo:
             cursor.execute(query, params)
             rows = cursor.fetchall()
             return [self._row_to_dict(cursor, r) for r in rows]
+
+
+ALLOWED_SCREENING_FIELDS = {
+    'grs', 'bsop_prfi_inrt', 'ntin_inrt', 'roe_val', 'eps', 'sps', 'bps',
+    'rsrv_rate', 'lblt_rate', 'cptl_ntin_rate', 'self_cptl_ntin_inrt',
+    'sale_ntin_rate', 'sale_totl_rate', 'eva', 'ebitda', 'ev_ebitda',
+    'bram_depn', 'crnt_rate', 'quck_rate', 'equt_inrt', 'totl_aset_inrt'
+}
+
+ALLOWED_OPERATORS = {
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+    "eq": "="
+}
+
+
+def screen_stocks_method(
+    self,
+    stac_yymm: str,
+    div_cls_code: str,
+    as_of_date: datetime,
+    filters: List[Dict[str, Any]],
+    limit: int = 50
+) -> List[Dict[str, Any]]:
+    """
+    DB 레벨 동적 SQL(CTE + WHERE + LIMIT)을 통해 재무 비율 기준 종목들을 스크리닝합니다.
+    """
+    if as_of_date.tzinfo is None:
+        as_of_date = as_of_date.replace(tzinfo=KST)
+
+    if as_of_date < HISTORICAL_CUTOFF:
+        cte_query = """
+            SELECT DISTINCT ON (fr.stk_cd) fr.*, si.stk_nm
+            FROM financial_ratios fr
+            JOIN stock_info si ON fr.stk_cd = si.stk_cd
+            WHERE fr.stac_yymm = %(stac_yymm)s AND fr.div_cls_code = %(div_cls_code)s
+            ORDER BY fr.stk_cd, fr.retrieved_at DESC
+        """
+        params = {
+            "stac_yymm": stac_yymm,
+            "div_cls_code": div_cls_code
+        }
+    else:
+        cte_query = """
+            SELECT DISTINCT ON (fr.stk_cd) fr.*, si.stk_nm
+            FROM financial_ratios fr
+            JOIN stock_info si ON fr.stk_cd = si.stk_cd
+            WHERE fr.stac_yymm = %(stac_yymm)s AND fr.div_cls_code = %(div_cls_code)s AND fr.retrieved_at <= %(as_of_date)s
+            ORDER BY fr.stk_cd, fr.retrieved_at DESC
+        """
+        params = {
+            "stac_yymm": stac_yymm,
+            "div_cls_code": div_cls_code,
+            "as_of_date": as_of_date
+        }
+
+    where_clauses = []
+    for i, f in enumerate(filters):
+        field = f.get("field")
+        op = f.get("operator")
+        val = f.get("value")
+        
+        if field not in ALLOWED_SCREENING_FIELDS:
+            raise ValueError(f"Disallowed screening field: {field}")
+        if op not in ALLOWED_OPERATORS:
+            raise ValueError(f"Disallowed screening operator: {op}")
+        
+        param_key = f"val_{i}"
+        db_op = ALLOWED_OPERATORS[op]
+        where_clauses.append(f"{field} {db_op} %({param_key})s")
+        params[param_key] = val
+
+    where_str = ""
+    if where_clauses:
+        where_str = "WHERE " + " AND ".join(where_clauses)
+
+    query = f"""
+        WITH latest_ratios AS (
+            {cte_query}
+        )
+        SELECT * FROM latest_ratios
+        {where_str}
+        ORDER BY stk_cd ASC
+        LIMIT %(limit)s;
+    """
+    params["limit"] = limit
+
+    with self.pool.get_cursor() as cursor:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [self._row_to_dict(cursor, r) for r in rows]
+
+# 클래스에 바인딩
+FinancialRepo.screen_stocks = screen_stocks_method
+

@@ -121,3 +121,44 @@ class MarketCapRepo:
             if conn:
                 self._release_connection(conn)
 
+    def get_daily_market_cap(self, stk_cd: str, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+        """
+        daily_market_cap 테이블에서 특정 종목의 일별 시가총액 데이터를 기간 조회합니다.
+        
+        :param stk_cd: 종목코드
+        :param start_date: 시작 날짜
+        :param end_date: 종료 날짜
+        :return: 시가총액 데이터 리스트
+        """
+        query = """
+            SELECT dt, stk_cd, cls_prc, mkt_cap, vol, amt, listed_shares
+            FROM daily_market_cap
+            WHERE stk_cd = %s AND dt BETWEEN %s AND %s
+            ORDER BY dt ASC;
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                cur.execute(query, (stk_cd, start_date, end_date))
+                rows = cur.fetchall()
+                return [
+                    {
+                        "dt": row[0],
+                        "stk_cd": row[1],
+                        "cls_prc": int(row[2]) if row[2] is not None else 0,
+                        "mkt_cap": int(row[3]) if row[3] is not None else 0,
+                        "vol": int(row[4]) if row[4] is not None else 0,
+                        "amt": int(row[5]) if row[5] is not None else 0,
+                        "listed_shares": int(row[6]) if row[6] is not None else 0
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.error(f"daily_market_cap 기간 조회 중 오류 발생: {e}", exc_info=True)
+            raise
+        finally:
+            if conn:
+                self._release_connection(conn)
+
+

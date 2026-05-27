@@ -109,7 +109,17 @@ def test_fetch_stock_master_downloads_and_parses_mst(mocker):
         kosdaq_part2_str += field.ljust(width)[:width]
         
     kosdaq_part1_str = "A035420  " + "KR7035420009" + "네이버              "
-    kosdaq_line = kosdaq_part1_str + kosdaq_part2_str + "\n"
+    
+    # 알파벳 혼용 종목코드 (0008Z0) mock 데이터 추가
+    kosdaq_part2_fields_2 = ["  "] * len(field_specs_kosdaq)
+    kosdaq_part2_fields_2[44] = "20250819"
+    kosdaq_part2_fields_2[45] = "          10000"
+    kosdaq_part2_str_2 = ""
+    for width, field in zip(field_specs_kosdaq, kosdaq_part2_fields_2):
+        kosdaq_part2_str_2 += field.ljust(width)[:width]
+    kosdaq_part1_str_2 = "A0008Z0  " + "KR70008Z0002" + "에스엔시스          "
+    
+    kosdaq_line = kosdaq_part1_str + kosdaq_part2_str + "\n" + kosdaq_part1_str_2 + kosdaq_part2_str_2 + "\n"
     
     # ZIP 바이트 생성 함수
     def make_zip(filename, data):
@@ -139,7 +149,7 @@ def test_fetch_stock_master_downloads_and_parses_mst(mocker):
     client = KisKrClient(api_core=mocker.MagicMock())
     stocks = client.fetch_stock_master()
     
-    assert len(stocks) == 2
+    assert len(stocks) == 3
     
     # KOSPI 검증
     kospi_stock = next(s for s in stocks if s["market"] == "KOSPI")
@@ -149,12 +159,19 @@ def test_fetch_stock_master_downloads_and_parses_mst(mocker):
     assert kospi_stock["listed_shares"] == 5969782550
     assert kospi_stock["is_active"] is True
     
-    # KOSDAQ 검증
-    kosdaq_stock = next(s for s in stocks if s["market"] == "KOSDAQ")
-    assert kosdaq_stock["stk_cd"] == "035420"
-    assert kosdaq_stock["stk_nm"] == "네이버"
-    assert kosdaq_stock["listed_dt"] == date(1999, 11, 11)
-    # KOSDAQ은 상장주수가 천주 단위이므로 50,000 * 1,000 = 50,000,000
-    assert kosdaq_stock["listed_shares"] == 50000000
-    assert kosdaq_stock["is_active"] is True
+    # KOSDAQ 검증 (네이버)
+    naver_stock = next(s for s in stocks if s["stk_cd"] == "035420")
+    assert naver_stock["stk_nm"] == "네이버"
+    assert naver_stock["market"] == "KOSDAQ"
+    assert naver_stock["listed_dt"] == date(1999, 11, 11)
+    assert naver_stock["listed_shares"] == 50000000
+    assert naver_stock["is_active"] is True
+    
+    # KOSDAQ 검증 (알파벳 혼용 종목 - 에스엔시스)
+    sn_stock = next(s for s in stocks if s["stk_cd"] == "0008Z0")
+    assert sn_stock["stk_nm"] == "에스엔시스"
+    assert sn_stock["market"] == "KOSDAQ"
+    assert sn_stock["listed_dt"] == date(2025, 8, 19)
+    assert sn_stock["listed_shares"] == 10000000
+    assert sn_stock["is_active"] is True
 

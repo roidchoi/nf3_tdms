@@ -5,7 +5,7 @@
 > **포트**: `5432`
 > **사용자**: `roid`
 > **볼륨**: `kdms_pgdata` (external: true)
-> **마지막 업데이트**: 2026-05-26 (실제 DB `\d` 결과 기반)
+> **마지막 업데이트**: 2026-05-27
 > **관련**: `[[interfaces/ohlcv_repo.md]]`, `[[interfaces/financial_repo.md]]`, `[[operations/runbook.md]]`
 
 ---
@@ -155,7 +155,7 @@ CREATE TABLE daily_market_cap (
 
 ```sql
 CREATE TABLE stock_info (
-    stk_cd      VARCHAR(6)   NOT NULL,                      -- 종목코드 (6자리)
+    stk_cd      VARCHAR(6)   NOT NULL,                      -- 종목코드 (6자리. 2024년 이후 KRX 알파벳 혼용 규격 포함)
     stk_nm      VARCHAR(100) NOT NULL,                      -- 종목명
     market_type VARCHAR(10),                                 -- 시장 구분 ('KOSPI', 'KOSDAQ', ...)
     status      VARCHAR(20)  NOT NULL DEFAULT 'listed',     -- 상태 ('listed', 'delisted')

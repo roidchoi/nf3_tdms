@@ -178,8 +178,8 @@ class KisKrClient:
                                         listed_dt_str = listed_dt_bytes.decode('cp949', errors='ignore').strip()
                                         listed_shares_str = listed_shares_bytes.decode('cp949', errors='ignore').strip()
                                     
-                                    # 6자리 숫자로 구성된 단축코드만 수집
-                                    if not re.match(r'^\d{6}$', stk_cd):
+                                    # 6자리 단축코드만 수집 (알파벳 혼용 코드 대응)
+                                    if not re.match(r'^[0-9A-Z]{6}$', stk_cd):
                                         continue
                                     
                                     # 상장일자 파싱

@@ -83,13 +83,27 @@ class DailyTask:
         if not active_stocks:
             return {"collected": 0, "failed": 0, "skipped": 0}
 
+        # 블랙리스트 종목 조회
+        blacklisted_stocks = set()
+        if hasattr(self.ohlcv_repo, "get_blacklisted_stocks"):
+            try:
+                blacklisted_stocks = set(self.ohlcv_repo.get_blacklisted_stocks())
+            except Exception as bl_err:
+                logger.error(f"Failed to load blacklisted stocks: {bl_err}")
+
         # 3. 각 종목별 OHLCV 및 수정계수 수집/처리 (Loop 1)
         for stock in active_stocks:
             stk_cd = stock.get("stk_cd")
             if not stk_cd:
                 continue
 
+            if stk_cd in blacklisted_stocks:
+                logger.info(f"[{stk_cd}] Skip data collection due to blacklist.")
+                skipped += 1
+                continue
+
             try:
+
                 # Raw OHLCV 시세 수집
                 ohlcv = self.kis_client.fetch_daily_ohlcv(stk_cd, target_date)
                 if ohlcv:
@@ -357,11 +371,11 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
         duration = (end_time - start_time).total_seconds()
         
         skipped_count = result.get("skipped", 0)
-        if skipped_count > 0:
+        if skipped_count > 0 and result.get("collected", 0) == 0 and result.get("failed", 0) == 0:
             final_log = f"수집 스킵 (휴장일: {target_date})"
             last_status = "success (holiday skipped)"
         else:
-            final_log = f"수집 완료 (성공: {result['collected']}건, 실패: {result['failed']}건, 소요시간: {int(duration)}초)"
+            final_log = f"수집 완료 (성공: {result['collected']}건, 실패: {result['failed']}건, 스킵: {skipped_count}건, 소요시간: {int(duration)}초)"
             last_status = "success"
 
         job_statuses[job_id].update({
