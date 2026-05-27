@@ -8,5 +8,8 @@ httpx
 pandas
 lxml
 apscheduler==3.11.0
--e ../p1_shared
 pyarrow>=22.0
+pytest-asyncio
+-e ../p1_shared
+
+

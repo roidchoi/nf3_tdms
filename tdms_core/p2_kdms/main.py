@@ -110,12 +110,31 @@ app = FastAPI(lifespan=lifespan)
 
 from routers.data import router as data_router
 from routers.admin import router as admin_router
+from routers.health import router as health_router
 
 app.include_router(data_router)
 app.include_router(admin_router, prefix="/api/v1/admin")
+app.include_router(health_router)
+
+from fastapi import WebSocket, WebSocketDisconnect
+from utils.log_broadcaster import log_broadcaster
+
+@app.websocket("/ws/logs")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    await log_broadcaster.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        log_broadcaster.disconnect(websocket)
+    except Exception:
+        log_broadcaster.disconnect(websocket)
 
 @app.get("/")
 def read_root():
     return {"message": "KDMS API is running"}
+
+
 
 

@@ -73,8 +73,8 @@ T-009 (p4_manager 연동)
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-007 | 조회 API 완성 + Blacklist 패턴 | `/api/data/ohlcv/daily`, `/api/data/ohlcv/minute`, `/api/data/financials`, `/api/data/screening`, `/api/data/market-cap`, `/api/data/preview/{table}`, Blacklist 패턴(수집 실패 종목 사유 코드 관리, `daily_task.py` skip 로직 교체) | 대기 | Medium | T-006 | - | - |
-| T-008 | 헬스·어드민 API + WebSocket | `/api/health/freshness`, `/api/health/gaps`, `/api/health/milestones` CRUD, `/api/admin/schedules` 조회·수정, `WS /ws/logs` 실시간 실행 로그 스트리밍 | 대기 | Medium | T-007 | - | - |
+| T-007 | 조회 API 완성 + Blacklist 패턴 | `/api/data/ohlcv/daily`, `/api/data/ohlcv/minute`, `/api/data/financials`, `/api/data/screening`, `/api/data/market-cap`, `/api/data/preview/{table}`, Blacklist 패턴(수집 실패 종목 사유 코드 관리, `daily_task.py` skip 로직 교체) | 완료 | Medium | T-006 | - | - |
+| T-008 | 헬스·어드민 API + WebSocket | `/api/health/freshness`, `/api/health/gaps`, `/api/health/milestones` CRUD, `/api/admin/schedules` 조회·수정, `WS /ws/logs` 실시간 실행 로그 스트리밍 | 완료 | Medium | T-007 | - | - |
 
 ### Phase 4: p4_manager 연동
 
@@ -115,9 +115,10 @@ T-009 (p4_manager 연동)
 | 구분 | 수량 |
 |------|------|
 | 전체 | 9개 |
-| 완료 | 3개 |
+| 완료 | 8개 |
 | 진행 중 | 0개 |
-| 대기 | 6개 |
+| 대기 | 1개 |
+
 
 ---
 

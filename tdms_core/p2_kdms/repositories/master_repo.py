@@ -77,4 +77,13 @@ class MasterRepo:
                 results.append(stock_dict)
             return results
 
+    def get_ipo_dates(self) -> Dict[str, Any]:
+        """모든 종목의 종목코드별 상장일(list_dt) 딕셔너리를 반환합니다."""
+        query = "SELECT stk_cd, list_dt FROM stock_info WHERE list_dt IS NOT NULL"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return {row[0]: row[1] for row in rows}
+
+
 

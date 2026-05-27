@@ -332,6 +332,33 @@ class OhlcvRepo:
             rows = cursor.fetchall()
             return [r[0] for r in rows]
 
+    def get_daily_ohlcv_count_for_date(self, target_date: date) -> int:
+        """특정 날짜의 daily_ohlcv 레코드 건수 조회"""
+        query = "SELECT COUNT(*) FROM daily_ohlcv WHERE dt = %s"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (target_date,))
+            row = cursor.fetchone()
+            return row[0] if row else 0
+
+    def get_latest_minute_dt_tm(self) -> datetime | None:
+        """minute_ohlcv 테이블의 가장 최신 시각 조회"""
+        query = "SELECT MAX(dt_tm) FROM minute_ohlcv"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query)
+            row = cursor.fetchone()
+            return row[0] if row and row[0] is not None else None
+
+    def get_minute_target_history_for_date(self, target_date: date) -> list[str]:
+        """특정 날짜가 속한 분기의 분봉 수집 대상 종목코드(symbol) 리스트를 조회"""
+        q = (target_date.month - 1) // 3 + 1
+        quarter = f"{target_date.year}Q{q}"
+        query = "SELECT symbol FROM minute_target_history WHERE quarter = %s"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (quarter,))
+            rows = cursor.fetchall()
+            return [r[0] for r in rows]
+
+
 
 
 

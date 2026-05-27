@@ -151,3 +151,56 @@ async def run_task(
     except Exception as e:
         logger.error(f"수동 작업 등록 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"수동 작업 기동에 실패했습니다: {str(e)}")
+
+
+@router.get("/scheduler", summary="스케줄러 정보 및 등록된 작업 목록 조회")
+async def get_scheduler_info():
+    """스케줄러의 구동 상태 및 등록된 모든 cron/manual job들의 상세 목록을 반환합니다."""
+    if scheduler is None:
+        raise HTTPException(status_code=500, detail="스케줄러 시스템이 정상적으로 기동되지 않았습니다.")
+        
+    jobs = []
+    for job in scheduler.get_jobs():
+        jobs.append({
+            "id": job.id,
+            "name": job.name,
+            "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+            "trigger": str(job.trigger)
+        })
+        
+    return {
+        "is_running": scheduler.running,
+        "jobs_count": len(jobs),
+        "jobs": jobs
+    }
+
+
+@router.post("/scheduler/{job_id}/toggle", summary="스케줄러 작업 일시정지 또는 재개")
+async def toggle_job(
+    job_id: str,
+    action: str = Query(..., description="작업 ('pause' 또는 'resume')")
+):
+    """특정 작업(job_id)을 일시 정지(pause) 또는 재개(resume)합니다."""
+    if scheduler is None:
+        raise HTTPException(status_code=500, detail="스케줄러 시스템이 정상적으로 기동되지 않았습니다.")
+        
+    if action not in ["pause", "resume"]:
+        raise HTTPException(status_code=400, detail="action 파라미터는 'pause' 또는 'resume'이어야 합니다.")
+        
+    job = scheduler.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"작업 '{job_id}'을 찾을 수 없습니다.")
+        
+    try:
+        if action == "pause":
+            job.pause()
+            logger.info(f"스케줄러 작업 일시 정지 완료: {job_id}")
+            return {"status": "PAUSED", "job_id": job_id}
+        elif action == "resume":
+            job.resume()
+            logger.info(f"스케줄러 작업 재개 완료: {job_id}")
+            return {"status": "RESUMED", "job_id": job_id}
+    except Exception as e:
+        logger.error(f"스케줄러 작업 상태 변경 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"작업 상태 변경에 실패했습니다: {str(e)}")
+
