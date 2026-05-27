@@ -60,6 +60,46 @@ class KisKrClient:
                 }
         return None
 
+    def fetch_daily_ohlcv_range(self, stk_cd: str, start_date: date, end_date: date) -> list[dict]:
+        """
+        특정 종목의 지정 범위(start_date ~ end_date) 일봉 데이터를 수집.
+        """
+        path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+        
+        # T-002 스펙: end_date=target_date, adj_price='1' (Raw 주가)
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": stk_cd,
+            "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
+            "FID_INPUT_DATE_2": end_date.strftime("%Y%m%d"),
+            "FID_PERIOD_DIV_CODE": "D",
+            "FID_ORG_ADJ_PRC": "1"  # 원본 가격 요청
+        }
+        
+        try:
+            res = self.api_core.get(path, adj_price="1", **params)
+        except Exception as e:
+            raise e
+            
+        output2 = res.get("output2", [])
+        records = []
+        for row in output2:
+            dt_str = row.get("stck_bsop_date")
+            if dt_str:
+                dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
+                if start_date <= dt_val <= end_date:
+                    records.append({
+                        "stk_cd": stk_cd,
+                        "dt": dt_val,
+                        "open": int(row["stck_oprc"]),
+                        "high": int(row["stck_hgpr"]),
+                        "low": int(row["stck_lwpr"]),
+                        "close": int(row["stck_clpr"]),
+                        "volume": int(row["acml_vol"])
+                    })
+        return records
+
+
     def fetch_ohlcv_range(self, stk_cd: str, start_date: date, end_date: date, adj_price: str = '1') -> list[dict]:
         """
         특정 종목의 지정 범위 시세 데이터를 수집합니다.

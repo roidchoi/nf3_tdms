@@ -37,7 +37,7 @@ class DailyTask:
         self.market_cap_repo = market_cap_repo
         self.kiwoom_client = kiwoom_client
 
-    def run(self, target_date: date) -> Dict[str, Any]:
+    def run(self, target_date: date, end_date: date | None = None) -> Dict[str, Any]:
         """
         일일 데이터 수집 및 갱신 태스크를 실행합니다.
         순서: 
@@ -50,11 +50,24 @@ class DailyTask:
           6. 물리 수정주가 테이블(daily_ohlcv_adjusted) 갱신
           7. 당일 분봉 데이터 수집 및 적재 (kiwoom_client가 제공된 경우)
         """
+        start_date = target_date
+        if end_date is None:
+            end_date = start_date
+
+
         # 0. 휴장일 검사
         is_mock = isinstance(self.kis_client, MagicMock)
-        if not is_mock and not is_kr_trading_day(target_date):
-            logger.info(f"Target date {target_date} is not a KR trading day. Skipping daily update.")
-            return {"collected": 0, "failed": 0, "skipped": 1, "msg": "Skipped due to holiday"}
+        if not is_mock:
+            # 단일 날짜 호출인 경우 기존 is_kr_trading_day 유틸 활용
+            if start_date == end_date:
+                if not is_kr_trading_day(start_date):
+                    logger.info(f"Target date {start_date} is not a KR trading day. Skipping daily update.")
+                    return {"collected": 0, "failed": 0, "skipped": 1, "msg": "Skipped due to holiday"}
+            else:
+                trading_days_cnt = self.ohlcv_repo.get_trading_days_count(start_date, end_date)
+                if trading_days_cnt == 0:
+                    logger.info(f"No trading days found in range {start_date} ~ {end_date}. Skipping daily update.")
+                    return {"collected": 0, "failed": 0, "skipped": 1, "msg": "Skipped due to holiday"}
 
         collected = 0
         failed = 0
@@ -103,35 +116,41 @@ class DailyTask:
                 continue
 
             try:
+                # 단일 날짜와 범위 기반 분기
+                if start_date == end_date:
+                    ohlcv = self.kis_client.fetch_daily_ohlcv(stk_cd, start_date)
+                    ohlcv_list = [ohlcv] if ohlcv else []
+                else:
+                    # Raw OHLCV 시세 범위 수집
+                    ohlcv_list = self.kis_client.fetch_daily_ohlcv_range(stk_cd, start_date, end_date)
 
-                # Raw OHLCV 시세 수집
-                ohlcv = self.kis_client.fetch_daily_ohlcv(stk_cd, target_date)
-                if ohlcv:
+                if ohlcv_list:
                     # DB에 원본 시세 UPSERT
-                    self.ohlcv_repo.upsert_daily_ohlcv([ohlcv])
+                    self.ohlcv_repo.upsert_daily_ohlcv(ohlcv_list)
                     
                     # 시가총액 레코드 빌드
                     if self.market_cap_repo is not None:
                         shares = stock.get("listed_shares", 0) or 0
-                        mkt_cap = ohlcv["close"] * shares
-                        amt = ohlcv["close"] * ohlcv["volume"]
-                        mc_records.append({
-                            "dt": target_date,
-                            "stk_cd": stk_cd,
-                            "cls_prc": ohlcv["close"],
-                            "mkt_cap": mkt_cap,
-                            "vol": ohlcv["volume"],
-                            "amt": amt,
-                            "listed_shares": shares
-                        })
+                        for ohlcv in ohlcv_list:
+                            mkt_cap = ohlcv["close"] * shares
+                            amt = ohlcv["close"] * ohlcv["volume"]
+                            mc_records.append({
+                                "dt": ohlcv["dt"],
+                                "stk_cd": stk_cd,
+                                "cls_prc": ohlcv["close"],
+                                "mkt_cap": mkt_cap,
+                                "vol": ohlcv["volume"],
+                                "amt": amt,
+                                "listed_shares": shares
+                            })
 
                     # 4. 수정계수 역산 및 저장 (FactorRepo가 존재할 경우에만)
                     if self.factor_repo is not None:
                         # 최근 45일 범위의 Raw 및 Adjusted 시세 조회
-                        start_dt = target_date - timedelta(days=45)
+                        calc_start_dt = end_date - timedelta(days=45)
                         try:
-                            raw_list = self.kis_client.fetch_ohlcv_range(stk_cd, start_dt, target_date, adj_price='1')
-                            adj_list = self.kis_client.fetch_ohlcv_range(stk_cd, start_dt, target_date, adj_price='0')
+                            raw_list = self.kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, end_date, adj_price='1')
+                            adj_list = self.kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, end_date, adj_price='0')
                             
                             df_raw = pd.DataFrame(raw_list).rename(columns={"close": "raw_close"})
                             df_adj = pd.DataFrame(adj_list).rename(columns={"close": "adj_close"})
@@ -158,7 +177,7 @@ class DailyTask:
                                     # 사후 정정으로 인해 소멸되었을 수 있으므로 obsolete_dates 제거 진행
                                     if stk_cd in recent_event_map:
                                         # 45일 범위가 맞으므로 이 기간의 기존 DB 내 팩터 삭제
-                                        obsolete_dates = [dt for dt in recent_event_map[stk_cd] if start_dt <= dt <= target_date]
+                                        obsolete_dates = [dt for dt in recent_event_map[stk_cd] if calc_start_dt <= dt <= end_date]
                                         if obsolete_dates:
                                             self.factor_repo.delete_adjustment_factors_by_dates(stk_cd, obsolete_dates, price_source='KIS')
                                             logger.info(f"[{stk_cd}] {len(obsolete_dates)} obsolete factors deleted (Loop 1 - empty API).")
@@ -166,14 +185,14 @@ class DailyTask:
                         except Exception as fe:
                             logger.warning(f"Failed to calculate factors for {stk_cd}: {fe}")
                     
-                    collected += 1
+                    collected += len(ohlcv_list)
                 else:
                     # 수집 결과 없음 (휴장일 또는 데이터 미존재) -> Gap 기록
-                    self.ohlcv_repo.record_gap(stk_cd, target_date, "No data returned from KIS API")
+                    self.ohlcv_repo.record_gap(stk_cd, end_date, "No data returned from KIS API for range")
                     failed += 1
             except Exception as e:
                 # 수집 에러 발생 -> Gap 기록
-                self.ohlcv_repo.record_gap(stk_cd, target_date, str(e))
+                self.ohlcv_repo.record_gap(stk_cd, end_date, str(e))
                 failed += 1
 
         # 4. 시가총액 일괄 저장
@@ -205,24 +224,37 @@ class DailyTask:
         # 6. 물리 수정주가 테이블(daily_ohlcv_adjusted) 일괄 갱신 (최근 30일 범위 배치)
         if self.factor_repo is not None:
             try:
-                start_update_dt = target_date - timedelta(days=30)
-                self.ohlcv_repo.refresh_adjusted_ohlcv_batch(start_update_dt, target_date, 'KIS')
+                start_update_dt = start_date - timedelta(days=30)
+                self.ohlcv_repo.refresh_adjusted_ohlcv_batch(start_update_dt, end_date, 'KIS')
             except Exception as re:
                 logger.error(f"Failed to refresh adjusted ohlcv physical table: {re}")
 
         # 7. 당일 분봉 데이터 수집 및 적재 (kiwoom_client가 제공된 경우)
         if self.kiwoom_client is not None:
             try:
-                self._collect_daily_minute_data(target_date)
+                self._collect_daily_minute_data_range(start_date, end_date)
             except Exception as me:
                 logger.error(f"Failed in daily minute data collection: {me}")
 
         return {"collected": collected, "failed": failed, "skipped": skipped}
 
-    def _collect_daily_minute_data(self, target_date: date) -> None:
-        """당일 분기 대상 종목들에 대해 Kiwoom API를 통해 당일 분봉 데이터를 수집하고 적재합니다."""
-        logger.info("--- Starting Daily Minute Data Collection ---")
-        today = target_date
+    def _collect_daily_minute_data_range(self, start_date: date, end_date: date) -> None:
+        """당일 분기 대상 종목들에 대해 Kiwoom API를 통해 공백 기간(start_date ~ end_date) 분봉 데이터를 동적으로 수집하고 적재합니다."""
+        logger.info(f"--- Starting Daily Minute Data Range Collection ({start_date} ~ {end_date}) ---")
+        
+        # 영업일 수 계산
+        trading_days = self.ohlcv_repo.get_trading_days_count(start_date, end_date)
+        if isinstance(trading_days, MagicMock):
+            trading_days = 1
+        if trading_days == 0:
+            logger.info("No trading days in range for minute data. Skipping.")
+            return
+            
+        # max_requests 동적 산정 (1일 약 380개 분봉, 1회 요청 시 약 600~900개 수집)
+        max_requests = max(1, (trading_days * 380) // 600 + 1)
+
+        
+        today = end_date
         quarter = f"{today.year}Q{(today.month - 1) // 3 + 1}"
         
         target_stocks = []
@@ -248,7 +280,6 @@ class DailyTask:
                 logger.error(f"Failed to fetch or select target stocks for market {market}: {err}")
 
         if not target_stocks:
-
             logger.warning(f"No minute targets found for {quarter}. Fetching active stocks as fallback.")
             try:
                 active_stocks = self.master_repo.get_all_active_stocks()
@@ -258,29 +289,39 @@ class DailyTask:
                 return
 
         target_stocks = list(set(target_stocks))
-        date_str = target_date.strftime("%Y%m%d")
+        end_date_str = end_date.strftime("%Y%m%d")
         
-        logger.info(f"Targeting {len(target_stocks)} stocks for daily minute collection on {date_str}.")
+        logger.info(f"Targeting {len(target_stocks)} stocks for daily range minute collection on {end_date_str} with max_requests={max_requests}.")
 
         for idx, stk_cd in enumerate(target_stocks):
             try:
-                # 당일 분봉 데이터 조회 (max_requests는 1로 설정하여 당일자 시세만 빠르게 수집)
-                collected = self.kiwoom_client.get_minute_chart(stk_cd, start_date=date_str, max_requests=1)
+                # 최신 영업일(end_date_str) 기준 과거로 연속 수집
+                collected = self.kiwoom_client.get_minute_chart(stk_cd, start_date=end_date_str, max_requests=max_requests)
                 if collected:
-                    # 당일 날짜 데이터만 필터링
-                    day_collected = [item for item in collected if item.get("cntr_tm", "")[:8] == date_str]
-                    if day_collected:
-                        for item in day_collected:
-                            item["stk_cd"] = stk_cd
-                        transformed = col_utils.transform_data(day_collected, "kiwoom", "minute_ohlcv")
+                    # 범위 내에 매칭되는 분봉만 필터링 (start_date <= dt <= end_date)
+                    range_collected = []
+                    for item in collected:
+                        cntr_tm = item.get("cntr_tm", "")
+                        if len(cntr_tm) >= 8:
+                            try:
+                                item_dt = datetime.strptime(cntr_tm[:8], "%Y%m%d").date()
+                                if start_date <= item_dt <= end_date:
+                                    item["stk_cd"] = stk_cd
+                                    range_collected.append(item)
+                            except ValueError:
+                                pass
+                                
+                    if range_collected:
+                        transformed = col_utils.transform_data(range_collected, "kiwoom", "minute_ohlcv")
                         self.ohlcv_repo.upsert_minute_ohlcv(transformed)
-                        logger.info(f"[{stk_cd}] Daily minute data {len(transformed)} records upserted.")
+                        logger.info(f"[{stk_cd}] Range minute data {len(transformed)} records upserted.")
                 
                 # 키움 API 봇 차단 및 부하 완화 딜레이 (MagicMock이 아닐 때만 0.2초 대기)
                 if not isinstance(self.kiwoom_client, MagicMock):
                     time.sleep(0.2)
             except Exception as me:
                 logger.error(f"Failed to collect daily minute data for {stk_cd}: {me}")
+
 
 
 def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
@@ -353,26 +394,69 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             kiwoom_client=kiwoom_client
         )
         
-        # 장 종료 전 수집 안전장치: 17:00 KST 기준으로 target_date 결정
-        # - 17:00 이전(장중) 실행 시: 미확정 당일 데이터 오염 방지를 위해 전날까지만 수집
-        # - 17:00 이후(장 종료) 실행 시: 당일 포함 수집
+        # 17:00 KST 기준으로 수집 종료일(target_date) 결정
         MARKET_CLOSE_HOUR = 17
         if start_time.hour < MARKET_CLOSE_HOUR:
             target_date = (start_time - timedelta(days=1)).date()
             logger.info(
                 f"[{job_id}] 장 종료 전 실행 감지 ({start_time.strftime('%H:%M')} KST). "
-                f"수집일 → 전날: {target_date}"
+                f"수집 목표일 → 전날: {target_date}"
             )
         else:
             target_date = start_time.date()
-        result = task.run(target_date)
+
+        # DB 상 마지막 적재 날짜 조회
+        last_collected_date = None
+        try:
+            last_collected_date = ohlcv_repo.get_last_collected_date()
+            if isinstance(last_collected_date, MagicMock):
+                last_collected_date = None
+        except Exception as l_err:
+            logger.warning(f"Failed to query last collected date: {l_err}")
+
+        # 수집 범위 산출
+        if last_collected_date is None:
+            # 적재 데이터가 없으면 안전하게 단일 target_date만 타겟팅
+            start_date = target_date
+            end_date = target_date
+            logger.info(f"[{job_id}] DB has no ohlcv data. Starting with single target date: {target_date}")
+        else:
+            # 마지막 수집 다음 날부터 target_date 사이의 개장 영업일 조회
+            search_start = last_collected_date + timedelta(days=1)
+            open_days = []
+            try:
+                open_days = ohlcv_repo.get_open_trading_days(search_start, target_date)
+                if isinstance(open_days, MagicMock):
+                    open_days = []
+            except Exception as o_err:
+                logger.warning(f"Failed to query open trading days: {o_err}")
+
+            if open_days:
+                start_date = min(open_days)
+                end_date = max(open_days)
+                logger.info(
+                    f"[{job_id}] 공백 영업일 감지: {start_date} ~ {end_date} "
+                    f"(총 {len(open_days)} 영업일). 일괄 수집 진행합니다."
+                )
+            else:
+                # 공백이 없는 경우 단일 target_date 적용 (휴장일 스킵 처리 등 정상 흐면 유지를 위함)
+                start_date = target_date
+                end_date = target_date
+                logger.info(f"[{job_id}] No missing trading days detected. Target date: {target_date}")
+
+        if start_date == end_date:
+            result = task.run(start_date)
+        else:
+            result = task.run(start_date, end_date)
+
+
 
         end_time = datetime.now(KST)
         duration = (end_time - start_time).total_seconds()
         
         skipped_count = result.get("skipped", 0)
         if skipped_count > 0 and result.get("collected", 0) == 0 and result.get("failed", 0) == 0:
-            final_log = f"수집 스킵 (휴장일: {target_date})"
+            final_log = f"수집 스킵 (휴장일 범위: {start_date} ~ {end_date})"
             last_status = "success (holiday skipped)"
         else:
             final_log = f"수집 완료 (성공: {result['collected']}건, 실패: {result['failed']}건, 스킵: {skipped_count}건, 소요시간: {int(duration)}초)"
@@ -381,6 +465,7 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
         job_statuses[job_id].update({
             "is_running": False,
             "progress": 100,
+
             "last_status": last_status,
             "end_time": end_time.isoformat(),
             "duration": f"{int(duration)}초",

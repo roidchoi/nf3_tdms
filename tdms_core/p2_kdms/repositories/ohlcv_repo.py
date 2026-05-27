@@ -64,6 +64,40 @@ class OhlcvRepo:
                 return row[0]
             return None
 
+    def get_last_collected_date(self) -> date | None:
+        """
+        전체 종목 기준 DB에 적재된 일봉 데이터의 가장 최근 날짜를 반환.
+        """
+        query = "SELECT MAX(dt) FROM daily_ohlcv"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query)
+            row = cursor.fetchone()
+            if row and row[0] is not None:
+                return row[0]
+            return None
+
+    def get_trading_days_count(self, start_date: date, end_date: date) -> int:
+        """
+        trading_calendar 테이블을 참조하여 두 날짜 사이의 개장 영업일 수를 구합니다.
+        """
+        query = "SELECT COUNT(*) FROM trading_calendar WHERE opnd_yn = 'Y' AND dt BETWEEN %s AND %s"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (start_date, end_date))
+            row = cursor.fetchone()
+            return row[0] if row else 0
+
+    def get_open_trading_days(self, start_date: date, end_date: date) -> list[date]:
+        """
+        trading_calendar 테이블을 참조하여 두 날짜 사이의 개장 영업일(date) 목록을 오름차순으로 반환합니다.
+        """
+        query = "SELECT dt FROM trading_calendar WHERE opnd_yn = 'Y' AND dt BETWEEN %s AND %s ORDER BY dt ASC"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (start_date, end_date))
+            rows = cursor.fetchall()
+            return [r[0] for r in rows]
+
+
+
     def record_gap(self, stk_cd: str, target_date: date, reason: str) -> None:
         """
         수집 실패 종목을 daily_ohlcv_gap 테이블에 기록. ON CONFLICT (stk_cd, dt) DO UPDATE.
