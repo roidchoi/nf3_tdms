@@ -10,7 +10,7 @@ def test_get_valid_token_returns_token_when_cache_is_valid(tmp_path):
 
     cache_file = tmp_path / "token.json"
     expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
     tm.save_token("valid_token_abc", expires_at)
 
     result = tm.get_valid_token()
@@ -25,7 +25,7 @@ def test_get_valid_token_returns_none_when_cache_file_not_exists(tmp_path):
     from p1_shared.api.token_manager import TokenManager
 
     cache_file = tmp_path / "nonexistent_token.json"
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
 
     result = tm.get_valid_token()
     assert result is None
@@ -41,7 +41,7 @@ def test_save_token_creates_json_file_with_correct_structure(tmp_path):
 
     cache_file = tmp_path / "token.json"
     expires_at = datetime(2026, 12, 31, 12, 0, 0, tzinfo=timezone.utc)
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
     tm.save_token("my_token", expires_at)
 
     data = json.loads(cache_file.read_text())
@@ -58,7 +58,7 @@ def test_save_token_creates_parent_directories_automatically(tmp_path):
 
     cache_file = tmp_path / "subdir" / "deep" / "token.json"
     expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
     tm.save_token("my_token", expires_at)
 
     assert cache_file.exists()
@@ -73,7 +73,7 @@ def test_is_valid_returns_true_when_token_has_enough_time_left(tmp_path):
 
     cache_file = tmp_path / "token.json"
     expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
     tm.save_token("still_valid", expires_at)
 
     assert tm.is_valid() is True
@@ -87,7 +87,7 @@ def test_is_valid_returns_false_when_no_cache_file(tmp_path):
     from p1_shared.api.token_manager import TokenManager
 
     cache_file = tmp_path / "missing.json"
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
 
     assert tm.is_valid() is False
 
@@ -101,7 +101,7 @@ def test_get_valid_token_returns_none_when_token_is_expired(tmp_path):
 
     cache_file = tmp_path / "token.json"
     expired_at = datetime.now(timezone.utc) - timedelta(hours=1)
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
     tm.save_token("expired_token", expired_at)
 
     result = tm.get_valid_token()
@@ -118,7 +118,7 @@ def test_is_valid_returns_false_within_5_minutes_of_expiry(tmp_path):
     cache_file = tmp_path / "token.json"
     # 만료까지 4분 남음 (5분 버퍼 내)
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=4)
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
     tm.save_token("almost_expired", expires_at)
 
     assert tm.is_valid() is False
@@ -133,7 +133,29 @@ def test_get_valid_token_returns_none_when_cache_file_is_corrupted(tmp_path):
 
     cache_file = tmp_path / "token.json"
     cache_file.write_text("THIS IS NOT VALID JSON {{{{")
-    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom")
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom", min_buffer_hours=5/60)
 
     result = tm.get_valid_token()
     assert result is None
+
+
+def test_is_valid_returns_correct_result_with_5_hours_buffer(tmp_path):
+    """
+    [목적] 기본 5시간 버퍼 정책이 정상 동작하는지 테스트
+    """
+    from p1_shared.api.token_manager import TokenManager
+
+    cache_file = tmp_path / "token.json"
+    tm = TokenManager(cache_path=str(cache_file), token_type="kiwoom") # 기본값 5.0시간
+
+    # 1. 6시간 남았을 때 -> 유효함 (True)
+    expires_at_6h = datetime.now(timezone.utc) + timedelta(hours=6)
+    tm.save_token("token_6h", expires_at_6h)
+    assert tm.is_valid() is True
+    assert tm.get_valid_token() == "token_6h"
+
+    # 2. 4시간 남았을 때 -> 유효하지 않음 (False)
+    expires_at_4h = datetime.now(timezone.utc) + timedelta(hours=4)
+    tm.save_token("token_4h", expires_at_4h)
+    assert tm.is_valid() is False
+    assert tm.get_valid_token() is None

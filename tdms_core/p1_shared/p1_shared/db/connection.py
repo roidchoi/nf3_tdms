@@ -62,6 +62,14 @@ class DbConnectionPool:
         finally:
             self._pool.putconn(conn)
 
+    def get_conn(self):
+        """커넥션 풀에서 커넥션을 직접 획득한다 (레거시/어댑터 호환용)."""
+        return self._pool.getconn()
+
+    def put_conn(self, conn) -> None:
+        """획득한 커넥션을 풀에 반환한다 (레거시/어댑터 호환용)."""
+        self._pool.putconn(conn)
+
     def close_all(self) -> None:
         """풀의 모든 커넥션을 닫는다."""
         self._pool.closeall()

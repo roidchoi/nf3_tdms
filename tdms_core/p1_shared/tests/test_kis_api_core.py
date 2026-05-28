@@ -249,10 +249,38 @@ def test_request_raises_http_error_when_401_persists_after_retry(tmp_path, mocke
         core.request("GET", "/some/path")
 
 
-def test_request_raises_http_error_on_non_401_error(tmp_path, mocker):
+def test_request_raises_http_error_on_non_retryable_error(tmp_path, mocker):
     """
-    [목적] 500 등 401이 아닌 HTTP 오류는 재시도 없이 즉시 HTTPError 전파
-    [유도] 401 조건을 명시적으로 분기하여 다른 오류는 바로 raise하는 구현 강제
+    [목적] 404 등 재시도 불가능한 HTTP 오류는 재시도 없이 즉시 HTTPError 전파
+    """
+    import requests as req
+    from p1_shared.api.kis_api_core import KisApiCore
+    from p1_shared.api.token_manager import TokenManager
+
+    cache_file = tmp_path / "kis_token.json"
+    tm = TokenManager(str(cache_file), "kis")
+    tm.save_token("valid_token", datetime.now(timezone.utc) + timedelta(hours=12))
+
+    resp_404 = mocker.MagicMock()
+    resp_404.status_code = 404
+    resp_404.raise_for_status.side_effect = req.HTTPError("404 Not Found", response=resp_404)
+
+    mock_request = mocker.patch("requests.request", return_value=resp_404)
+
+    core = KisApiCore(
+        app_key="key", app_secret="secret", account_no="12345678-01",
+        token_cache_path=str(cache_file),
+    )
+    with pytest.raises(req.HTTPError):
+        core.request("GET", "/some/path")
+
+    # 재시도 없이 1회만 호출
+    assert mock_request.call_count == 1
+
+
+def test_request_retries_on_transient_error_using_backoff(tmp_path, mocker):
+    """
+    [목적] 500 Server Error 발생 시 지수 백오프를 기동하여 최대 3회 재시도(총 4회 호출) 실행 검증
     """
     import requests as req
     from p1_shared.api.kis_api_core import KisApiCore
@@ -264,9 +292,10 @@ def test_request_raises_http_error_on_non_401_error(tmp_path, mocker):
 
     resp_500 = mocker.MagicMock()
     resp_500.status_code = 500
-    resp_500.raise_for_status.side_effect = req.HTTPError("500 Server Error")
+    resp_500.raise_for_status.side_effect = req.HTTPError("500 Server Error", response=resp_500)
 
     mock_request = mocker.patch("requests.request", return_value=resp_500)
+    mock_sleep = mocker.patch("time.sleep") # 테스트 대기 시간 패치로 초고속 완료 보장
 
     core = KisApiCore(
         app_key="key", app_secret="secret", account_no="12345678-01",
@@ -275,8 +304,9 @@ def test_request_raises_http_error_on_non_401_error(tmp_path, mocker):
     with pytest.raises(req.HTTPError):
         core.request("GET", "/some/path")
 
-    # 재시도 없이 1회만 호출
-    assert mock_request.call_count == 1
+    # 최초 시도 + 3회 재시도 = 총 4회 호출
+    assert mock_request.call_count == 4
+    assert mock_sleep.call_count == 3
 
 
 def test_get_headers_raises_runtime_error_when_token_issue_fails(tmp_path, mocker):

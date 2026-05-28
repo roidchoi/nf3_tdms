@@ -1,5 +1,6 @@
 import requests
 import os
+import time
 from datetime import datetime, timezone, timedelta
 from p1_shared.api.token_manager import TokenManager
 
@@ -9,16 +10,18 @@ class KiwoomApiCore:
     TokenManager를 통해 토큰 캐시를 관리하며, 요청 시 자동으로 유효한 헤더를 구성한다.
     """
 
-    BASE_URL = "https://openapi.kiwoom.com"
+    BASE_URL = "https://api.kiwoom.com"
 
     def __init__(
         self,
         app_key: str,
         app_secret: str,
         token_cache_path: str = "~/.cache/tdms/kiwoom_token.json",
+        throttle_delay: float = 0.25,
     ) -> None:
         self.app_key = app_key
         self.app_secret = app_secret
+        self.throttle_delay = throttle_delay
         expanded_path = os.path.expanduser(token_cache_path)
         self.token_manager = TokenManager(expanded_path, "kiwoom")
 
@@ -78,4 +81,7 @@ class KiwoomApiCore:
         res = requests.request(method, url, headers=headers, params=params)
         res.raise_for_status()
         
+        if self.throttle_delay > 0:
+            time.sleep(self.throttle_delay)
+            
         return res.json()
