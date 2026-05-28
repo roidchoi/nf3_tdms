@@ -131,9 +131,18 @@ class DailyTask:
                     # 시가총액 레코드 빌드
                     if self.market_cap_repo is not None:
                         shares = stock.get("listed_shares", 0) or 0
+                        # 1,000억 주 초과 비정상 주식수(마스터 오류 유입) 방어
+                        if shares > 100_000_000_000 or shares < 0:
+                            shares = 0
                         for ohlcv in ohlcv_list:
                             mkt_cap = ohlcv["close"] * shares
+                            # PostgreSQL bigint (9.22경) 오버플로우 방어
+                            if mkt_cap > 9_000_000_000_000_000_000:
+                                mkt_cap = 0
                             amt = ohlcv["close"] * ohlcv["volume"]
+                            if amt > 9_000_000_000_000_000_000:
+                                amt = 0
+                            
                             mc_records.append({
                                 "dt": ohlcv["dt"],
                                 "stk_cd": stk_cd,
@@ -364,9 +373,20 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             profile = detector.load_env_profile()
             env = detector.detect()
             is_dev = (env == "dev")
-
-            appkey = profile.get("kis_appkey") or os.environ.get("KIS_APPKEY", "")
-            appsecret = profile.get("kis_appsecret") or os.environ.get("KIS_APPSECRET", "")
+            appkey = (
+                os.environ.get("KIS_APP_KEY") 
+                or os.environ.get("KIS_APPKEY") 
+                or profile.get("kis_app_key") 
+                or profile.get("kis_appkey") 
+                or ""
+            )
+            appsecret = (
+                os.environ.get("KIS_APP_SECRET") 
+                or os.environ.get("KIS_APPSECRET") 
+                or profile.get("kis_app_secret") 
+                or profile.get("kis_appsecret") 
+                or ""
+            )
 
             api_core = KisApiCore(
                 app_key=appkey,
@@ -404,6 +424,39 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             )
         else:
             target_date = start_time.date()
+
+        # 0. trading_calendar 테이블 자동 동기화 (target_date 까지 개장일 정보 최신화)
+        if not test_mode:
+            try:
+                with pool.get_cursor() as cursor:
+                    cursor.execute("SELECT MAX(dt) FROM trading_calendar")
+                    max_cal_dt = cursor.fetchone()[0]
+                    
+                    if max_cal_dt is None:
+                        # 데이터가 없는 경우 안전하게 1년 전부터 동기화
+                        sync_start = target_date - timedelta(days=365)
+                    else:
+                        sync_start = max_cal_dt + timedelta(days=1)
+                        
+                    if sync_start <= target_date:
+                        from p1_shared.utils.date_utils import is_kr_trading_day
+                        curr_d = sync_start
+                        cal_records = []
+                        while curr_d <= target_date:
+                            opnd = 'Y' if is_kr_trading_day(curr_d) else 'N'
+                            cal_records.append((curr_d, opnd))
+                            curr_d += timedelta(days=1)
+                            
+                        if cal_records:
+                            for c_dt, c_opnd in cal_records:
+                                cursor.execute("""
+                                    INSERT INTO trading_calendar (dt, opnd_yn, updated_at)
+                                    VALUES (%s, %s, NOW())
+                                    ON CONFLICT (dt) DO UPDATE SET opnd_yn = EXCLUDED.opnd_yn, updated_at = NOW()
+                                """, (c_dt, c_opnd))
+                            logger.info(f"[{job_id}] trading_calendar 자동 동기화 완료: {len(cal_records)}건 적재 ({sync_start} ~ {target_date})")
+            except Exception as cal_err:
+                logger.error(f"[{job_id}] trading_calendar 자동 동기화 실패: {cal_err}")
 
         # DB 상 마지막 적재 날짜 조회
         last_collected_date = None

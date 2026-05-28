@@ -2,7 +2,7 @@
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
 > **마지막 업데이트**: 2026-05-27
-> **총 등록 파일**: 16개
+> **총 등록 파일**: 19개
 
 ---
 
@@ -93,6 +93,14 @@
 | `dec-001_pit_financial_pattern.md` | PIT 재무: ON CONFLICT 없이 INSERT → DISTINCT ON 버전 선택 | T-004 |
 | `dec-002_price_adjustment_dual_strategy.md` | 수정주가: On-the-fly + 물리 테이블 이중 제공 | T-003 |
 | `dec-003_support_alphanumeric_stock_codes.md` | 종목코드: 한국거래소(KRX) 알파벳 혼용 종목코드 지원을 위한 수집기 필터 완화 | — |
+| `dec-004_kis_api_throttling_strategy.md` | 속도 정책: 안전 마진 기반 KIS API 스로틀링(Throttling) 및 방어적 시가총액 bigint 연산 | Task-010 |
+
+### errors/ (해결된 에러 기록)
+
+| 파일 | 에러 요약 | Severity |
+|---|---|---|
+| `err-001_kis_api_403_forbidden.md` | API 과호출로 인한 KIS IP 차단 (403 Forbidden) -> Throttling 딜레이 도입 | High |
+| `err-002_bigint_out_of_range_in_market_cap.md` | 기형적 주식수 데이터 연산으로 인한 시총 bigint 오버플로우 -> 1000억 주 초과 컷오프 | Critical |
 
 ---
 
@@ -130,6 +138,8 @@
 
 - [P1-ERR-001] Docker 볼륨 UID 불일치 → `p1_shared_wiki/errors/p1-err-001_volume_uid_mismatch.md`
 - [P1-ERR-002] pg_restore 논리 복원 실패 → `p1_shared_wiki/errors/p1-err-002_logical_restore_failure.md`
+- [P2-ERR-001] KIS API 403 Forbidden 차단 → `p2_kdms_wiki/errors/err-001_kis_api_403_forbidden.md`
+- [P2-ERR-002] 시총 bigint 오버플로우 롤백 → `p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md`
 
 ### 📐 최근 변경된 인터페이스
 

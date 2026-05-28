@@ -20,12 +20,19 @@ class KisApiCore:
         account_no: str,
         is_mock: bool = False,
         token_cache_path: str = "~/.cache/tdms/kis_token.json",
+        throttle_delay: float = None,
     ) -> None:
         self.app_key = app_key
         self.app_secret = app_secret
         self.account_no = account_no
         self.is_mock = is_mock
         
+        # 안전 마진이 적용된 속도 제한 지연 설정
+        if throttle_delay is not None:
+            self.throttle_delay = throttle_delay
+        else:
+            self.throttle_delay = 0.4 if is_mock else 0.08
+            
         expanded_path = os.path.expanduser(token_cache_path)
         self.token_manager = TokenManager(expanded_path, "kis")
 
@@ -120,6 +127,8 @@ class KisApiCore:
             try:
                 res = _make_request()
                 res.raise_for_status()
+                if self.throttle_delay > 0:
+                    time.sleep(self.throttle_delay)
                 return res.json()
             except requests.exceptions.RequestException as e:
                 # HTTP 에러인 경우 상태 코드로 판단
@@ -133,6 +142,8 @@ class KisApiCore:
                         self._issue_new_token()
                         res = _make_request()
                         res.raise_for_status()
+                        if self.throttle_delay > 0:
+                            time.sleep(self.throttle_delay)
                         return res.json()
                     except Exception as token_err:
                         # 토큰 갱신 후에도 실패한 경우 일반 백오프 로직에 태움
