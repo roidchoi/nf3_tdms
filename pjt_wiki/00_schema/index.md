@@ -2,7 +2,7 @@
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
 > **마지막 업데이트**: 2026-05-27
-> **총 등록 파일**: 19개
+> **총 등록 파일**: 21개
 
 ---
 
@@ -45,6 +45,8 @@
 | `backup_manager.md` | BackupManager | **58** | pg_dump 백업, pre-data→data→post-data 강건 복원 |
 | `startup_validator.md` | StartupValidator | **48** | Docker 재기동 후 5종 검증, FastAPI lifespan 패턴 |
 | `physical_sync_manager.md` | PhysicalSyncManager | **20** | tar+SSH 물리 동기화, 5단계 파이프라인 |
+| `kis_api_core.md` | KisApiCore | — | KIS REST API 연동, OAuth2 토큰 자동 관리, 지수 백오프 재시도 및 스로틀 지연 적용 |
+| `kiwoom_api_core.md` | KiwoomApiCore | — | Kiwoom REST API 연동, OAuth2 토큰 자동 관리, 초당 5회 제한 스로틀 0.25초 지연 적용 |
 
 ### decisions/ (핵심 기술 의사결정)
 

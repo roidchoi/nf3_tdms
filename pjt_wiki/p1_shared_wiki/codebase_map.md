@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p1_shared (공통 인프라 라이브러리)
-> **마지막 업데이트**: 2026-05-14 (T-001~T-008 전체 완료)
+> **마지막 업데이트**: 2026-05-28 (KIS/Kiwoom API 스로틀링 반영 완료)
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -109,8 +109,8 @@ docs/p1_shared/
 | `ops/sync_manager.py` | ⚠️ | SyncManager | **폐기 예정** — T-008의 PhysicalSyncManager로 대체 |
 | `ops/auditors/` | ✅ | audit_fast/deep/usdms | 동기화 후 무결성 감사 |
 | `api/token_manager.py` | ✅ | TokenManager | 파일 기반 API 토큰 캐시 |
-| `api/kis_api_core.py` | ✅ | KisApiCore | KIS REST API, 401 자동 토큰 갱신 |
-| `api/kiwoom_api_core.py` | ✅ | KiwoomApiCore | Kiwoom REST API, TokenManager 연동 |
+| `api/kis_api_core.py` | ✅ | KisApiCore | KIS REST API, 401 자동 토큰 갱신, 스로틀링 딜레이(실전 0.08s, 모의 0.4s) |
+| `api/kiwoom_api_core.py` | ✅ | KiwoomApiCore | Kiwoom REST API, TokenManager 연동, 스로틀링 딜레이(0.25s) |
 
 ---
 
@@ -154,3 +154,4 @@ docs/p1_shared/
 | T-006 | BackupManager 구현, pre-data→data→post-data 강건 복원 |
 | T-007 | StartupValidator 구현, 5종 검증 + FastAPI lifespan 패턴 |
 | T-008 | PhysicalSyncManager 구현 (T-009 흡수), tar+SSH 파이프라인 |
+| 2026-05-28 | KIS/Kiwoom OpenAPI 속도 제어(Throttling Delay) 도입 |

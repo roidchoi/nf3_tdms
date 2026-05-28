@@ -1,7 +1,7 @@
 # Sub Project 개발/운영 환경 (environment.md)
 
 > **Sub Project**: p2_kdms (한국 시장 데이터 백엔드)
-> **마지막 업데이트**: 2026-05-26
+> **마지막 업데이트**: 2026-05-28
 > **타입**: Type E (배경/환경 지식)
 > **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
 
@@ -40,8 +40,8 @@
 
 | 소스 | 접근 방법 | 갱신 주기 | 제약/한도 |
 |---|---|---|---|
-| KIS OpenAPI (한국투자증권) | REST API (Bearer Token) | 일 1회 (평일 17:00) | 초당 호출 제한 있음 (RateLimiter) |
-| Kiwoom REST API | REST API (Bearer Token) | 분봉 백필 시 | 호출 제한 있음 |
+| KIS OpenAPI (한국투자증권) | REST API (Bearer Token) | 일 1회 (평일 17:00) | 초당 호출 제한 있음 (실전 0.08s, 모의 0.4s 지연 적용) |
+| Kiwoom REST API | REST API (Bearer Token) | 분봉 백필 시 | 호출 제한 있음 (0.25s 기본 지연 적용) |
 | pykrx / KRX | 공개 API | 일 1회 (시총) | 비인증, 안정성 제한 |
 
 ---
@@ -93,3 +93,5 @@
 | EnvDetector "unknown" 감지 실패 | `.env`에 TDMS_ENV/DEV_HOSTNAME 미설정 | `.env.example` 참조하여 변수 채우기 |
 | FastAPI lifespan DB 검증 실패 | DB 미기동 또는 테이블 누락 | `check_db.py` 수동 실행으로 상태 확인 |
 | conftest mock_lifespan 미적용 | pytest fixtures 미등록 | `tests/conftest.py`의 `autouse=True` fixture 확인 |
+| KIS API 403 Forbidden 차단 | API 호출 딜레이 제어 누락 | `KisApiCore`에 안전 마진 스로틀 딜레이 도입 (`[[dec-004_kis_api_throttling_strategy.md]]` 참조) |
+| 시가총액 bigint 오버플로우 롤백 | 비주식 상품 주식수 파싱 오차 | `daily_task.py` 수집 시 1,000억 주 초과 및 9경 초과값 `0` 보정 |

@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p2_kdms (한국 시장 데이터 백엔드)
-> **마지막 업데이트**: 2026-05-26 (Graphify 기반 초기 지식화)
+> **마지막 업데이트**: 2026-05-28 (시가총액 오버플로우 방어 패치 반영 완료)
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -116,7 +116,7 @@ tdms_core/p2_kdms/
 | `collectors/pub_data_client.py` | ✅ | PubDataClient | pykrx 기반 시가총액 수집 |
 | `collectors/factor_calculator.py` | ✅ | FactorCalculator | Raw/Adj 비율 기반 수정계수 역산 (ZeroDivision 처리) |
 | `collectors/target_selector.py` | ✅ | TargetSelector | 거래대금 기준 분봉 수집 대상 Top-N 선정 |
-| `tasks/daily_task.py` | ✅ | DailyTask | 평일 17:00 KST 크론: OHLCV → 팩터 → 수정주가 → 시총 → 분봉 |
+| `tasks/daily_task.py` | ✅ | DailyTask | 평일 17:00 KST 크론: OHLCV → 팩터 → 수정주가 → 시총(1000억주 컷오프/9경 초과 bigint 방어 필터) → 분봉 |
 | `tasks/financial_task.py` | ✅ | run_financial_update() | 매일 19:00 KST 크론: PIT 재무데이터 변경 감지 및 수집 |
 | `tasks/backfill_task.py` | ✅ | run_backfill_minute_data() | 분봉 갭 탐지 및 백필 (수동 트리거) |
 | `routers/data.py` | ✅ | data router | /api/data/* 데이터 조회 API |
@@ -168,3 +168,4 @@ tdms_core/p2_kdms/
 | T-005 | KiwoomClient + TargetSelector + backfill_task |
 | T-006~T-008 | 시가총액 수집 파이프라인 + MarketCapRepo + DailyTask 통합 |
 | 2026-05-26 | Graphify 기반 초기 지식화 (위키 codebase_map 전면 작성) |
+| 2026-05-28 | KIS 마스터 데이터 오차 대응을 위한 시가총액 bigint 오버플로우 방어 패치 적용 |
