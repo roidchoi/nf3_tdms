@@ -68,7 +68,7 @@ T-009 (p4_manager 연동 테스트)
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-001 | 프로젝트 기반 구조 및 DB 인계 | Docker Compose(`external: true` 볼륨), FastAPI 골격(`main.py`, `config.py`), `repositories/base.py`(EnvDetector DSN 자동 결정, DbConnectionPool), `StartupValidator` lifespan 연동, `BackupManager` 인계 전 백업 실행, 기존 `db_manager.py` 호환 shim 유지 | 대기 | High | - | - | - |
+| T-001 | 프로젝트 기반 구조 및 DB 인계 | Docker Compose(`external: true` 볼륨), FastAPI 골격(`main.py`, `config.py`), `repositories/base.py`(EnvDetector DSN 자동 결정, DbConnectionPool), `StartupValidator` lifespan 연동, `BackupManager` 인계 전 백업 실행, 기존 `db_manager.py` 호환 shim 유지 | 완료 | High | - | 2026-05-29 | 2026-05-29 |
 | T-002 | 티커 마스터 + 일봉 OHLCV + 수정계수 수집 (KIS) | `collectors/master_sync.py`(SEC EDGAR 3종 API, SCD Type 2, yfinance Enrichment asyncio, Targeting 분석, Authority Verification API 포함), `collectors/kis_us_client.py`(KisApiCore 래퍼, KIS US 래퍼), `collectors/market_data_loader.py`(일봉 OHLCV 수집), `collectors/price_engine.py`(Adj/Close 비율 수정계수 이벤트 감지), `repositories/master_repo.py`, `repositories/price_repo.py`, `/api/data/tickers`, `/api/data/price/daily`, `/api/data/price/factors` | 대기 | High | T-001 | - | - |
 
 ### Phase 2: 수집 완성 + 자동화
@@ -137,9 +137,9 @@ T-009 (p4_manager 연동 테스트)
 | 구분 | 수량 |
 |------|------|
 | 전체 | 9개 |
-| 완료 | 0개 |
+| 완료 | 1개 |
 | 진행 중 | 0개 |
-| 대기 | 9개 |
+| 대기 | 8개 |
 
 ---
 

@@ -109,7 +109,7 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: ⬜ 미착수 (템플릿 상태)
+> **상태**: 🔄 T-001 완료 | 구현 진행 중
 
 ### 코어 문서
 
@@ -117,6 +117,12 @@
 |---|---|---|
 | `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | — |
 | `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | — |
+
+### errors/ (해결된 에러 기록)
+
+| 파일 | 에러 요약 | Severity |
+|---|---|---|
+| `usdms-err-001_wsl2_bind_mount_sync_error.md` | WSL2 마운트 동기화 유실로 인한 빈 DB 기동 현상 | High |
 
 ---
 
@@ -142,6 +148,7 @@
 - [P1-ERR-002] pg_restore 논리 복원 실패 → `p1_shared_wiki/errors/p1-err-002_logical_restore_failure.md`
 - [P2-ERR-001] KIS API 403 Forbidden 차단 → `p2_kdms_wiki/errors/err-001_kis_api_403_forbidden.md`
 - [P2-ERR-002] 시총 bigint 오버플로우 롤백 → `p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md`
+- [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
 
 ### 📐 최근 변경된 인터페이스
 
