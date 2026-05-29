@@ -163,6 +163,9 @@ class DatabaseManager(BaseRepository):
   - **DB 커넥션 정보**: `p1_shared` 동기화가 완료된 실물 DB인 `usdms_timescaledb` 컨테이너(포트 `5433`, 데이터베이스명 `usdms_db`)를 향하도록 환경 변수를 설계합니다.
   - **Docker Compose**: `docker-compose.yml` 에서 `usdms_db` 서비스의 컨테이너명이 `usdms_timescaledb` 로 선언되어 있으므로, `.env` 상의 `USDMS_CONTAINER_NAME` 역시 이와 일치하는 `usdms_timescaledb` 로 사용되어야 합니다.
   - **SEC User-Agent**: 미국 SEC API 호출 제한을 회피하기 위해 `SEC_USER_AGENT` 환경변수를 필수적으로 설정하고 애플리케이션 초기화 단계에서 유효성을 확인하도록 합니다.
+  - **IP 변경(DHCP) 및 환경 자동감지 완화 정책**:
+    - PC 재부팅 등으로 호스트의 실제 물리 IP가 변경되어도 `EnvDetector`는 `socket.gethostname()` (호스트명) 매칭을 최우선으로 사용하여 `dev` / `server` 환경을 정상 식별합니다.
+    - 실제 IP와 `.env`에 정의된 `DEV_IP`가 불일치할 시 `verify_dev_ip_sync()`를 통해 경고 로그를 출력하므로, 기동 시 해당 로그가 콘솔과 시스템 로그에 올바르게 반영되는지 유의해야 합니다.
 
 ---
 
