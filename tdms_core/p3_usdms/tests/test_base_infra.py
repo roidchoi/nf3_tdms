@@ -20,6 +20,7 @@ def test_db_connection_pool_creates_and_fetches_cursor(mocker):
     """TC-02: BaseRepository가 통합된 DbConnectionPool을 정상 초기화하고 데이터베이스 커서를 성공적으로 반환하는지 검증"""
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
+    mock_cursor.__enter__.return_value = mock_cursor
     mock_conn.cursor.return_value = mock_cursor
     
     mock_pool = MagicMock()

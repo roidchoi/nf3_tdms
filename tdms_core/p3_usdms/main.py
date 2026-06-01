@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from p1_shared.ops.startup_validator import StartupValidator
 from p3_usdms.repositories.base import BaseRepository
 from p3_usdms.config import get_settings
+from p3_usdms.routers.data import router as data_router
 
 # USDMS 필수 테이블 정의 (실제 us_ 스키마 테이블 매칭)
 USDMS_EXPECTED_TABLES = [
@@ -46,7 +47,9 @@ async def lifespan(app: FastAPI):
         pool.close_all()
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(data_router)
 
 @app.get("/")
 def read_root():
     return {"message": "USDMS API is running"}
+

@@ -5,9 +5,9 @@ services:
     container_name: kdms_timescaledb
     restart: on-failure:5
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-roid}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-kdms_db}
+      POSTGRES_USER: ${DEV_KDMS_DB_USER:-roid}
+      POSTGRES_PASSWORD: ${DEV_KDMS_DB_PASSWORD:-password}
+      POSTGRES_DB: ${DEV_KDMS_DB_NAME:-kdms_db}
       PGDATA: /var/lib/postgresql/data
     volumes:
       - ./data/kdms_db:/var/lib/postgresql/data
@@ -19,14 +19,15 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        sleep 15
+        rm -f /var/lib/postgresql/data/postmaster.pid
         (
-          sleep 15
-          until pg_isready -h localhost -p 5432 -U roid; do sleep 2; done
-          psql -U roid -d kdms_db -c "SELECT 1 FROM stock_info LIMIT 1;" > /dev/null 2>&1
+          sleep 30
+          until pg_isready -h localhost -p 5432 -d template1; do sleep 2; done
+          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM stock_info LIMIT 1;" > /dev/null 2>&1
           if [ $$? -ne 0 ]; then
             echo "❌ [KDMS 검증 실패] 물리 데이터 마운트 유실 또는 테이블 미존재 감지! 컨테이너를 중지합니다."
-            kill -15 1
-            exit 1
+            kill -3 1
           else
             echo "✅ [KDMS 검증 통과] 물리 데이터 마운트 정합성 확보 완료."
           fi
@@ -39,9 +40,9 @@ services:
     container_name: usdms_timescaledb
     restart: on-failure:5
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-roid}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: usdms_db
+      POSTGRES_USER: ${DEV_USDMS_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DEV_USDMS_DB_PASSWORD:-password}
+      POSTGRES_DB: ${DEV_USDMS_DB_NAME:-usdms_db}
       PGDATA: /var/lib/postgresql/data
     volumes:
       - ./data/usdms_db:/var/lib/postgresql/data
@@ -53,14 +54,15 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        sleep 15
+        rm -f /var/lib/postgresql/data/postmaster.pid
         (
-          sleep 15
-          until pg_isready -h localhost -p 5432 -U postgres; do sleep 2; done
-          psql -U postgres -d usdms_db -c "SELECT 1 FROM us_ticker_master LIMIT 1;" > /dev/null 2>&1
+          sleep 30
+          until pg_isready -h localhost -p 5432 -d template1; do sleep 2; done
+          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM us_ticker_master LIMIT 1;" > /dev/null 2>&1
           if [ $$? -ne 0 ]; then
             echo "❌ [USDMS 검증 실패] 물리 데이터 마운트 유실 또는 테이블 미존재 감지! 컨테이너를 중지합니다."
-            kill -15 1
-            exit 1
+            kill -3 1
           else
             echo "✅ [USDMS 검증 통과] 물리 데이터 마운트 정합성 확보 완료."
           fi

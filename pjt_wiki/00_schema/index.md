@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-05-27
-> **총 등록 파일**: 21개
+> **마지막 업데이트**: 2026-06-01
+> **총 등록 파일**: 24개
 
 ---
 
@@ -109,7 +109,7 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: 🔄 T-001 완료 | 구현 진행 중
+> **상태**: 🔄 T-002-A 완료 | T-002-B 대기
 
 ### 코어 문서
 
@@ -117,6 +117,14 @@
 |---|---|---|
 | `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | — |
 | `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | — |
+
+### interfaces/ (미국 시장 마스터 수집 핵심 인터페이스)
+
+| 파일 | 핵심 클래스/모듈 | 내용 요약 |
+|---|---|---|
+| `sec_client.md` | SECClient | SEC EDGAR API 래퍼 (Rate Limit 및 User-Agent 준수) |
+| `master_sync.md` | MasterSync | 마스터 티커 동기화 파이프라인 (Logic V2, SCD Type 2, yfinance Enrichment) |
+| `master_repo.md` | MasterRepo | 마스터 및 이력 DB CRUD 인터페이스 |
 
 ### errors/ (해결된 에러 기록)
 

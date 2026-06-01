@@ -1,4 +1,6 @@
 import os
+from contextlib import contextmanager
+from psycopg2.extras import RealDictCursor
 from p1_shared.db.connection import DbConnectionPool
 from p1_shared.utils.env_detector import EnvDetector
 from p3_usdms.config import get_settings
@@ -57,6 +59,20 @@ class BaseRepository:
         """커넥션 풀에서 커넥션을 직접 획득 (레거시 지원용)"""
         return self._pool.get_conn()
 
+    @contextmanager
     def get_cursor(self, autocommit: bool = False):
-        """커넥션 풀에서 context manager로 동작하는 커서 획득"""
-        return self._pool.get_cursor(autocommit=autocommit)
+        """커넥션 풀에서 RealDictCursor를 제공하는 context manager 획득"""
+        conn = self._pool.get_conn()
+        try:
+            if autocommit:
+                conn.autocommit = True
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                yield cur
+            if not autocommit:
+                conn.commit()
+        except Exception as e:
+            if not autocommit:
+                conn.rollback()
+            raise e
+        finally:
+            self._pool.put_conn(conn)

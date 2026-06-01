@@ -4,7 +4,8 @@
 > **기준 문서**: PRD v1.0 (2026-04-28)
 > **참조 원본**: `migration_pjt/usdms_origin/` (USDMS v5.0)
 > **작성일**: 2026-05-28
-> **총 Task**: 9개 (Phase 1: 2개 / Phase 2: 4개 / Phase 3: 2개 / Phase 4: 1개)
+> **최종 수정**: 2026-06-01 (T-002 → T-002-A / T-002-B 분할)
+> **총 Task**: 10개 (Phase 1: 3개 / Phase 2: 4개 / Phase 3: 2개 / Phase 4: 1개)
 
 ---
 
@@ -36,7 +37,10 @@ p3_usdms는 USDMS 원본(v5.0)의 백엔드 기능을 정제·리팩토링하여
 T-001 (인프라 + DB 인계)
   │
   ▼
-T-002 (티커 마스터 + 일봉 OHLCV + 수정계수 / KIS)
+T-002-A (티커 마스터 수집 코어 — MasterSync + SECClient + MasterRepo)
+  │
+  ▼
+T-002-B (일봉 OHLCV + 수정계수 + API / KIS)
   │
   ├──→ T-003 (SEC XBRL 재무 파싱 + 주식수 이력)
   │         │
@@ -69,7 +73,8 @@ T-009 (p4_manager 연동 테스트)
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
 | T-001 | 프로젝트 기반 구조 및 DB 인계 | Docker Compose(`external: true` 볼륨), FastAPI 골격(`main.py`, `config.py`), `repositories/base.py`(EnvDetector DSN 자동 결정, DbConnectionPool), `StartupValidator` lifespan 연동, `BackupManager` 인계 전 백업 실행, 기존 `db_manager.py` 호환 shim 유지 | 완료 | High | - | 2026-05-29 | 2026-05-29 |
-| T-002 | 티커 마스터 + 일봉 OHLCV + 수정계수 수집 (KIS) | `collectors/master_sync.py`(SEC EDGAR 3종 API, SCD Type 2, yfinance Enrichment asyncio, Targeting 분석, Authority Verification API 포함), `collectors/kis_us_client.py`(KisApiCore 래퍼, KIS US 래퍼), `collectors/market_data_loader.py`(일봉 OHLCV 수집), `collectors/price_engine.py`(Adj/Close 비율 수정계수 이벤트 감지), `repositories/master_repo.py`, `repositories/price_repo.py`, `/api/data/tickers`, `/api/data/price/daily`, `/api/data/price/factors` | 대기 | High | T-001 | - | - |
+| T-002-A | 티커 마스터 수집 코어 (SEC EDGAR + SCD Type 2 + MasterRepo) | `collectors/sec_client.py`(SEC EDGAR 3종 API 래퍼 — company_tickers / tickers_exchange / submissions), `collectors/master_sync.py`(SCD Type 2 Diff, Authority Verification, normalize_exchange, _resolve_primary_ticker, Targeting 분석, yfinance asyncio Enrichment 통합), `repositories/master_repo.py`(`us_ticker_master` / `us_ticker_history` CRUD), `/api/data/tickers` 엔드포인트, `routers/data.py` 초기화 | 완료 | High | T-001 | 2026-06-01 | 2026-06-01 |
+| T-002-B | 일봉 OHLCV + 수정계수 + 가격 API (KIS) | `collectors/kis_us_client.py`(KisApiCore US 래퍼, 토큰 캐시 공유), `collectors/market_data_loader.py`(KIS 미국 일봉 수집), `collectors/price_engine.py`(Adj/Close 비율 수정계수 이벤트 감지), `repositories/price_repo.py`(`us_daily_price` / `us_price_adjustment_factors` CRUD), `/api/data/price/daily`, `/api/data/price/factors` 엔드포인트 | 대기 | High | T-002-A | - | - |
 
 ### Phase 2: 수집 완성 + 자동화
 
@@ -136,8 +141,8 @@ T-009 (p4_manager 연동 테스트)
 
 | 구분 | 수량 |
 |------|------|
-| 전체 | 9개 |
-| 완료 | 1개 |
+| 전체 | 10개 |
+| 완료 | 2개 |
 | 진행 중 | 0개 |
 | 대기 | 8개 |
 
