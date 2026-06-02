@@ -109,7 +109,7 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: 🔄 T-002-A 완료 | T-002-B 대기
+> **상태**: 🔄 T-003 완료 | T-004 대기
 
 ### 코어 문서
 
@@ -125,6 +125,15 @@
 | `sec_client.md` | SECClient | SEC EDGAR API 래퍼 (Rate Limit 및 User-Agent 준수) |
 | `master_sync.md` | MasterSync | 마스터 티커 동기화 파이프라인 (Logic V2, SCD Type 2, yfinance Enrichment) |
 | `master_repo.md` | MasterRepo | 마스터 및 이력 DB CRUD 인터페이스 |
+| `financial_parser.md` | FinancialParser | SEC XBRL facts 수집/정제 및 discrete 분기 재무 데이터 도출 파이프라인 |
+| `financial_repo.md` | FinancialRepo | us_financial_facts, us_standard_financials, us_share_history 테이블 CRUD/Upsert |
+| `xbrl_mapper.md` | XBRLMapper | US-GAAP 원시 태그의 분석용 표준 회계 필드 우선순위 매핑 및 정규화 |
+
+### decisions/
+
+| 파일 | 결정 요약 | Task |
+|---|---|---|
+| `decisions.md` | SEC XBRL 재무 데이터 이산화 계산 및 Overwrite 벌크 갱신 전략 | T-003 |
 
 ### errors/ (해결된 에러 기록)
 

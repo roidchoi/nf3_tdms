@@ -12,6 +12,8 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-02] Task완료 | p3_usdms 미국 시장 백엔드 T-003(SEC XBRL 재무 파싱 + 주식수 이력) 완료에 따른 핵심 인터페이스(financial_parser, financial_repo, xbrl_mapper) 및 의사결정(USDMS_DEC-001) 위키 지식화 완료.
+
 ## [2026-06-01] Task완료 | p3_usdms 미국 시장 백엔드 T-002-A 완료에 따른 핵심 인터페이스(sec_client, master_sync, master_repo) 문서화 완료 및 SECClient get_company_facts 누락 기능 복구 및 검증 완료.
 
 ## [2026-05-29] 에러등록 | WSL2 도커 데스크탑 바인드 마운트 동기화 유실로 인한 빈 DB 기동 및 IP 변경 에러(USDMS-ERR-001) 등록 완료.
