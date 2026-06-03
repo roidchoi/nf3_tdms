@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-01
-> **총 등록 파일**: 24개
+> **마지막 업데이트**: 2026-06-02
+> **총 등록 파일**: 26개
 
 ---
 
@@ -109,7 +109,7 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: 🔄 T-003 완료 | T-004 대기
+> **상태**: ✅ T-004 완료 (가치평가 및 지표 엔진 구현 및 550종목 검증 완료)
 
 ### 코어 문서
 
@@ -128,6 +128,8 @@
 | `financial_parser.md` | FinancialParser | SEC XBRL facts 수집/정제 및 discrete 분기 재무 데이터 도출 파이프라인 |
 | `financial_repo.md` | FinancialRepo | us_financial_facts, us_standard_financials, us_share_history 테이블 CRUD/Upsert |
 | `xbrl_mapper.md` | XBRLMapper | US-GAAP 원시 태그의 분석용 표준 회계 필드 우선순위 매핑 및 정규화 |
+| `valuation_repo.md` | ValuationRepo | 일별 가격, 주식수 이력, 표준재무 조회 및 daily_valuation/financial_metrics 일괄 Upsert |
+| `valuation_engine.md` | ValuationCalculator / MetricCalculator | PIT 가치평가(5대 가치지표), 9대 재무비율 및 3대 YoY 성장률 산출 |
 
 ### decisions/
 
