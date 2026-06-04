@@ -3,7 +3,7 @@
 > **결정일**: 2026-05-06 (T-006 BackupManager 구현 중)
 > **Task**: T-006
 > **상태**: 확정 (적용됨)
-> **관련**: `[[interfaces/backup_manager.md]]`
+> **관련**: `[[p1_shared_wiki/interfaces/backup_manager.md]]`
 
 ---
 

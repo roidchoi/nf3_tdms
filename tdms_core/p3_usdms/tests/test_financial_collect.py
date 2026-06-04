@@ -114,6 +114,9 @@ def test_financial_pipeline_stores_to_real_db(real_pool, mocker):
     test_cik = "9999999999"
     
     # 1. EAV Clean & Insert 테스트
+    with repo.get_cursor() as cur:
+        cur.execute("DELETE FROM us_standard_financials WHERE cik = %s", (test_cik,))
+        cur.execute("DELETE FROM us_share_history WHERE cik = %s", (test_cik,))
     repo.delete_raw_facts_by_cik(test_cik)
     
     raw_facts = [

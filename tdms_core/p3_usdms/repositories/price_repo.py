@@ -54,9 +54,8 @@ class PriceRepo(BaseRepository):
         query = """
             INSERT INTO us_price_adjustment_factors (cik, event_dt, factor_val, event_type, matched_info)
             VALUES %s
-            ON CONFLICT (cik, event_dt) DO UPDATE SET
+            ON CONFLICT (cik, event_dt, event_type) DO UPDATE SET
                 factor_val = EXCLUDED.factor_val,
-                event_type = EXCLUDED.event_type,
                 matched_info = EXCLUDED.matched_info
         """
         

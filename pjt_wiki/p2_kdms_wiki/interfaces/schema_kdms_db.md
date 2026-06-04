@@ -6,7 +6,7 @@
 > **사용자**: `roid`
 > **볼륨**: `kdms_pgdata` (external: true)
 > **마지막 업데이트**: 2026-05-27
-> **관련**: `[[interfaces/ohlcv_repo.md]]`, `[[interfaces/financial_repo.md]]`, `[[operations/runbook.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/ohlcv_repo.md]]`, `[[p2_kdms_wiki/interfaces/financial_repo.md]]`, `[[p2_kdms_wiki/operations/runbook.md]]`
 
 ---
 
@@ -253,7 +253,7 @@ CREATE TABLE financial_statements (
 | `idx_fs_pit_screening` | `(stac_yymm, div_cls_code, retrieved_at DESC, stk_cd)` | btree | as_of 기준 PIT 스크리닝 |
 
 > ⚠️ **PIT 설계 특이사항**: `ON CONFLICT` 없이 항상 INSERT → 동일 `(stk_cd, stac_yymm, div_cls_code)`에 다수 버전 행 존재 가능.  
-> 조회 시 `DISTINCT ON (stac_yymm)` + `retrieved_at <= as_of_date` 패턴 사용. → `[[decisions/dec-001_pit_financial_pattern.md]]` 참조.
+> 조회 시 `DISTINCT ON (stac_yymm)` + `retrieved_at <= as_of_date` 패턴 사용. → `[[p2_kdms_wiki/decisions/dec-001_pit_financial_pattern.md]]` 참조.
 
 ---
 

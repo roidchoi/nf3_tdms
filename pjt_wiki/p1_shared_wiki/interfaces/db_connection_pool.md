@@ -3,7 +3,7 @@
 > **파일**: `tdms_core/p1_shared/p1_shared/db/connection.py`
 > **Task**: T-003
 > **Graphify God Node**: 80 edges (2위)
-> **관련**: `[[environment.md]]`, `[[interfaces/startup_validator.md]]`
+> **관련**: `[[p1_shared_wiki/environment.md]]`, `[[p1_shared_wiki/interfaces/startup_validator.md]]`
 
 ---
 

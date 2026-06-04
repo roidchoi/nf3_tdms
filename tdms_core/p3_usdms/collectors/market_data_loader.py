@@ -102,10 +102,22 @@ class MarketDataLoader:
 
         logger.info(f"Updating {len(targets)} tickers...")
         
-        end_dt = datetime.now()
-        start_dt = end_dt - timedelta(days=lookback_days)
-        start_str = start_dt.strftime('%Y%m%d')
-        end_str = end_dt.strftime('%Y%m%d')
+        # 한국 시차(KST) 및 미국 시장 마감/집계 완료 시간(06:30 KST)을 반영한 동적 수집 최종일 결정
+        from zoneinfo import ZoneInfo
+        now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
+        
+        if now_kst.time() < datetime.strptime("06:30", "%H:%M").time():
+            # 미국 당일 장중이거나 KIS 일봉 최종 배치 확정 전이므로 안전하게 KST 기준 그저께(미국 현지 2일 전)
+            target_date = now_kst.date() - timedelta(days=2)
+        else:
+            # 미국 장 마감 및 최종 집계 완료 시점이므로 KST 기준 어제(미국 현지 1일 전)
+            target_date = now_kst.date() - timedelta(days=1)
+            
+        start_date = target_date - timedelta(days=lookback_days)
+        start_str = start_date.strftime('%Y%m%d')
+        end_str = target_date.strftime('%Y%m%d')
+        
+        logger.info(f"Dynamic US Market Date bounds resolved: {start_str} ~ {end_str} (Based on KST Run Time: {now_kst.strftime('%Y-%m-%d %H:%M:%S')})")
         
         success_count = 0
         for i, t in enumerate(targets):

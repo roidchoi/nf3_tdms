@@ -119,7 +119,7 @@ TimescaleDB (Hypertables: daily_ohlcv, minute_ohlcv, daily_market_cap)
 > 이 섹션은 `p1_kdms` 설계 시 직접 활용합니다.
 
 - **DatabaseManager 패턴**: `ThreadedConnectionPool(5~20)` → `context manager` 방식 채택 권장
-- **PIT 재무 관리**: `retrieved_at` 기준 버전 관리 → [[ref_kdms_wiki/interfaces/pit_financial_pattern]]
-- **수정주가 계산**: Raw OHLCV + `price_adjustment_factors` 분리 → [[ref_kdms_wiki/interfaces/price_adjustment_factor]]
+- **PIT 재무 관리**: `retrieved_at` 기준 버전 관리 → [[migration-pjt/ref_kdms_wiki/interfaces/pit_financial_pattern.md]]
+- **수정주가 계산**: Raw OHLCV + `price_adjustment_factors` 분리 → [[migration-pjt/ref_kdms_wiki/interfaces/price_adjustment_factor.md]]
 - **WebSocket 로그 스트리밍**: `asyncio.Queue` 기반 실시간 로그 → `log_utils.py` 참조
 - **시총 수집 (신규)**: `pykrx` 기반 `daily_market_cap` 하이퍼테이블 → `krx_loader.py` 참조

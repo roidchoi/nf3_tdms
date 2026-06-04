@@ -70,4 +70,4 @@ ORDER BY event_dt ASC;
 
 - 두 데이터 소스(KIS/Kiwoom)의 팩터를 각각 별도 레코드로 관리할 것 (`price_source` 컬럼 유지)
 - `rebuild_factors_from_kis.py` — KIS 기반 전체 팩터 재구축 참고 스크립트
-- [[ref_kdms_wiki/interfaces/db_schema]] 의 `price_adjustment_factors` 스키마 참조
+- [[migration-pjt/ref_kdms_wiki/interfaces/db_schema.md]] 의 `price_adjustment_factors` 스키마 참조

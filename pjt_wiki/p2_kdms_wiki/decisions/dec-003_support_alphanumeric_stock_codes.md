@@ -3,7 +3,7 @@
 > **Sub Project**: p2_kdms
 > **Status**: active
 > **Date**: 2026-05-27
-> **관련**: `[[interfaces/schema_kdms_db.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/schema_kdms_db.md]]`
 
 ---
 

@@ -16,6 +16,7 @@ def test_valuation_calculator_hybrid_fallback_uses_financials(mocker):
     from p3_usdms.engines.valuation_calculator import ValuationCalculator
     
     mock_repo = mocker.MagicMock()
+    mock_repo.get_latest_valuation_date.return_value = None
     # 일봉 주가 1건 (dt: 2026-03-31, cls_prc: 150.0)
     mock_repo.load_prices.return_value = [{'dt': '2026-03-31', 'cls_prc': 150.0}]
     # 주식수 이력은 완전 비어있음
@@ -141,6 +142,7 @@ def test_valuation_calculator_handles_zero_debt_and_cash_filling(mocker):
     from p3_usdms.engines.valuation_calculator import ValuationCalculator
     
     mock_repo = mocker.MagicMock()
+    mock_repo.get_latest_valuation_date.return_value = None
     mock_repo.load_prices.return_value = [{'dt': '2026-03-31', 'cls_prc': 150.0}]
     mock_repo.load_shares.return_value = [{'filed_dt': '2026-03-15', 'val': 1000.0}]
     mock_repo.load_financials.return_value = [{

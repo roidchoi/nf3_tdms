@@ -82,7 +82,7 @@ T-009 (p4_manager 연동 테스트)
 |----|--------|--------------|------|---------|--------|--------|--------|
 | T-003 | SEC XBRL 재무 파싱 + 주식수 이력 | `collectors/financial_parser.py`(Raw Facts EAV 저장, `_standardize_financials_v2` — FY/FP 그룹화·이산화·Q4역산, FCF/EBITDA 후처리), `collectors/xbrl_mapper.py`(US-GAAP 태그 매핑 보존), `collectors/sec_client.py`(company_facts, filings_by_date SEC Index 스캔), `repositories/financial_repo.py`(`us_financial_facts` bulk insert, `us_standard_financials` upsert, `us_share_history` upsert) | 완료 | High | T-002 | 2026-06-02 | 2026-06-02 |
 | T-004 | 가치평가 + 재무비율 산출 | `engines/valuation_calculator.py`(`merge_asof(direction='backward')` PIT 매칭, PE/PB/PS/PCR/EV-EBITDA, TTM×4, 주식수 Hybrid Fallback, 50건 배치 저장), `engines/metric_calculator.py`(ROE/ROA/ROIC/GP-A/Debt Ratio/Current Ratio/Interest Coverage + YoY 성장률 Rev/Op/EPS), `repositories/valuation_repo.py`(`us_daily_valuation`, `us_financial_metrics` ON CONFLICT upsert) | 완료 | High | T-003 | 2026-06-02 | 2026-06-02 |
-| T-005 | Blacklist + MasterEnricher + 일일 루틴 전체 자동화 | `utils/blacklist_manager.py`(DB 기반, `add_blacklist`/`is_blacklisted`/`remove_blacklist`, 사유코드 체계), `collectors/master_enricher.py`(yfinance sector/industry/country/quote_type 배치 보강), `tasks/daily_routine.py`(Step 1~5 오케스트레이터, Step별 독립 예외처리, 부분 성공 허용, 실행 Report JSON 저장), `AsyncIOScheduler` lifespan 연동(`daily_routine(화~토 07:00)`, `weekly_backfill(일 03:00)`), `/api/admin/tasks/{id}/run` 수동 실행 엔드포인트 | 대기 | High | T-003, T-004 | - | - |
+| T-005 | Blacklist + MasterEnricher + 일일 루틴 전체 자동화 | `utils/blacklist_manager.py`(DB 기반, `add_blacklist`/`is_blacklisted`/`remove_blacklist`, 사유코드 체계), `collectors/master_enricher.py`(yfinance sector/industry/country/quote_type 배치 보강), `tasks/daily_routine.py`(Step 1~5 오케스트레이터, Step별 독립 예외처리, 부분 성공 허용, 실행 Report JSON 저장), `AsyncIOScheduler` lifespan 연동(`daily_routine(화~토 07:00)`, `weekly_backfill(일 03:00)`), `/api/admin/tasks/{id}/run` 수동 실행 엔드포인트 | 완료 | High | T-003, T-004 | 2026-06-03 | 2026-06-03 |
 
 ### Phase 3: API 완성 + Auditors
 
@@ -142,9 +142,9 @@ T-009 (p4_manager 연동 테스트)
 | 구분 | 수량 |
 |------|------|
 | 전체 | 10개 |
-| 완료 | 2개 |
+| 완료 | 6개 |
 | 진행 중 | 0개 |
-| 대기 | 8개 |
+| 대기 | 4개 |
 
 ---
 
@@ -178,4 +178,5 @@ T-009 (p4_manager 연동 테스트)
 
 | 날짜 | 변경 내용 | 사유 |
 |------|----------|------|
+| 2026-06-03 | T-005 (Blacklist, MasterEnricher, DailyRoutine, APScheduler) 구현 완료 | Task-005 명세 기반 구현 및 TDD 올 그린(GREEN) 패스 |
 | 2026-05-28 | 초안 작성 (9개 Task, Phase 1~4) | PRD v1.0 + usdms_origin v5.0 코드베이스 직접 분석 기반 |

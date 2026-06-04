@@ -3,7 +3,7 @@
 > **결정일**: 2026-05-07 (KDMS 마이그레이션 실패 후)
 > **Task**: T-008
 > **상태**: 확정 (적용됨)
-> **관련**: `[[interfaces/physical_sync_manager.md]]`, `[[interfaces/backup_manager.md]]`
+> **관련**: `[[p1_shared_wiki/interfaces/physical_sync_manager.md]]`, `[[p1_shared_wiki/interfaces/backup_manager.md]]`
 
 ---
 

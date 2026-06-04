@@ -14,4 +14,5 @@ aiohttp>=3.9.0
 pytest-asyncio>=0.23.0
 tqdm>=4.66.0
 -e ../p1_shared
+apscheduler>=3.10.4
 

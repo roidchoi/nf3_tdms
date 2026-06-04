@@ -3,7 +3,7 @@
 > **파일**: `tdms_core/p1_shared/p1_shared/utils/env_detector.py`
 > **Task**: T-002
 > **Graphify God Node**: 97 edges (1위 — 전체 그래프의 최고 허브)
-> **관련**: `[[interfaces/db_connection_pool.md]]`, `[[interfaces/physical_sync_manager.md]]`
+> **관련**: `[[p1_shared_wiki/interfaces/db_connection_pool.md]]`, `[[p1_shared_wiki/interfaces/physical_sync_manager.md]]`
 
 ---
 

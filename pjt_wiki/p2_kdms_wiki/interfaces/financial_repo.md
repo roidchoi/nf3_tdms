@@ -3,7 +3,7 @@
 > **파일**: `tdms_core/p2_kdms/repositories/financial_repo.py`
 > **클래스**: `FinancialRepo`
 > **Graphify**: God Node #3 (degree=38) — PIT 재무 데이터의 단일 진실 공급원
-> **관련**: `[[interfaces/ohlcv_repo.md]]`, `[[decisions/dec-001_pit_financial_pattern.md]]`, `[[codebase_map.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/ohlcv_repo.md]]`, `[[p2_kdms_wiki/decisions/dec-001_pit_financial_pattern.md]]`, `[[p2_kdms_wiki/codebase_map.md]]`
 
 ---
 

@@ -4,7 +4,7 @@
 > **Status**: active
 > **Date**: 2026-05-26
 > **Task**: T-004
-> **관련**: `[[interfaces/financial_repo.md]]`, `[[interfaces/data_api_endpoints.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/financial_repo.md]]`, `[[p2_kdms_wiki/interfaces/data_api_endpoints.md]]`
 
 ---
 

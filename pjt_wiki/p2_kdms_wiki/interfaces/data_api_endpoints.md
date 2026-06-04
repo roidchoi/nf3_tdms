@@ -2,7 +2,7 @@
 
 > **파일**: `tdms_core/p2_kdms/routers/data.py`
 > **라우터 prefix**: `/api/data`
-> **관련**: `[[interfaces/ohlcv_repo.md]]`, `[[interfaces/financial_repo.md]]`, `[[interfaces/factor_repo.md]]`, `[[decisions/dec-001_pit_financial_pattern.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/ohlcv_repo.md]]`, `[[p2_kdms_wiki/interfaces/financial_repo.md]]`, `[[interfaces/factor_repo.md]]`, `[[p2_kdms_wiki/decisions/dec-001_pit_financial_pattern.md]]`
 
 ---
 

@@ -11,10 +11,10 @@
 | 목적 | 문서 |
 |---|---|
 | 두 프로젝트 전체 개요 및 관계 | [[parent_wiki/overview]] |
-| KDMS 코드 구조 전체 | [[ref_kdms_wiki/codebase_map]] |
-| USDMS 코드 구조 전체 | [[ref_usdms_wiki/codebase_map]] |
-| KDMS DB 스키마 | [[ref_kdms_wiki/interfaces/db_schema]] |
-| USDMS DB 스키마 | [[ref_usdms_wiki/interfaces/db_schema]] |
+| KDMS 코드 구조 전체 | [[migration-pjt/ref_kdms_wiki/codebase_map.md]] |
+| USDMS 코드 구조 전체 | [[migration-pjt/ref_usdms_wiki/codebase_map.md]] |
+| KDMS DB 스키마 | [[migration-pjt/ref_kdms_wiki/interfaces/db_schema.md]] |
+| USDMS DB 스키마 | [[migration-pjt/ref_usdms_wiki/interfaces/db_schema.md]] |
 
 ---
 
@@ -26,28 +26,28 @@
 | 문서 | 요약 | 상태 |
 |---|---|---|
 | [[parent_wiki/overview]] | 두 참조 프로젝트 역할, 신규 프로젝트 매핑 | ✅ |
-| [[ref_kdms_wiki/interfaces/pit_financial_pattern]] | KDMS PIT 재무 패턴 (`retrieved_at` 기반) | ✅ |
-| [[ref_usdms_wiki/interfaces/pit_sec_pattern]] | USDMS PIT SEC 패턴 (`filed_dt` + merge_asof) | ✅ |
-| [[ref_kdms_wiki/interfaces/price_adjustment_factor]] | Raw + Factor 분리 수정주가 패턴 (공통) | ✅ |
-| [[ref_usdms_wiki/decisions/coexistence_with_kdms]] | KDMS-USDMS 공존 아키텍처 (포트 분리) | ✅ |
+| [[migration-pjt/ref_kdms_wiki/interfaces/pit_financial_pattern.md]] | KDMS PIT 재무 패턴 (`retrieved_at` 기반) | ✅ |
+| [[migration-pjt/ref_usdms_wiki/interfaces/pit_sec_pattern.md]] | USDMS PIT SEC 패턴 (`filed_dt` + merge_asof) | ✅ |
+| [[migration-pjt/ref_kdms_wiki/interfaces/price_adjustment_factor.md]] | Raw + Factor 분리 수정주가 패턴 (공통) | ✅ |
+| [[migration-pjt/ref_usdms_wiki/decisions/coexistence_with_kdms.md]] | KDMS-USDMS 공존 아키텍처 (포트 분리) | ✅ |
 
 ### Cluster B: KDMS (한국 시장) 참조
 > `p1_kdms` 구현 시 주요 참조
 
 | 문서 | 요약 | 상태 |
 |---|---|---|
-| [[ref_kdms_wiki/codebase_map]] | KDMS 전체 파일 구조 + 역할 | ✅ |
-| [[ref_kdms_wiki/environment]] | KDMS 기술 스택 + 환경 변수 | ✅ |
-| [[ref_kdms_wiki/interfaces/db_schema]] | KDMS 9개 핵심 테이블 DDL | ✅ |
+| [[migration-pjt/ref_kdms_wiki/codebase_map.md]] | KDMS 전체 파일 구조 + 역할 | ✅ |
+| [[migration-pjt/ref_kdms_wiki/environment.md]] | KDMS 기술 스택 + 환경 변수 | ✅ |
+| [[migration-pjt/ref_kdms_wiki/interfaces/db_schema.md]] | KDMS 9개 핵심 테이블 DDL | ✅ |
 
 ### Cluster C: USDMS (미국 시장) 참조
 > `p2_usdms` 구현 시 주요 참조
 
 | 문서 | 요약 | 상태 |
 |---|---|---|
-| [[ref_usdms_wiki/codebase_map]] | USDMS 전체 파일 구조 + 일일 루틴 | ✅ |
-| [[ref_usdms_wiki/environment]] | USDMS 기술 스택 + 운영 환경 | ✅ |
-| [[ref_usdms_wiki/interfaces/db_schema]] | USDMS 10개 핵심 테이블 DDL | ✅ |
+| [[migration-pjt/ref_usdms_wiki/codebase_map.md]] | USDMS 전체 파일 구조 + 일일 루틴 | ✅ |
+| [[migration-pjt/ref_usdms_wiki/environment.md]] | USDMS 기술 스택 + 운영 환경 | ✅ |
+| [[migration-pjt/ref_usdms_wiki/interfaces/db_schema.md]] | USDMS 10개 핵심 테이블 DDL | ✅ |
 
 ---
 

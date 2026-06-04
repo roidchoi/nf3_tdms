@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p3_usdms (미국 시장 데이터 백엔드)  
-> **마지막 업데이트**: 2026-06-02 (Task-004 완료)  
+> **마지막 업데이트**: 2026-06-04 (Task-005 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -13,6 +13,7 @@ tdms_core/p3_usdms/
 ├── collectors/           # 데이터 수집 레이어 [✅완성]
 │   ├── sec_client.py     # SEC EDGAR API 연동용 클라이언트
 │   ├── master_sync.py    # 미국 주식 마스터 동기화 오케스트레이터
+│   ├── master_enricher.py # yfinance 기반 메타데이터 보강 및 ADR 필터링 수집기 [NEW]
 │   ├── kis_us_client.py  # KIS API 기반 미국 주식 시세 연동 클라이언트
 │   ├── price_engine.py   # Ratio 기반 가격 수정계수 계산 엔진
 │   ├── market_data_loader.py # 일봉 시세 수집 및 팩터 연동 파이프라인
@@ -24,15 +25,25 @@ tdms_core/p3_usdms/
 │   ├── base.py           # DbConnectionPool 및 EnvDetector를 래핑한 기본 레포지토리
 │   ├── master_repo.py    # us_ticker_master, us_ticker_history CIK 기반 데이터 I/O
 │   ├── price_repo.py     # us_daily_price, us_price_adjustment_factors 데이터 I/O
-│   └── valuation_repo.py # us_daily_valuation 및 us_financial_metrics 데이터 I/O
+│   ├── valuation_repo.py # us_daily_valuation 및 us_financial_metrics 데이터 I/O
+│   └── blacklist_repo.py # us_collection_blacklist 데이터 I/O [NEW]
 ├── routers/              # API 라우팅 레이어 [✅완성]
-│   └── data.py           # 마스터 목록, 일일 주가, 수정계수 조회 엔드포인트
+│   ├── data.py           # 마스터 목록, 일일 주가, 수정계수 조회 엔드포인트
+│   └── admin.py          # 일일 루틴 수동 실행 및 락(Lock) 관리 엔드포인트 [NEW]
+├── tasks/                # 자동화 태스크 레이어 [✅완성]
+│   └── daily_routine.py  # 5단계 일일 루틴 및 주간 백필 스케줄러 제어기 [NEW]
+├── utils/                # 유틸리티 레이어 [✅완성]
+│   └── blacklist_manager.py # 일시적/영구적 에러의 이원화 격리 처리 및 쿨다운 해제 비즈니스 논리 제어 [NEW]
 ├── tests/                # 테스트 스위트 [✅완성]
 │   ├── conftest.py       # pytest 픽처 및 DB 풀 정의
 │   ├── test_base_infra.py # DB 커넥션 풀 검증
 │   ├── test_master_sync.py # 마스터 동기화 검증
+│   ├── test_master_enricher.py # 메타데이터 보강 필터 및 실패 누적 검증 [NEW]
 │   ├── test_price_collect.py # 일일 시세 수집, 팩터 감지 엔진, API 통합 검증
-│   └── test_valuation_metric.py # 가치평가, 재무비율, 대량 550종목 루프 성능 및 적재 통합 검증
+│   ├── test_financial_collect.py # SEC XBRL 파싱 및 분기 재무제표 수집 검증 [NEW]
+│   ├── test_valuation_metric.py # 가치평가, 재무비율, 대량 550종목 루프 성능 및 적재 통합 검증
+│   ├── test_blacklist.py # 블랙리스트 매니저 임계치 도달 및 자동 해제 검증 [NEW]
+│   └── test_daily_routine.py # 일일 파이프라인 E2E, 이상치 격리 및 수동 API 락 검증 [NEW]
 ├── config.py             # 환경 설정 모듈 [✅완성]
 └── main.py               # FastAPI 애플리케이션 진입점 [✅완성]
 ```
@@ -44,7 +55,7 @@ tdms_core/p3_usdms/
 ```
 [ SEC EDGAR / yfinance ]
          │
-         │ (MasterSync / SECClient / yfinance)
+         │ (MasterSync / SECClient / MasterEnricher)
          ▼
 [ us_ticker_master / us_ticker_history ] 
          │
@@ -63,6 +74,13 @@ tdms_core/p3_usdms/
 [ us_share_history ] ──┘
 
 [ us_standard_financials ] ──► [ MetricCalculator ] ──► [ us_financial_metrics ] (재무비율/YoY성장률 적재)
+
+───────────────────────────────────────────────────────
+
+[ 수집/연산 장애 감지 ] ──► [ BlacklistManager ] ──► [ us_collection_blacklist ]
+                                                            │ (daily_routine 차단 필터링)
+                                                            ▼
+                                                     [ 수집 대상 제외 ]
 ```
 
 ---
@@ -71,11 +89,13 @@ tdms_core/p3_usdms/
 
 | 모듈/폴더 | 상태 | 핵심 파일 | 역할 요약 |
 |---|---|---|---|
-| **collectors** | ✅ | `master_sync.py`, `financial_parser.py` | SEC 공시 및 KIS 시세 데이터 동기화, discrete 재무 제표 도출 파이프라인 |
+| **collectors** | ✅ | `master_sync.py`, `master_enricher.py` | SEC 공시 동기화, yfinance 기반 메타데이터 보강 및 ADR 차단 수집기 |
 | **engines** | ✅ | `valuation_calculator.py`, `metric_calculator.py` | PIT 기반 가치평가비율 및 YoY 성장률을 포함한 12대 퀀트 재무지표 산출 |
-| **repositories** | ✅ | `master_repo.py`, `valuation_repo.py` | 마스터, 시세, 가치평가, 재무비율 대용량 DB 저장 및 최적화 조회 기능 제공 |
-| **routers** | ✅ | `data.py` | 외부 퀀트 및 분석 서비스 대상 마스터, 일봉, 수정계수 조회 서비스 제공 |
-| **config** | ✅ | `config.py`, `main.py` | FastAPI 기동, DB 커넥션 풀 초기화, 기동 전 Startup Validator 유효성 검증 |
+| **repositories** | ✅ | `master_repo.py`, `valuation_repo.py`, `blacklist_repo.py` | 마스터, 시세, 가치평가, 블랙리스트 대용량 DB 저장 및 최적화 조회 기능 제공 |
+| **routers** | ✅ | `data.py`, `admin.py` | 외부 퀀트 및 분석 서비스 대상 시세 조회 및 수동 태스크 기동 API 제공 |
+| **tasks** | ✅ | `daily_routine.py` | 5단계 일일 루틴 및 주간 자동 해제/보강 백필 스케줄러 오케스트레이션 |
+| **utils** | ✅ | `blacklist_manager.py` | 일시적/영구적 에러의 이원화 격리 처리 및 쿨다운 해제 비즈니스 논리 제어 |
+| **config** | ✅ | `config.py`, `main.py` | FastAPI 기동, DB 커넥션 풀 초기화, Startup Validator 및 APScheduler 연동 |
 
 ---
 
@@ -83,10 +103,8 @@ tdms_core/p3_usdms/
 
 | 스크립트 | 실행 방법 | 역할 |
 |---|---|---|
-| `main.py` | `uvicorn main:app --port 8000` | FastAPI Web API Server 기동 |
-| `tests/test_master_sync.py` | `pytest tests/test_master_sync.py` | SEC 마스터 데이터 동기화 파이프라인 검증 |
-| `tests/test_price_collect.py` | `pytest tests/test_price_collect.py` | KIS 일일 시세, 수정계수 산출 엔진 및 REST API 검증 |
-| `tests/test_valuation_metric.py` | `pytest tests/test_valuation_metric.py` | 가치평가/재무비율 연산 단위 및 대량 실 계산 루프 안정성 검증 |
+| `main.py` | `uvicorn main:app --port 8000` | FastAPI Web API Server 기동 및 APScheduler 스케줄러 백그라운드 구동 |
+| `tests/test_daily_routine.py` | `pytest tests/test_daily_routine.py` | 일일 파이프라인 E2E 통합 및 이상치 격리, 수동 Lock API 통합 검증 |
 
 ---
 
@@ -96,8 +114,12 @@ tdms_core/p3_usdms/
 |---|---|---|
 | `tests/test_base_infra.py` | DbConnectionPool, StartupValidator | ✅ 통과 |
 | `tests/test_master_sync.py` | SECClient, MasterRepo, MasterSync | ✅ 통과 |
+| `tests/test_master_enricher.py` | MasterEnricher, yfinance 연동 | ✅ 통과 |
 | `tests/test_price_collect.py` | KisUSClient, PriceEngine, PriceRepo, routers/data.py | ✅ 통과 |
+| `tests/test_financial_collect.py` | FinancialParser, FinancialRepo | ✅ 통과 |
 | `tests/test_valuation_metric.py` | ValuationCalculator, MetricCalculator, ValuationRepo | ✅ 통과 |
+| `tests/test_blacklist.py` | BlacklistManager, BlacklistRepo | ✅ 통과 |
+| `tests/test_daily_routine.py` | DailyRoutine, routers/admin.py | ✅ 통과 |
 
 ---
 
@@ -120,3 +142,4 @@ tdms_core/p3_usdms/
 | Task-002-B | KIS API 연동 일일 주가 수집, PriceEngine 기반 수정계수 역산 및 REST API 구축 |
 | Task-003 | SEC facts 파싱 정규화 매퍼(XBRLMapper), 분기 discrete 재무제표 구축 및 주식수 수집기 이식 |
 | Task-004 | PIT 기반 가치비율(5대 지표) 및 9대 재무비율/3대 YoY 성장률 엔진 구현, 550종목 실 데이터 벌크 캐싱 대용량 최적화 검증 완료 |
+| Task-005 | Blacklist Repo/Manager 구축, MasterEnricher(ADR 필터링), DailyRoutine 5단계 자동화 스케줄러 및 이상치 격리(Quarantine), 수동 실행 Lock API 및 자가 치유형 갭 복구 엔진 최적화 완료 |

@@ -19,6 +19,8 @@
 |ID|제목|Task|상태|
 |---|---|---|---|
 |USDMS_DEC-001|SEC XBRL 재무 데이터 이산화 계산 및 Overwrite 벌크 갱신 전략|T-003|Active|
+|USDMS_DEC-002|자가 치유형(Self-Healing) 가치평가 및 지표 복구 엔진 최적화|T-005|Active|
+|USDMS_DEC-003|일시적/영구적 에러의 이원화 예외 처리 및 자동 쿨다운 릴리즈 루프|T-005|Active|
 
 ---
 
@@ -41,3 +43,46 @@
 ### 영향 범위
 - `tdms_core/p3_usdms/collectors/financial_parser.py`
 - `tdms_core/p3_usdms/repositories/financial_repo.py`
+
+---
+
+## USDMS_DEC-002: 자가 치유형(Self-Healing) 가치평가 및 지표 복구 엔진 최적화 (T-005)
+
+### 배경
+- 수집 장애, 강제 중단 또는 연산 유실 등으로 인해 특정 종목의 가격은 적재되었으나 일별 가치평가(`us_daily_valuation`)가 적재되지 못한 공백(Gap)이 발생할 경우, 기존에는 10년 치 전체 데이터를 재연산해야 하여 약 4시간 이상의 과부하가 걸렸음.
+- 증분 재계산을 기동하기 위해 갭 날짜를 판별하는 쿼리가 10년 치 대량 데이터 조인 병목으로 인해 42초 이상 소요되어 스케일러빌리티 위협이 됨.
+
+### 결정 내용
+1. **60일 룩백 자가 치유 갭 감지 기법**: 
+   - `ValuationCalculator.calculate_and_save` 실행 시 최근 60일의 룩백 윈도우 내에서 주가는 기 적재되어 있으나 PE 등 가치지표가 누락된 최초의 날짜(`gap_dt`)를 자동 스캔하여, 해당 시점부터 가치평가를 증분 재계산하도록 연동함.
+2. **갭 스캔 쿼리 인덱스 및 범위 한정 최적화**:
+   - `ValuationRepo.get_earliest_valuation_gap_date`에 `start_date` 파라미터를 추가하여 쿼리 조회 대상을 최근 60일(`dt >= start_date`)로 강제 한정하여 조인 병목을 해결하고 탐색 속도를 1ms 이하로 단축시킴.
+3. **재무제표 부재 종목 스킵 (`EXISTS` 가드)**:
+   - ETF나 CEF 등 재무제표가 아예 없어 갭 탐색 시 무한 정체되는 현상을 방지하고자, 갭 판별 SQL 내에 `EXISTS (SELECT 1 FROM us_standard_financials)` 조건을 결합하여 재무제표 및 주식수가 실재하는 종목에 대해서만 갭을 추적하게 함.
+
+### 영향 범위
+- `tdms_core/p3_usdms/engines/valuation_calculator.py`
+- `tdms_core/p3_usdms/repositories/valuation_repo.py`
+
+---
+
+## USDMS_DEC-003: 일시적/영구적 에러의 이원화 예외 처리 및 자동 쿨다운 릴리즈 루프 (T-005)
+
+### 배경
+- 레거시 수집기는 429 Rate Limit이나 일시적인 네트워크 장애가 생겼을 때에도 무조건 블랙리스트에 올리거나, 또는 블랙리스트 기능을 완전히 끄는 하드코딩이 팽배해 장기 수집 시 정상 종목이 영구 소실되거나 IP 밴을 초래하는 등의 불합리가 존재했음.
+- 차단된 종목들의 차단을 풀기 위해서 관리자의 수동 직접 개입이 강제되는 비효율이 있었음.
+
+### 결정 내용
+1. **실패 원인의 명확한 분류 및 이원화 분기 (`record_failure`)**:
+   - `TRANSIENT_ERRORS` (429, Timeout 등) 발생 시 `is_blocked = FALSE`인 상태를 유지한 채 `fail_count`만 1 누적.
+   - `PERMANENT_ERRORS` (404, Delisted 등) 발생 시 즉시 `is_blocked = TRUE`로 격리.
+2. **차단 승격(Promotion) 및 Cooldown 자동 해제 루프**:
+   - 일시적 오류라도 5회(`threshold`) 누적 기록 시 영구 차단으로 승격시켜 시스템 마비 전파를 방어.
+   - 주간 루틴(`run_weekly_backfill`) 수행 시 마지막 실패일로부터 7일(`cool_off_days`)이 경과한 차단 종목을 스캔하여 자동으로 차단을 해제(`is_blocked=FALSE`, `fail_count=0`)해 재진입 기회를 부여하는 자가 치유 라이프사이클 구축.
+3. **yfinance 불능 종목 강제 Target 배제**:
+   - yfinance 보강 실패 에러가 `HTTP_404`, `DELISTED`로 판명될 경우, 블랙리스트 차단과 함께 DB의 메타데이터를 `Unknown` 및 `is_collect_target = FALSE`로 강제 업데이트하여 매일 불필요하게 스캔하는 현상을 차단함.
+
+### 영향 범위
+- `tdms_core/p3_usdms/utils/blacklist_manager.py`
+- `tdms_core/p3_usdms/collectors/master_enricher.py`
+- `tdms_core/p3_usdms/tasks/daily_routine.py`

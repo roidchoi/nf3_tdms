@@ -12,6 +12,8 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-04] Task완료+의사결정+에러등록 | p3_usdms 미국 시장 백엔드 T-005(Blacklist + MasterEnricher + 일일 자동화) 완료에 따른 핵심 인터페이스(blacklist_repo, blacklist_manager, master_enricher, daily_routine) 추가, 60일 룩백 자가 치유 및 쿼리 병목 최적화(USDMS_DEC-002, USDMS-ERR-002), 이원화 에러 분기 및 자동 릴리즈(USDMS_DEC-003) 위키 지식화 완료.
+
 ## [2026-06-02] Task완료 | p3_usdms 미국 시장 백엔드 T-004(가치평가 및 재무비율 대량 실 계산) 완료에 따른 핵심 인터페이스(valuation_repo, valuation_engine) 추가 및 550종목 DB 캐싱 최적화(Bulk Cache Caching) 위키 지식화 완료.
 
 ## [2026-06-02] Task완료 | p3_usdms 미국 시장 백엔드 T-003(SEC XBRL 재무 파싱 + 주식수 이력) 완료에 따른 핵심 인터페이스(financial_parser, financial_repo, xbrl_mapper) 및 의사결정(USDMS_DEC-001) 위키 지식화 완료.

@@ -22,6 +22,10 @@ where = ["."]
 include = ["p3_usdms*"]
 
 [tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
 markers = [
     "integration: marks tests as integration (requires real DB container)",
 ]

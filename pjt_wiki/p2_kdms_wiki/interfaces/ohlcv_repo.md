@@ -3,7 +3,7 @@
 > **파일**: `tdms_core/p2_kdms/repositories/ohlcv_repo.py`
 > **클래스**: `OhlcvRepo`
 > **Graphify**: God Node #1 (degree=39) — 가장 많은 연결을 가진 핵심 저장소
-> **관련**: `[[interfaces/financial_repo.md]]`, `[[interfaces/factor_repo.md]]`, `[[codebase_map.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/financial_repo.md]]`, `[[interfaces/factor_repo.md]]`, `[[p2_kdms_wiki/codebase_map.md]]`
 
 ---
 

@@ -3,7 +3,7 @@
 > **파일**: `tdms_core/p1_shared/p1_shared/ops/startup_validator.py`
 > **Task**: T-007
 > **Graphify God Node**: 48 edges (4위)
-> **관련**: `[[interfaces/db_connection_pool.md]]`, `[[interfaces/backup_manager.md]]`
+> **관련**: `[[p1_shared_wiki/interfaces/db_connection_pool.md]]`, `[[p1_shared_wiki/interfaces/backup_manager.md]]`
 
 ---
 

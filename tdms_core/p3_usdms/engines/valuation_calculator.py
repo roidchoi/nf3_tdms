@@ -18,15 +18,26 @@ class ValuationCalculator:
         # 1. 증분 계산(Incremental) 범위 처리
         latest_dt = None
         if not rebuild and start_date is None:
-            if latest_val_dates_cache is not None:
-                latest_dt = latest_val_dates_cache.get(cik)
+            # [Self-healing] 최근 60일 이내의 가격 데이터 중 가치평가가 비어 있는 최초의 갭(Gap) 날짜를 판별합니다.
+            import datetime
+            from datetime import timedelta
+            lookback_limit = (datetime.date.today() - timedelta(days=60)).strftime('%Y-%m-%d')
+            
+            gap_dt = self.repo.get_earliest_valuation_gap_date(cik, start_date=lookback_limit)
+            if gap_dt:
+                start_date = str(gap_dt)
+                logger.info(f"[{cik}] Valuation gap detected starting at {start_date}. Activating self-healing mode.")
             else:
-                latest_dt = self.repo.get_latest_valuation_date(cik)
+                if latest_val_dates_cache is not None:
+                    latest_dt = latest_val_dates_cache.get(cik)
+                else:
+                    latest_dt = self.repo.get_latest_valuation_date(cik)
 
-            if latest_dt:
-                # 최신 날짜의 string 변환 또는 datetime 호환 포맷 지정
-                start_date = str(latest_dt)
-                logger.debug(f"[{cik}] Incremental start date detected (cache or DB): {start_date}")
+                if latest_dt:
+                    # 최신 날짜의 string 변환 또는 datetime 호환 포맷 지정
+                    start_date = str(latest_dt)
+                    logger.debug(f"[{cik}] Incremental start date detected (cache or DB): {start_date}")
+
 
         # 2. Raw 데이터 로드
         prices_raw = self.repo.load_prices(cik, start_date=start_date)

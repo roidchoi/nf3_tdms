@@ -109,14 +109,14 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: ✅ T-004 완료 (가치평가 및 지표 엔진 구현 및 550종목 검증 완료)
+> **상태**: ✅ T-005 완료 (Blacklist, MasterEnricher, DailyRoutine 자동화 및 자가 치유 갭 복구 완료)
 
 ### 코어 문서
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | — |
-| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | — |
+| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | 2026-06-04 |
+| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | 2026-06-04 |
 
 ### interfaces/ (미국 시장 마스터 수집 핵심 인터페이스)
 
@@ -124,7 +124,11 @@
 |---|---|---|
 | `sec_client.md` | SECClient | SEC EDGAR API 래퍼 (Rate Limit 및 User-Agent 준수) |
 | `master_sync.md` | MasterSync | 마스터 티커 동기화 파이프라인 (Logic V2, SCD Type 2, yfinance Enrichment) |
-| `master_repo.md` | MasterRepo | 마스터 및 이력 DB CRUD 인터페이스 |
+| `master_enricher.md` | MasterEnricher | yfinance 기반 메타데이터 보강, ADR 수집 제외 및 에러 백오프 통제 |
+| `master_repo.md` | MasterRepo | 마스터, 이력 DB CRUD 및 Dynamic Targeting Rules SQL 적용 |
+| `blacklist_repo.md` | BlacklistRepo | us_collection_blacklist 테이블 연동 CRUD 처리 |
+| `blacklist_manager.md` | BlacklistManager | 실패 에러 분석 및 일시적/영구적 에러 분기, 쿨다운 관리 매니저 |
+| `daily_routine.md` | DailyRoutine | 5단계 일일 루틴 자동화, 동적 lookback 계산 및 이상치 롤백/격리 |
 | `financial_parser.md` | FinancialParser | SEC XBRL facts 수집/정제 및 discrete 분기 재무 데이터 도출 파이프라인 |
 | `financial_repo.md` | FinancialRepo | us_financial_facts, us_standard_financials, us_share_history 테이블 CRUD/Upsert |
 | `xbrl_mapper.md` | XBRLMapper | US-GAAP 원시 태그의 분석용 표준 회계 필드 우선순위 매핑 및 정규화 |
@@ -135,13 +139,16 @@
 
 | 파일 | 결정 요약 | Task |
 |---|---|---|
-| `decisions.md` | SEC XBRL 재무 데이터 이산화 계산 및 Overwrite 벌크 갱신 전략 | T-003 |
+| `decisions.md#USDMS_DEC-001` | SEC XBRL 재무 데이터 이산화 계산 및 Overwrite 벌크 갱신 전략 | T-003 |
+| `decisions.md#USDMS_DEC-002` | 자가 치유형(Self-Healing) 가치평가 및 지표 복구 엔진 최적화 | T-005 |
+| `decisions.md#USDMS_DEC-003` | 일시적/영구적 에러의 이원화 예외 처리 및 자동 쿨다운 릴리즈 루프 | T-005 |
 
 ### errors/ (해결된 에러 기록)
 
 | 파일 | 에러 요약 | Severity |
 |---|---|---|
 | `usdms-err-001_wsl2_bind_mount_sync_error.md` | WSL2 마운트 동기화 유실로 인한 빈 DB 기동 현상 | High |
+| `usdms-err-002_valuation_rebuild_timeout.md` | Valuation 자가치유 갭 탐색 쿼리 실행 지연 및 타임아웃 | High |
 
 ---
 
@@ -168,16 +175,21 @@
 - [P2-ERR-001] KIS API 403 Forbidden 차단 → `p2_kdms_wiki/errors/err-001_kis_api_403_forbidden.md`
 - [P2-ERR-002] 시총 bigint 오버플로우 롤백 → `p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md`
 - [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
+- [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 
 ### 📐 최근 변경된 인터페이스
 
+- `DailyRoutine`: 5단계 일일 자동화 및 이상치 격리, 자가 치유 갭 복구 적용 → `p3_usdms_wiki/interfaces/daily_routine.md`
+- `BlacklistManager`: 일시적/영구적 에러 분기 및 쿨다운 자동 해제 관리 → `p3_usdms_wiki/interfaces/blacklist_manager.md`
 - `PhysicalSyncManager`: T-008에서 T-009 흡수, tar+SSH 파이프라인 확정 → `p1_shared_wiki/interfaces/physical_sync_manager.md`
 - `SyncManager`: **폐기 예정** — 실운영 사용 금지, PhysicalSyncManager 사용
 
 ### 🔄 진행중인 작업
 
 - p1_shared: ✅ 완료 (T-001~T-008)
-- 다음: p2_kdms, p3_usdms, p4_manager 구현 예정
+- p2_kdms: 🔄 진행 중
+- p3_usdms: ✅ 완료 (T-001~T-005)
+- p4_manager: ⬜ 미착수
 
 ---
 

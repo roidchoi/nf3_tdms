@@ -69,7 +69,7 @@ conda run -n tdms_p1_env uv pip install -e tdms_core/p1_shared/
 | `kdms_timescaledb` | kdms_db | 5432 | TimescaleDB 2.14.2 + PG16 |
 | `usdms_db` | usdms_db | 5435 | TimescaleDB (별도 환경) |
 
-> ⚠️ TimescaleDB 버전 불일치 주의: 개발PC 2.14.2, 과거 서버PC에서 2.15.0 불일치 발생 → **이미지 Digest 고정으로 해결** (`[[decisions/dec-001_physical_sync.md]]`)
+> ⚠️ TimescaleDB 버전 불일치 주의: 개발PC 2.14.2, 과거 서버PC에서 2.15.0 불일치 발생 → **이미지 Digest 고정으로 해결** (`[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`)
 
 ---
 
@@ -80,4 +80,4 @@ conda run -n tdms_p1_env uv pip install -e tdms_core/p1_shared/
 | WSL2 IP 동적 변경 | DHCP 재할당으로 DEV_IP 불일치 | `EnvDetector.verify_dev_ip_sync()` 호출로 감지 → `.env` 수동 수정 |
 | Docker 볼륨 권한(UID mismatch) | 물리 복제 후 UID 불일치 | `PhysicalSyncManager.fix_permissions()` 자동 교정 (1000:1000) |
 | USDMS 폴더 탐색기 접근 불가 | Docker가 UID 70으로 폴더 잠금 | `sudo setfacl -R -m u:$USER:rx ./data/usdms_db` |
-| SSH sudo 비밀번호 프롬프트 | 자동화 실행 차단 | `sudoers.d/tdms_sync` 1회 설정 (`[[decisions/dec-001_physical_sync.md]]`) |
+| SSH sudo 비밀번호 프롬프트 | 자동화 실행 차단 | `sudoers.d/tdms_sync` 1회 설정 (`[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`) |

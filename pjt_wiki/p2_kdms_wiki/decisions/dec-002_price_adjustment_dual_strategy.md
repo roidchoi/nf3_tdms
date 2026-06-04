@@ -4,7 +4,7 @@
 > **Status**: active
 > **Date**: 2026-05-26
 > **Task**: T-003
-> **관련**: `[[interfaces/ohlcv_repo.md]]`, `[[interfaces/data_api_endpoints.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/ohlcv_repo.md]]`, `[[p2_kdms_wiki/interfaces/data_api_endpoints.md]]`
 
 ---
 

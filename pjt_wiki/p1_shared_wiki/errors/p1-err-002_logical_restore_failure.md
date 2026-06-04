@@ -4,7 +4,7 @@
 > **Severity**: High (결국 ADR-001로 아키텍처 변경 유발)
 > **발생 Task**: T-008 이전 단계 (2026-05-07 마이그레이션)
 > **상태**: 해결됨 (물리 복제로 우회)
-> **관련**: `[[decisions/dec-001_physical_sync.md]]`
+> **관련**: `[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`
 
 ---
 
@@ -37,9 +37,9 @@ out of shared memory
 
 ## 해결법
 
-**근본 해결**: 논리 복원 대신 `PhysicalSyncManager`의 물리 Stop-and-Copy 방식 사용 (`[[decisions/dec-001_physical_sync.md]]`)
+**근본 해결**: 논리 복원 대신 `PhysicalSyncManager`의 물리 Stop-and-Copy 방식 사용 (`[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`)
 
-**소용량 복원 시 (BackupManager 사용 시)**: `section_order=True`로 pre-data → data → post-data 순서 복원 (`[[decisions/dec-002_pg_restore_section_order.md]]`)
+**소용량 복원 시 (BackupManager 사용 시)**: `section_order=True`로 pre-data → data → post-data 순서 복원 (`[[p1_shared_wiki/decisions/dec-002_pg_restore_section_order.md]]`)
 
 ---
 

@@ -228,3 +228,32 @@ class ValuationRepo(BaseRepository):
         """
         with self.get_cursor() as cur:
             execute_values(cur, query, metrics)
+
+    def get_earliest_valuation_gap_date(self, cik: str, start_date: str = '2026-05-01') -> Any:
+        """
+        특정 CIK에 대해, 지정한 start_date 이후의 가격 데이터(us_daily_price)는 존재하나 
+        가치평가 데이터(us_daily_valuation)가 매칭되지 않고 비어 있는 
+        가장 오래된 날짜(MIN dt)를 반환합니다.
+        재무 정보 및 발행주식수 이력이 둘 다 없는 종목(ETF/CEF 등)은 
+        매번 불필요한 전체 재계산이 유발되지 않도록 gap 감지에서 제외합니다.
+        """
+        query = """
+            SELECT MIN(p.dt) as gap_dt
+            FROM us_daily_price p
+            LEFT JOIN us_daily_valuation v ON p.dt = v.dt AND p.cik = v.cik
+            WHERE p.cik = %s 
+              AND p.dt >= %s
+              AND v.cik IS NULL
+              AND EXISTS (SELECT 1 FROM us_standard_financials f WHERE f.cik = p.cik)
+              AND (
+                  EXISTS (SELECT 1 FROM us_share_history s WHERE s.cik = p.cik)
+                  OR EXISTS (SELECT 1 FROM us_standard_financials f WHERE f.cik = p.cik AND f.shares_outstanding IS NOT NULL)
+              )
+        """
+        with self.get_cursor() as cur:
+            cur.execute(query, (cik, start_date))
+            row = cur.fetchone()
+            if row and row.get('gap_dt'):
+                return row['gap_dt']
+        return None
+

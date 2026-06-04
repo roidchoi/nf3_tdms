@@ -38,8 +38,8 @@ migration_pjt/usdms_origin/ → nf3_tdms 프로젝트의 p2_usdms 구현 참조
 
 ### 3.1 Point-in-Time (PIT) 원칙
 - **정의**: 모든 데이터는 수집 시점(`retrieved_at` 또는 `filed_dt`)을 기록하여 특정 시점의 상태를 재현 가능하게 저장
-- **KDMS**: `retrieved_at` 기반 재무제표 버전 관리 → [[ref_kdms_wiki/interfaces/pit_financial_pattern]]
-- **USDMS**: `filed_dt` 기반 SEC 공시 기준 PIT → [[ref_usdms_wiki/interfaces/pit_sec_pattern]]
+- **KDMS**: `retrieved_at` 기반 재무제표 버전 관리 → [[migration-pjt/ref_kdms_wiki/interfaces/pit_financial_pattern.md]]
+- **USDMS**: `filed_dt` 기반 SEC 공시 기준 PIT → [[migration-pjt/ref_usdms_wiki/interfaces/pit_sec_pattern.md]]
 
 ### 3.2 Raw + Factor 분리 아키텍처
 - **정의**: 수정 주가를 API에서 받지 않고, Raw 가격과 수정 계수(Factor)를 분리 저장하여 역산
@@ -74,4 +74,4 @@ migration_pjt/
 └── usdms_origin/     # USDMS 원본 (git clone: nf_03_usdms)
 ```
 
-상세 구조: [[ref_kdms_wiki/codebase_map]] 및 [[ref_usdms_wiki/codebase_map]] 참조
+상세 구조: [[migration-pjt/ref_kdms_wiki/codebase_map.md]] 및 [[migration-pjt/ref_usdms_wiki/codebase_map.md]] 참조

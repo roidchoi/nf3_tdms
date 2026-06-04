@@ -2,7 +2,7 @@
 
 > **파일**: `tdms_core/p2_kdms/config.py`
 > **클래스**: `Settings(BaseSettings)`
-> **관련**: `[[interfaces/fastapi_lifespan.md]]`, `[[p1_shared_wiki/interfaces/env_detector.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/fastapi_lifespan.md]]`, `[[p1_shared_wiki/interfaces/env_detector.md]]`
 
 ---
 
