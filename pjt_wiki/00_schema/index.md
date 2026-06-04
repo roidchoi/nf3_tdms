@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-02
-> **총 등록 파일**: 26개
+> **마지막 업데이트**: 2026-06-04
+> **총 등록 파일**: 27개
 
 ---
 
@@ -109,7 +109,7 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: ✅ T-005 완료 (Blacklist, MasterEnricher, DailyRoutine 자동화 및 자가 치유 갭 복구 완료)
+> **상태**: ✅ T-006 완료 (REST API 7종 구현 완료 및 TDD/E2E 테스트 올그린 통과)
 
 ### 코어 문서
 
@@ -134,6 +134,7 @@
 | `xbrl_mapper.md` | XBRLMapper | US-GAAP 원시 태그의 분석용 표준 회계 필드 우선순위 매핑 및 정규화 |
 | `valuation_repo.md` | ValuationRepo | 일별 가격, 주식수 이력, 표준재무 조회 및 daily_valuation/financial_metrics 일괄 Upsert |
 | `valuation_engine.md` | ValuationCalculator / MetricCalculator | PIT 가치평가(5대 가치지표), 9대 재무비율 및 3대 YoY 성장률 산출 |
+| `data_api_endpoints.md` | routers/data.py | REST API 7종 엔드포인트 명세 및 Throttling 범위, Arrow 바이너리 직렬화 규격 |
 
 ### decisions/
 
@@ -182,13 +183,14 @@
 - `DailyRoutine`: 5단계 일일 자동화 및 이상치 격리, 자가 치유 갭 복구 적용 → `p3_usdms_wiki/interfaces/daily_routine.md`
 - `BlacklistManager`: 일시적/영구적 에러 분기 및 쿨다운 자동 해제 관리 → `p3_usdms_wiki/interfaces/blacklist_manager.md`
 - `PhysicalSyncManager`: T-008에서 T-009 흡수, tar+SSH 파이프라인 확정 → `p1_shared_wiki/interfaces/physical_sync_manager.md`
+- `Data API Endpoints`: REST API 7종 및 Arrow IPC 스트리밍 지원 완료 → `p3_usdms_wiki/interfaces/data_api_endpoints.md`
 - `SyncManager`: **폐기 예정** — 실운영 사용 금지, PhysicalSyncManager 사용
 
 ### 🔄 진행중인 작업
 
 - p1_shared: ✅ 완료 (T-001~T-008)
 - p2_kdms: 🔄 진행 중
-- p3_usdms: ✅ 완료 (T-001~T-005)
+- p3_usdms: ✅ 완료 (T-001~T-006)
 - p4_manager: ⬜ 미착수
 
 ---

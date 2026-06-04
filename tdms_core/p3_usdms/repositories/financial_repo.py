@@ -127,3 +127,47 @@ class FinancialRepo(BaseRepository):
         ]
         with self.get_cursor() as cur:
             execute_values(cur, query, values)
+
+    def get_standard_financials_range(self, cik: str, start_dt: str = None, end_dt: str = None) -> list[dict]:
+        """특정 CIK의 표준화 재무 정보를 범위로 조회 (날짜순 정렬)"""
+        query = """
+            SELECT 
+                cik, report_period, filed_dt, fiscal_year, fiscal_period,
+                total_assets, total_debt, shares_outstanding, revenue, gross_profit,
+                op_income, rnd_expense, interest_expense, net_income, ebitda,
+                ocf, capex, fcf
+            FROM us_standard_financials
+            WHERE cik = %s
+        """
+        params = [str(cik).zfill(10)]
+        if start_dt:
+            query += " AND filed_dt >= %s"
+            params.append(start_dt)
+        if end_dt:
+            query += " AND filed_dt <= %s"
+            params.append(end_dt)
+            
+        query += " ORDER BY report_period ASC, filed_dt ASC"
+        with self.get_cursor() as cur:
+            cur.execute(query, tuple(params))
+            return cur.fetchall()
+
+    def get_standard_financials_pit(self, cik: str, as_of_date: Any) -> list[dict]:
+        """특정 시점(as_of_date) 기준으로 최신 공시된(filed_dt <= as_of) Point-in-Time 표준화 재무 정보 조회"""
+        query = """
+            SELECT DISTINCT ON (report_period)
+                cik, report_period, filed_dt, fiscal_year, fiscal_period,
+                total_assets, total_debt, shares_outstanding, revenue, gross_profit,
+                op_income, rnd_expense, interest_expense, net_income, ebitda,
+                ocf, capex, fcf
+            FROM us_standard_financials
+            WHERE cik = %s AND filed_dt <= %s
+            ORDER BY report_period DESC, filed_dt DESC
+        """
+        with self.get_cursor() as cur:
+            cur.execute(query, (str(cik).zfill(10), as_of_date))
+            rows = cur.fetchall()
+            # report_period 기준 오름차순 정렬 반환
+            rows.sort(key=lambda x: x['report_period'])
+            return rows
+

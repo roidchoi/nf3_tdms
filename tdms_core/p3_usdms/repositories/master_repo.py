@@ -16,6 +16,26 @@ class MasterRepo(BaseRepository):
             cur.execute(query)
             return cur.fetchall()
 
+    def get_tickers_filtered(self, exchange: Optional[str] = None, is_collect_target: Optional[bool] = None) -> list[dict]:
+        """필터 조건에 따라 티커 목록 조회 (exchange, is_collect_target)"""
+        query = """
+            SELECT cik, latest_ticker, latest_name, exchange, sector, industry, country, quote_type, market_cap, current_price, is_active, is_collect_target
+            FROM us_ticker_master
+            WHERE is_active = TRUE
+        """
+        params = []
+        if exchange:
+            query += " AND exchange = %s"
+            params.append(exchange)
+        if is_collect_target is not None:
+            query += " AND is_collect_target = %s"
+            params.append(is_collect_target)
+            
+        with self.get_cursor() as cur:
+            cur.execute(query, tuple(params))
+            return cur.fetchall()
+
+
     def get_collect_targets(self) -> list[dict]:
         """is_collect_target = TRUE인 종목 목록 조회"""
         query = """

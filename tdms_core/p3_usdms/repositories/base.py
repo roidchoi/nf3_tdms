@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from contextlib import contextmanager
 from psycopg2.extras import RealDictCursor
 from p1_shared.db.connection import DbConnectionPool
@@ -11,10 +12,13 @@ class BaseRepository:
     _pool: DbConnectionPool = None
     _env: EnvDetector = None
 
-    def __init__(self):
+    def __init__(self, pool: Optional[DbConnectionPool] = None):
         # EnvDetector 지연 초기화
         if BaseRepository._env is None:
             BaseRepository._env = EnvDetector()
+            
+        if pool is not None:
+            BaseRepository._pool = pool
             
         # DbConnectionPool 지연 초기화
         if BaseRepository._pool is None:

@@ -29,6 +29,8 @@
 | yfinance | 0.2.38 | Yahoo Finance 메타데이터 보강 조회 |
 | pandas | 2.2.0 | 가격 및 재무 데이터 가공 및 연산 |
 | apscheduler | 3.10.4 | 일일 루틴 및 주간 백필 백그라운드 크론 스케줄링 |
+| pyarrow | 24.0.0 | Apache Arrow Stream IPC 바이너리 직렬화 스트리밍 |
+
 
 ---
 

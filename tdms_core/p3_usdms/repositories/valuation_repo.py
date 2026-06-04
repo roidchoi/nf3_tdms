@@ -257,3 +257,48 @@ class ValuationRepo(BaseRepository):
                 return row['gap_dt']
         return None
 
+    def get_valuations(self, cik: str, start_dt: str = None, end_dt: str = None) -> list[dict]:
+        """특정 CIK의 일별 가치평가 정보를 조회 (날짜순 정렬)"""
+        query = """
+            SELECT dt, cik, mkt_cap, pe, pb, ps, pcr, ev_ebitda
+            FROM us_daily_valuation
+            WHERE cik = %s
+        """
+        params = [str(cik).zfill(10)]
+        if start_dt:
+            query += " AND dt >= %s"
+            params.append(start_dt)
+        if end_dt:
+            query += " AND dt <= %s"
+            params.append(end_dt)
+            
+        query += " ORDER BY dt ASC"
+        with self.get_cursor() as cur:
+            cur.execute(query, tuple(params))
+            return cur.fetchall()
+
+    def get_metrics(self, cik: str, start_dt: str = None, end_dt: str = None) -> list[dict]:
+        """특정 CIK의 재무비율 정보를 조회 (날짜순 정렬)"""
+        query = """
+            SELECT 
+                cik, report_period, filed_dt,
+                roe, roa, roic, op_margin, net_margin,
+                gp_a_ratio, debt_ratio, current_ratio, interest_coverage,
+                rev_growth_yoy, op_growth_yoy, eps_growth_yoy
+            FROM us_financial_metrics
+            WHERE cik = %s
+        """
+        params = [str(cik).zfill(10)]
+        if start_dt:
+            query += " AND filed_dt >= %s"
+            params.append(start_dt)
+        if end_dt:
+            query += " AND filed_dt <= %s"
+            params.append(end_dt)
+            
+        query += " ORDER BY report_period ASC, filed_dt ASC"
+        with self.get_cursor() as cur:
+            cur.execute(query, tuple(params))
+            return cur.fetchall()
+
+
