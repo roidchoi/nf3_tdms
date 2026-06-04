@@ -39,3 +39,16 @@ def get_daily_prices(self, cik: str, start_dt: str, end_dt: str) -> list[dict]
 def get_price_factors(self, cik: str) -> list[dict]
 ```
 - **반환형**: 데이터베이스 Row 결과를 `RealDictRow`(딕셔너리형) 리스트 형식으로 반환합니다.
+
+### `get_daily_price_count_for_date`
+특정 날짜에 수집 완료된 일봉 데이터의 총 개수를 조회합니다.
+```python
+def get_daily_price_count_for_date(self, dt: date | str) -> int
+```
+
+### `get_collect_targets_for_date`
+특정 날짜 기준 수집 대상(is_collect_target=True)인 티커 목록을 조회합니다.
+```python
+def get_collect_targets_for_date(self, dt: date | str) -> list[str]
+```
+

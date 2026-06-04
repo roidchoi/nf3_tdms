@@ -13,7 +13,7 @@ tdms_core/p3_usdms/
 ├── collectors/           # 데이터 수집 레이어 [✅완성]
 │   ├── sec_client.py     # SEC EDGAR API 연동용 클라이언트
 │   ├── master_sync.py    # 미국 주식 마스터 동기화 오케스트레이터
-│   ├── master_enricher.py # yfinance 기반 메타데이터 보강 및 ADR 필터링 수집기 [NEW]
+│   ├── master_enricher.py # yfinance 기반 메타데이터 보강 및 ADR 필터링 수집기
 │   ├── kis_us_client.py  # KIS API 기반 미국 주식 시세 연동 클라이언트
 │   ├── price_engine.py   # Ratio 기반 가격 수정계수 계산 엔진
 │   ├── market_data_loader.py # 일봉 시세 수집 및 팩터 연동 파이프라인
@@ -21,29 +21,37 @@ tdms_core/p3_usdms/
 ├── engines/              # 비즈니스 연산 엔진 레이어 [✅완성]
 │   ├── valuation_calculator.py # PIT 기반 가치평가 비율 산출 (pe, pb, ps, pcr, ev_ebitda)
 │   └── metric_calculator.py    # 9대 재무비율 및 3대 YoY 성장률 산출
+├── auditors/             # 데이터 무결성 검증 레이어 [✅완성] [NEW]
+│   ├── financial_auditor.py # 회계 항등식, 핵심 Null값, 공시이격 이격 검사 엔진
+│   ├── metric_auditor.py    # ROE 역산, 가치평가 아웃라이어 검사 엔진
+│   ├── price_auditor.py     # KIS 종가 대조 및 수정계수 재현 검증 엔진
 ├── repositories/         # 데이터 접근 레이어 [✅완성]
 │   ├── base.py           # DbConnectionPool 및 EnvDetector를 래핑한 기본 레포지토리
 │   ├── master_repo.py    # us_ticker_master, us_ticker_history CIK 기반 데이터 I/O
 │   ├── price_repo.py     # us_daily_price, us_price_adjustment_factors 데이터 I/O
 │   ├── valuation_repo.py # us_daily_valuation 및 us_financial_metrics 데이터 I/O
-│   └── blacklist_repo.py # us_collection_blacklist 데이터 I/O [NEW]
+│   └── blacklist_repo.py # us_collection_blacklist 데이터 I/O
 ├── routers/              # API 라우팅 레이어 [✅완성]
 │   ├── data.py           # 마스터 목록, 일일 주가, 수정계수 조회 엔드포인트
-│   └── admin.py          # 일일 루틴 수동 실행 및 락(Lock) 관리 엔드포인트 [NEW]
+│   ├── health.py         # 데이터 최신성(Freshness), 갭(Gaps), 블랙리스트 헬스 엔드포인트 [NEW]
+│   └── admin.py          # 일일 루틴 수동 실행, 스케줄링 관리 및 실시간 로그 스트리밍 엔드포인트 [NEW]
 ├── tasks/                # 자동화 태스크 레이어 [✅완성]
-│   └── daily_routine.py  # 5단계 일일 루틴 및 주간 백필 스케줄러 제어기 [NEW]
+│   └── daily_routine.py  # 5단계 일일 루틴 및 주간 백필 스케줄러 제어기
+├── ops/                  # 시스템 운영 및 진단 스크립트 레이어 [✅완성] [NEW]
+│   └── run_diagnostics.py # 3종 감사 및 최신성 판정을 일괄 실행하는 CLI 진단 스크립트
 ├── utils/                # 유틸리티 레이어 [✅완성]
-│   └── blacklist_manager.py # 일시적/영구적 에러의 이원화 격리 처리 및 쿨다운 해제 비즈니스 논리 제어 [NEW]
+│   └── blacklist_manager.py # 일시적/영구적 에러의 이원화 격리 처리 및 쿨다운 해제 비즈니스 논리 제어
 ├── tests/                # 테스트 스위트 [✅완성]
 │   ├── conftest.py       # pytest 픽처 및 DB 풀 정의
 │   ├── test_base_infra.py # DB 커넥션 풀 검증
 │   ├── test_master_sync.py # 마스터 동기화 검증
-│   ├── test_master_enricher.py # 메타데이터 보강 필터 및 실패 누적 검증 [NEW]
+│   ├── test_master_enricher.py # 메타데이터 보강 필터 및 실패 누적 검증
 │   ├── test_price_collect.py # 일일 시세 수집, 팩터 감지 엔진, API 통합 검증
-│   ├── test_financial_collect.py # SEC XBRL 파싱 및 분기 재무제표 수집 검증 [NEW]
+│   ├── test_financial_collect.py # SEC XBRL 파싱 및 분기 재무제표 수집 검증
 │   ├── test_valuation_metric.py # 가치평가, 재무비율, 대량 550종목 루프 성능 및 적재 통합 검증
-│   ├── test_blacklist.py # 블랙리스트 매니저 임계치 도달 및 자동 해제 검증 [NEW]
-│   └── test_daily_routine.py # 일일 파이프라인 E2E, 이상치 격리 및 수동 API 락 검증 [NEW]
+│   ├── test_blacklist.py # 블랙리스트 매니저 임계치 도달 및 자동 해제 검증
+│   ├── test_daily_routine.py # 일일 파이프라인 E2E, 이상치 격리 및 수동 API 락 검증
+│   └── test_health_auditors.py # 헬스 API 및 3종 Auditors 모킹 단위/통합 테스트 [NEW]
 ├── config.py             # 환경 설정 모듈 [✅완성]
 └── main.py               # FastAPI 애플리케이션 진입점 [✅완성]
 ```
@@ -120,6 +128,7 @@ tdms_core/p3_usdms/
 | `tests/test_valuation_metric.py` | ValuationCalculator, MetricCalculator, ValuationRepo | ✅ 통과 |
 | `tests/test_blacklist.py` | BlacklistManager, BlacklistRepo | ✅ 통과 |
 | `tests/test_daily_routine.py` | DailyRoutine, routers/admin.py | ✅ 통과 |
+| `tests/test_health_auditors.py` | routers/health.py, routers/admin.py (WebSocket / schedules / status), Auditors 3종 | ✅ 통과 [NEW] |
 
 ---
 
@@ -143,3 +152,4 @@ tdms_core/p3_usdms/
 | Task-003 | SEC facts 파싱 정규화 매퍼(XBRLMapper), 분기 discrete 재무제표 구축 및 주식수 수집기 이식 |
 | Task-004 | PIT 기반 가치비율(5대 지표) 및 9대 재무비율/3대 YoY 성장률 엔진 구현, 550종목 실 데이터 벌크 캐싱 대용량 최적화 검증 완료 |
 | Task-005 | Blacklist Repo/Manager 구축, MasterEnricher(ADR 필터링), DailyRoutine 5단계 자동화 스케줄러 및 이상치 격리(Quarantine), 수동 실행 Lock API 및 자가 치유형 갭 복구 엔진 최적화 완료 |
+| Task-007 | 헬스체크 API(Freshness/Gaps/Blacklist), 어드민 스케줄 제어 및 WebSocket 로그 스트리밍, 재무/지표/수정주가 감사 엔진 3종 이식 및 CLI 진단 도구 완료 |

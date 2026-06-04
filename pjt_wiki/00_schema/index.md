@@ -2,7 +2,7 @@
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
 > **마지막 업데이트**: 2026-06-04
-> **총 등록 파일**: 27개
+> **총 등록 파일**: 29개
 
 ---
 
@@ -109,7 +109,7 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: ✅ T-006 완료 (REST API 7종 구현 완료 및 TDD/E2E 테스트 올그린 통과)
+> **상태**: ✅ T-007 완료 (헬스·어드민 API 및 Auditors, WebSocket, 진단 도구 완료 및 테스트 통과)
 
 ### 코어 문서
 
@@ -135,6 +135,8 @@
 | `valuation_repo.md` | ValuationRepo | 일별 가격, 주식수 이력, 표준재무 조회 및 daily_valuation/financial_metrics 일괄 Upsert |
 | `valuation_engine.md` | ValuationCalculator / MetricCalculator | PIT 가치평가(5대 가치지표), 9대 재무비율 및 3대 YoY 성장률 산출 |
 | `data_api_endpoints.md` | routers/data.py | REST API 7종 엔드포인트 명세 및 Throttling 범위, Arrow 바이너리 직렬화 규격 |
+| `health_admin_api.md` | routers/health.py, routers/admin.py | Freshness/Gaps/Blacklist 헬스 체크, 동적 크론 제어, 및 WebSocket 실시간 로그 전송 엔드포인트 명세 |
+| `auditors.md` | FinancialDiagnostic, MetricVerifier, PriceReproducer | 재무(항등식/Null), 지표(ROE/Outlier), 수정주가(KIS API 대조) 감사 엔진 3종의 시그니처 및 사양 |
 
 ### decisions/
 
@@ -143,6 +145,7 @@
 | `decisions.md#USDMS_DEC-001` | SEC XBRL 재무 데이터 이산화 계산 및 Overwrite 벌크 갱신 전략 | T-003 |
 | `decisions.md#USDMS_DEC-002` | 자가 치유형(Self-Healing) 가치평가 및 지표 복구 엔진 최적화 | T-005 |
 | `decisions.md#USDMS_DEC-003` | 일시적/영구적 에러의 이원화 예외 처리 및 자동 쿨다운 릴리즈 루프 | T-005 |
+| `decisions.md#USDMS_DEC-004` | 수집 마감 분기점 및 거래정지/차단 배제 기반 실질 갭 진단 정책 | T-007 |
 
 ### errors/ (해결된 에러 기록)
 
@@ -180,6 +183,8 @@
 
 ### 📐 최근 변경된 인터페이스
 
+- `Health/Admin API Endpoints`: Freshness/Gaps 판정 및 동적 스케줄링, WebSocket 실시간 로그 중계 → `p3_usdms_wiki/interfaces/health_admin_api.md`
+- `Auditors 3종`: 재무(항등식/Null), 지표(ROE/Outlier), 수정주가(KIS API 대조) 감사 엔진 → `p3_usdms_wiki/interfaces/auditors.md`
 - `DailyRoutine`: 5단계 일일 자동화 및 이상치 격리, 자가 치유 갭 복구 적용 → `p3_usdms_wiki/interfaces/daily_routine.md`
 - `BlacklistManager`: 일시적/영구적 에러 분기 및 쿨다운 자동 해제 관리 → `p3_usdms_wiki/interfaces/blacklist_manager.md`
 - `PhysicalSyncManager`: T-008에서 T-009 흡수, tar+SSH 파이프라인 확정 → `p1_shared_wiki/interfaces/physical_sync_manager.md`
@@ -190,7 +195,7 @@
 
 - p1_shared: ✅ 완료 (T-001~T-008)
 - p2_kdms: 🔄 진행 중
-- p3_usdms: ✅ 완료 (T-001~T-006)
+- p3_usdms: ✅ 완료 (T-001~T-007)
 - p4_manager: ⬜ 미착수
 
 ---

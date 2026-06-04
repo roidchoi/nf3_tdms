@@ -106,3 +106,14 @@ class BlacklistRepo(BaseRepository):
         with self.get_cursor() as cur:
             cur.execute(query, (cool_off_days,))
             return cur.fetchall()
+
+    def get_blocked_stocks(self) -> List[Dict[str, Any]]:
+        """현재 차단 상태(is_blocked = TRUE)인 종목 목록을 반환합니다."""
+        query = """
+            SELECT cik, ticker, reason_code as reason_cd, reason_detail as detail, is_blocked, fail_count, last_failed_at, updated_at
+            FROM us_collection_blacklist
+            WHERE is_blocked = TRUE
+        """
+        with self.get_cursor() as cur:
+            cur.execute(query)
+            return cur.fetchall()

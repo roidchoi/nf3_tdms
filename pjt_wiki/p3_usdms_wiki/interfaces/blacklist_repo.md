@@ -82,6 +82,14 @@ class BlacklistRepo(BaseRepository):
         Returns:
             List[Dict[str, Any]]: 쿨다운이 만료된 차단 대상 CIK 리스트 (cik, ticker, reason_code, fail_count, last_failed_at 포함)
         """
+
+    def get_blocked_stocks(self) -> List[Dict[str, Any]]:
+        """
+        현재 차단 상태(is_blocked = TRUE)인 블랙리스트 목록 전체를 반환합니다.
+        
+        Returns:
+            List[Dict[str, Any]]: 차단 상태 종목 레코드 목록 (cik, ticker, reason_cd, detail, is_blocked, fail_count, last_failed_at, updated_at 포함)
+        """
 ```
 
 ---

@@ -96,3 +96,30 @@ class PriceRepo(BaseRepository):
         with self.get_cursor() as cur:
             cur.execute(query, (cik,))
             return cur.fetchall()
+
+    def get_daily_price_count_for_date(self, dt) -> int:
+        """특정 날짜의 수집된 일봉 데이터 개수 조회"""
+        query = "SELECT COUNT(*) FROM us_daily_price WHERE dt = %s"
+        with self.get_cursor() as cur:
+            cur.execute(query, (dt,))
+            res = cur.fetchone()
+            if isinstance(res, dict):
+                return res.get('count', 0)
+            elif isinstance(res, tuple) or isinstance(res, list):
+                return res[0]
+            return 0
+
+    def get_collect_targets_for_date(self, dt) -> list[str]:
+        """특정 날짜 기준의 수집 대상 티커 목록 조회"""
+        query = "SELECT latest_ticker FROM us_ticker_master WHERE is_collect_target = TRUE"
+        with self.get_cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+            if not rows:
+                return []
+            
+            # rows가 dict 리스트일 수 있고 tuple 리스트일 수 있음
+            if isinstance(rows[0], dict):
+                return [r['latest_ticker'] for r in rows if r.get('latest_ticker')]
+            else:
+                return [r[0] for r in rows if r[0]]

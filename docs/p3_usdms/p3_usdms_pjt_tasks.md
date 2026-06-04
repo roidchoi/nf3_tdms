@@ -89,7 +89,7 @@ T-009 (p4_manager 연동 테스트)
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
 | T-006 | 데이터 조회 REST API 완성 | `routers/data.py` 전면 재구현: `/api/data/tickers`(exchange/is_collect_target 필터), `/api/data/price/daily`(raw/adjusted 분기), `/api/data/price/factors`, `/api/data/financials`(PIT 지원), `/api/data/valuation`, `/api/data/metrics`, `/api/data/preview/{table}` — 원본 3개 엔드포인트에서 7종으로 확장 | 완료 | Medium | T-005 | 2026-06-04 | 2026-06-04 |
-| T-007 | 헬스·어드민 API + Auditors + WebSocket | `/api/health/freshness`, `/api/health/gaps`, `/api/health/blacklist`, `/api/admin/tasks/status`, `/api/admin/schedules`(GET/PUT), `WS /ws/logs` 실시간 로그 스트리밍, `auditors/financial_auditor.py`(회계항등식/Critical Nulls/Historical Leakage), `auditors/metric_auditor.py`(ROE역산 검증), `auditors/price_auditor.py`(PriceReproducer 누적계수 재현), `ops/run_diagnostics.py` REST API 엔드포인트 연동 | 대기 | Medium | T-006 | - | - |
+| T-007 | 헬스·어드민 API + Auditors + WebSocket | `/api/health/freshness`, `/api/health/gaps`, `/api/health/blacklist`, `/api/admin/tasks/status`, `/api/admin/schedules`(GET/PUT), `WS /ws/logs` 실시간 로그 스트리밍, `auditors/financial_auditor.py`(회계항등식/Critical Nulls/Historical Leakage), `auditors/metric_auditor.py`(ROE역산 검증), `auditors/price_auditor.py`(PriceReproducer 누적계수 재현), `ops/run_diagnostics.py` REST API 엔드포인트 연동 | 완료 | Medium | T-006 | 2026-06-04 | 2026-06-04 |
 
 ### Phase 3.5: 리팩토링 정리
 

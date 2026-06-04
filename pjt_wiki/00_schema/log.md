@@ -12,7 +12,10 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-04] Task완료+의사결정 | p3_usdms 미국 시장 백엔드 T-007(헬스체크 및 어드민 API, Auditors 3종 마이그레이션, 실시간 WebSocket 로그 전송) 완료에 따른 신규 인터페이스 문서(health_admin_api.md, auditors.md) 등록 및 기존 레포지토리 인터페이스(price_repo.md, blacklist_repo.md), codebase_map, decisions(USDMS_DEC-004) 및 MoC(index.md) 현행화 완료.
+
 ## [2026-06-04] Task완료 | p3_usdms 미국 시장 백엔드 T-006(데이터 조회 REST API 완성) 완료에 따른 REST API 7종 엔드포인트 명세(data_api_endpoints.md) 신규 등록, pyarrow 패키지 추가에 따른 환경 문서(environment.md) 및 MoC(index.md) 현행화 완료.
+
 
 ## [2026-06-04] Task완료+의사결정+에러등록 | p3_usdms 미국 시장 백엔드 T-005(Blacklist + MasterEnricher + 일일 자동화) 완료에 따른 핵심 인터페이스(blacklist_repo, blacklist_manager, master_enricher, daily_routine) 추가, 60일 룩백 자가 치유 및 쿼리 병목 최적화(USDMS_DEC-002, USDMS-ERR-002), 이원화 에러 분기 및 자동 릴리즈(USDMS_DEC-003) 위키 지식화 완료.
 

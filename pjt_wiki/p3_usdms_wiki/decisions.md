@@ -21,6 +21,7 @@
 |USDMS_DEC-001|SEC XBRL 재무 데이터 이산화 계산 및 Overwrite 벌크 갱신 전략|T-003|Active|
 |USDMS_DEC-002|자가 치유형(Self-Healing) 가치평가 및 지표 복구 엔진 최적화|T-005|Active|
 |USDMS_DEC-003|일시적/영구적 에러의 이원화 예외 처리 및 자동 쿨다운 릴리즈 루프|T-005|Active|
+|USDMS_DEC-004|수집 마감 분기점 및 거래정지/차단 배제 기반 실질 갭 진단 정책|T-007|Active|
 
 ---
 
@@ -86,3 +87,23 @@
 - `tdms_core/p3_usdms/utils/blacklist_manager.py`
 - `tdms_core/p3_usdms/collectors/master_enricher.py`
 - `tdms_core/p3_usdms/tasks/daily_routine.py`
+
+---
+
+## USDMS_DEC-004: 수집 마감 분기점 및 거래정지/차단 배제 기반 실질 갭 진단 정책 (T-007)
+
+### 배경
+- 미국 일봉 수집 배치 작업의 마감 시각과 한국 표준시(KST) 시차 조건에 따라 단순 날짜 비교 시 미수집 오탐지가 발생함.
+- 거래량 0(거래정지/Suspended) 종목이나 네트워크/API 오류로 격리 차단된 블랙리스트 종목이 전체 미수집 갭으로 단순 산입되어, 인프라나 특이 종목 상태로 인한 허위 알람을 유발하였음.
+- 테스트 시 실제 외부 KIS API 및 로컬 DB 인프라가 개입하지 않는 완전 격리된 모킹 단위 검증 체계와 실시간 배치 로그 스트리밍 모듈이 부재함.
+
+### 결정 내용
+1. **KST 07:00 완료 분기점 판정**: 헬스 체크 시각이 07:00 KST 이전이면 전영업일 수집 커버리지를 검증하고, 07:00 KST 이후에는 당일 수집 완료율을 체크하여 수집 주기와 일치하도록 보장함.
+2. **실질 누락 갭 필터링**: 수집 대상 모수에서 거래량 0인 레코드와 `is_blocked = TRUE`인 블랙리스트 종목을 제외하여 인프라적 오작동에 의한 오경보를 배제하고 '순수 데이터 유실률'을 계산함.
+3. **FastAPI dependency_overrides 격리 및 Mocking**: 단위 테스트 기동 시 실제 DB 커넥션을 모킹 객체(`MagicMock`)로 완전히 치환하고 스케줄러 개입을 원천 차단하여 순수 로직만을 1초 이내에 보장하는 Tier 1/2 테스트 스위트 구축.
+4. **WebSocket tail -f 실시간 로그 스트리밍**: HTTP API 호출에 의존하지 않고, 최초 연결 시 기존 로그 100줄을 전달한 뒤 비동기 루프 및 `asyncio.sleep` 폴링을 통해 최신 덧붙여진 로그 데이터만을 지속 텍스트로 송신하는 실시간 중계 아키텍처 수립.
+
+### 영향 범위
+- `tdms_core/p3_usdms/routers/health.py`
+- `tdms_core/p3_usdms/routers/admin.py`
+- `tdms_core/p3_usdms/tests/test_health_auditors.py`

@@ -7,6 +7,7 @@ from p3_usdms.repositories.base import BaseRepository
 from p3_usdms.config import get_settings
 from p3_usdms.routers.data import router as data_router
 from p3_usdms.routers.admin import router as admin_router
+from p3_usdms.routers.health import router as health_router
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(scheduled_weekly, "cron", day_of_week="sat", hour=9, minute=0, id="weekly_maintenance_job")
     
     scheduler.start()
+    app.state.scheduler = scheduler
     logger.info("APScheduler started: daily collection and weekly maintenance jobs registered successfully.")
     
     yield
@@ -96,6 +98,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(data_router)
 app.include_router(admin_router)
+app.include_router(health_router)
 
 @app.get("/")
 def read_root():
