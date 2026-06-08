@@ -13,6 +13,7 @@ from p3_usdms.collectors.market_data_loader import MarketDataLoader
 from p3_usdms.collectors.financial_parser import FinancialParser
 from p3_usdms.engines.metric_calculator import MetricCalculator
 from p3_usdms.engines.valuation_calculator import ValuationCalculator
+from p1_shared.utils.date_utils import is_us_trading_day
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,76 @@ class DailyRoutine:
         # DB connection 참조 (Health Check 등 직접 쿼리용)
         self.db = self.master_repo
 
-    async def run(self, test_limit: int = None) -> Dict[str, Any]:
+    def sync_trading_calendar(self, limit_date: date) -> None:
+        """
+        `usdms_db`의 `trading_calendar` 테이블을 자동 동기화합니다.
+        - `trading_calendar`에서 MAX(dt)를 조회합니다.
+        - MAX(dt) 다음 날부터 limit_date까지 루프를 돌며 `is_us_trading_day(curr_d)`로 opnd_yn ('Y'/'N')을 매칭하여 인서트합니다.
+        """
+        max_dt = None
+        with self.db.get_cursor() as cur:
+            cur.execute("SELECT MAX(dt) as max_dt FROM trading_calendar")
+            row = cur.fetchone()
+            if row:
+                if isinstance(row, dict):
+                    max_dt = row.get("max_dt") or row.get("max")
+                else:
+                    max_dt = row[0]
+                    
+        if not max_dt:
+            start_date = limit_date - timedelta(days=365)
+        else:
+            if isinstance(max_dt, datetime):
+                max_dt = max_dt.date()
+            start_date = max_dt + timedelta(days=1)
+            
+        if start_date > limit_date:
+            logger.info(f"Trading calendar is up to date. max_dt: {max_dt}, limit_date: {limit_date}")
+            return
+            
+        logger.info(f"Syncing trading calendar from {start_date} to {limit_date}...")
+        
+        with self.db.get_cursor() as cur:
+            current = start_date
+            while current <= limit_date:
+                opnd_yn = 'Y' if is_us_trading_day(current) else 'N'
+                query = """
+                    INSERT INTO trading_calendar (dt, opnd_yn, created_at, updated_at)
+                    VALUES (%s, %s, NOW(), NOW())
+                    ON CONFLICT (dt) DO UPDATE SET opnd_yn = EXCLUDED.opnd_yn, updated_at = NOW()
+                """
+                cur.execute(query, (current, opnd_yn))
+                current += timedelta(days=1)
+
+    async def run(self, test_limit: int = None, target_date: date = None) -> Dict[str, Any]:
         """
         Step 1~5 일일 자동화 파이프라인 전체를 오케스트레이션합니다.
         각 스텝은 예외 차단을 통해 부분 성공(Partial Success)을 보장합니다.
         """
+        if target_date is None:
+            # KST 수집 당일 기준 전날을 수집 대상일로 삼음 (미국 기준 전날 영업일 마감)
+            target_date = date.today() - timedelta(days=1)
+            
+        # 0. trading_calendar 테이블 자동 갱신 동기화 실행
+        try:
+            self.sync_trading_calendar(limit_date=target_date)
+        except Exception as e:
+            logger.error(f"Failed to sync trading calendar up to {target_date}: {e}", exc_info=True)
+
+        # 1. target_date가 미국 영업일이 아니면 수집 루틴 전체 생략 후 즉시 스킵 리포트 리턴
+        if not is_us_trading_day(target_date):
+            logger.info(f"Target date {target_date} is not a US trading day. Skipping daily routine.")
+            report = {
+                "routine": "daily_routine",
+                "start_time": datetime.now().isoformat(),
+                "end_time": datetime.now().isoformat(),
+                "status": "SKIPPED",
+                "msg": f"US Holiday or weekend on {target_date}. skipping execution.",
+                "steps": []
+            }
+            self._save_report(report)
+            return report
+
         start_time = datetime.now()
         report = {
             "routine": "daily_routine",
@@ -85,14 +151,16 @@ class DailyRoutine:
             logger.warning(f"Failed to query max price date: {e}")
 
         if db_max_date:
-            days_diff = (date.today() - db_max_date).days
+            if isinstance(db_max_date, datetime):
+                db_max_date = db_max_date.date()
+            days_diff = (target_date - db_max_date).days
             lookback_days = max(10, days_diff + 2)
             logger.info(f"Dynamic lookback calculated: {lookback_days} days (db_max_date: {db_max_date})")
         else:
             lookback_days = 30
             logger.info(f"No max price date found. Using default lookback: {lookback_days} days")
 
-        lookback_start_date = (date.today() - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
+        lookback_start_date = (target_date - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
 
         # ----------------------------------------------------
         # Step 2: Market Data Update (OHLCV & Factors)
@@ -179,7 +247,7 @@ class DailyRoutine:
         step_start = datetime.now()
         logger.info("[Step 5] Performing Ingestion Health Checks & Data Isolation...")
         try:
-            anomalies = self._detect_anomalies_and_quarantine()
+            anomalies = self._detect_anomalies_and_quarantine(target_date)
             report["steps"].append({
                 "step": "Health Check & Isolation",
                 "status": "SUCCESS",
@@ -254,43 +322,48 @@ class DailyRoutine:
         logger.info(f"Weekly Backfill routine completed successfully: {report['details']}")
         return report
 
-    def _detect_anomalies_and_quarantine(self) -> List[Dict[str, Any]]:
+    def _detect_anomalies_and_quarantine(self, target_date: date) -> List[Dict[str, Any]]:
         """
-        당일 적재된 가격 및 가치평가 데이터를 분석하여 오염 데이터를 식별하고 격리(삭제/롤백)합니다.
+        수집 기준일(target_date)에 적재된 가격 및 가치평가 데이터를 분석하여 오염 데이터를 식별하고 격리(삭제/롤백)합니다.
         """
         anomalies = []
-        today_str = date.today().strftime('%Y-%m-%d')
 
-        # 1. 시세 데이터 오염 검사 (당일 vs 전일 가격 merge 비교)
+        # 1. 시세 데이터 오염 검사 (target_date vs target_date 전일 가격 merge 비교)
         # PRICE_SPIKE (50% 초과 변동)
         price_query = """
             SELECT t.cik, t.latest_ticker, p_today.cls_prc as today_prc, p_yesterday.cls_prc as yesterday_prc
             FROM us_ticker_master t
-            JOIN us_daily_price p_today ON t.cik = p_today.cik AND p_today.dt = CURRENT_DATE
-            JOIN us_daily_price p_yesterday ON t.cik = p_yesterday.cik AND p_yesterday.dt = CURRENT_DATE - INTERVAL '1 day'
+            JOIN us_daily_price p_today ON t.cik = p_today.cik AND p_today.dt = %s
+            JOIN us_daily_price p_yesterday ON t.cik = p_yesterday.cik AND p_yesterday.dt = %s - INTERVAL '1 day'
         """
         
-        # 2. Valuation 데이터 오염 검사 (당일 vs 전일 PE 비교)
+        # 2. Valuation 데이터 오염 검사 (target_date vs target_date 전일 PE 비교)
         # VALUATION_JUMP (2배 초과 혹은 0.5배 미만)
         val_query = """
             SELECT t.cik, t.latest_ticker, v_today.pe as today_pe, v_yesterday.pe as yesterday_pe
             FROM us_ticker_master t
-            JOIN us_daily_valuation v_today ON t.cik = v_today.cik AND v_today.dt = CURRENT_DATE
-            JOIN us_daily_valuation v_yesterday ON t.cik = v_yesterday.cik AND v_yesterday.dt = CURRENT_DATE - INTERVAL '1 day'
+            JOIN us_daily_valuation v_today ON t.cik = v_today.cik AND v_today.dt = %s
+            JOIN us_daily_valuation v_yesterday ON t.cik = v_yesterday.cik AND v_yesterday.dt = %s - INTERVAL '1 day'
         """
 
         with self.db.get_cursor() as cur:
             # 1. 가격 검사
-            cur.execute(price_query)
+            cur.execute(price_query, (target_date, target_date))
             price_rows = cur.fetchall()
             for r in price_rows:
-                today_prc = r['today_prc']
-                yesterday_prc = r['yesterday_prc']
+                if isinstance(r, dict):
+                    cik = r['cik']
+                    today_prc = r['today_prc']
+                    yesterday_prc = r['yesterday_prc']
+                else:
+                    cik = r[0]
+                    today_prc = r[2]
+                    yesterday_prc = r[3]
                 
                 # 시세가 0원 이하인 비정상 오염
                 if today_prc <= 0:
                     anomalies.append({
-                        "cik": r['cik'], "ticker": r['cik'], "type": "ZERO_OR_NEGATIVE_PRICE",
+                        "cik": cik, "ticker": cik, "type": "ZERO_OR_NEGATIVE_PRICE",
                         "detail": f"Price is {today_prc} (<= 0)"
                     })
                     continue
@@ -299,21 +372,28 @@ class DailyRoutine:
                     ratio = today_prc / yesterday_prc
                     if ratio > 1.5 or ratio < 0.5:
                         anomalies.append({
-                            "cik": r['cik'], "ticker": r['cik'], "type": "PRICE_SPIKE",
+                            "cik": cik, "ticker": cik, "type": "PRICE_SPIKE",
                             "detail": f"Price changed from {yesterday_prc} to {today_prc} ({((ratio-1)*100):.1f}%)"
                         })
 
             # 2. Valuation 검사
-            cur.execute(val_query)
+            cur.execute(val_query, (target_date, target_date))
             val_rows = cur.fetchall()
             for r in val_rows:
-                today_pe = r['today_pe']
-                yesterday_pe = r['yesterday_pe']
+                if isinstance(r, dict):
+                    cik = r['cik']
+                    today_pe = r['today_pe']
+                    yesterday_pe = r['yesterday_pe']
+                else:
+                    cik = r[0]
+                    today_pe = r[2]
+                    yesterday_pe = r[3]
+                    
                 if today_pe and yesterday_pe and yesterday_pe > 0 and today_pe > 0:
                     ratio = today_pe / yesterday_pe
                     if ratio > 2.0 or ratio < 0.5:
                         anomalies.append({
-                            "cik": r['cik'], "ticker": r['cik'], "type": "VALUATION_JUMP",
+                            "cik": cik, "ticker": cik, "type": "VALUATION_JUMP",
                             "detail": f"PE changed from {yesterday_pe} to {today_pe} ({ratio:.2f}x)"
                         })
 
@@ -326,9 +406,9 @@ class DailyRoutine:
                     logger.warning(f"Isolating data for CIK {cik} due to {anomaly['type']}")
                     
                     # 1. 시세 삭제
-                    cur.execute("DELETE FROM us_daily_price WHERE cik = %s AND dt = CURRENT_DATE", (cik,))
+                    cur.execute("DELETE FROM us_daily_price WHERE cik = %s AND dt = %s", (cik, target_date))
                     # 2. 가치평가 삭제
-                    cur.execute("DELETE FROM us_daily_valuation WHERE cik = %s AND dt = CURRENT_DATE", (cik,))
+                    cur.execute("DELETE FROM us_daily_valuation WHERE cik = %s AND dt = %s", (cik, target_date))
                     
                     # 데이터 이상 유발 사유로 실패 카운팅 및 지속 시 블랙리스트 자동 편입
                     self.blacklist_mgr.record_failure(
@@ -336,6 +416,8 @@ class DailyRoutine:
                         reason_code="PARSE_ERROR_CRITICAL",
                         detail=f"HealthCheck isolated: {anomaly['type']} - {anomaly['detail']}"
                     )
+
+        return anomalies
 
         return anomalies
 

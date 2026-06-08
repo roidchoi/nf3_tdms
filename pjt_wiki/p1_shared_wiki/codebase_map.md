@@ -34,7 +34,7 @@ tdms_core/p1_shared/
 │   │   └── sync_manager.py      # 논리적 동기화 (폐기 예정, T-008에 흡수)
 │   └── utils/                   # 유틸리티 레이어  ✅
 │       ├── __init__.py
-│       ├── date_utils.py        # 한국 거래일 유틸 (T-001)
+│       ├── date_utils.py        # 한국 거래일 및 미국 주식시장 영업일 유틸
 │       ├── env_detector.py      # 환경 자동 감지 (T-002)
 │       └── retry.py             # 지수 백오프 재시도 데코레이터 (T-001)
 ├── tests/                       ✅
@@ -101,7 +101,7 @@ docs/p1_shared/
 | `db/exceptions.py` | ✅ | DbConnectionError, DbOperationError | DB 예외 계층 |
 | `utils/env_detector.py` | ✅ | EnvDetector | 개발PC/서버PC 자동 감지, .env 프로파일 로드 |
 | `utils/retry.py` | ✅ | retry(), async_retry() | 지수 백오프 데코레이터 |
-| `utils/date_utils.py` | ✅ | get_kr_trading_days() | 한국 주식 거래일 계산 |
+| `utils/date_utils.py` | ✅ | get_kr_trading_days(), is_us_trading_day() | 한국 주식 거래일 및 미국 주식시장 영업일 계산 |
 | `ops/logger.py` | ✅ | get_logger() | 공통 구조화 로거 |
 | `ops/backup_manager.py` | ✅ | BackupManager | pg_dump Fc 백업, pre-data→data→post-data 강건 복원 |
 | `ops/startup_validator.py` | ✅ | StartupValidator | Docker 재기동 후 DB 5종 검증 |
@@ -154,4 +154,5 @@ docs/p1_shared/
 | T-006 | BackupManager 구현, pre-data→data→post-data 강건 복원 |
 | T-007 | StartupValidator 구현, 5종 검증 + FastAPI lifespan 패턴 |
 | T-008 | PhysicalSyncManager 구현 (T-009 흡수), tar+SSH 파이프라인 |
+| 2026-06-05 | 미국 주식시장 영업일 판별 유틸리티 (is_us_trading_day 등) 추가 |
 | 2026-05-28 | KIS/Kiwoom OpenAPI 속도 제어(Throttling Delay) 도입 |

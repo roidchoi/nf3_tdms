@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     SERVER_USDMS_DB_USER: str = "usdms_user"
     SERVER_USDMS_DB_PASSWORD: str = ""
 
+    # 수집 기준 환경변수 추가 (T-008)
+    TARGET_MIN_MARKET_CAP: float = 50000000.0      # $5천만 (진입)
+    TARGET_MIN_PRICE: float = 1.00                 # $1.00 (진입)
+    TARGET_RETAIN_MARKET_CAP: float = 35000000.0   # $3.5천만 (유지/탈퇴)
+    TARGET_RETAIN_PRICE: float = 0.80              # $0.80 (유지/탈퇴)
+
+    # 일일 루틴 스케줄 추가
+    SCHEDULE_DAILY_ROUTINE: str = "07:30"          # 일일 수집 실행 일정 (HH:MM 형식, 디폴트 07:30 KST)
+
     def __init__(self, **values):
         super().__init__(**values)
         # 필수 필드 유효성 검증

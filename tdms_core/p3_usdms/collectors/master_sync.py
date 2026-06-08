@@ -15,6 +15,7 @@ from collections import defaultdict
 from psycopg2.extras import execute_batch, execute_values
 from p3_usdms.repositories.base import BaseRepository
 from p3_usdms.collectors.sec_client import SECClient
+from p3_usdms.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -638,6 +639,8 @@ class MasterSync:
             logger.info(f"Bulk enriched {len(values)} tickers.")
 
     def _update_target_status(self):
+        settings = get_settings()
+        
         with self.db.get_cursor() as cur:
             major_exchanges = "('NASDAQ', 'NYSE', 'AMEX')"
             retention_q = f"""
@@ -645,8 +648,8 @@ class MasterSync:
                 SET is_collect_target = FALSE, updated_at = NOW()
                 WHERE is_collect_target = TRUE
                   AND (
-                      market_cap < 35000000 
-                      OR current_price < 0.80
+                      market_cap < %s 
+                      OR current_price < %s
                       OR exchange NOT IN {major_exchanges}
                       OR country != 'United States'
                       OR quote_type != 'EQUITY'
@@ -654,7 +657,7 @@ class MasterSync:
                       OR current_price IS NULL
                   )
             """
-            cur.execute(retention_q)
+            cur.execute(retention_q, (settings.TARGET_RETAIN_MARKET_CAP, settings.TARGET_RETAIN_PRICE))
             logger.info(f"Retention logic applied. Dropped count: {cur.rowcount}")
             
             entry_q = f"""
@@ -662,11 +665,12 @@ class MasterSync:
                 SET is_collect_target = TRUE, updated_at = NOW()
                 WHERE is_collect_target = FALSE
                   AND is_active = TRUE
-                  AND market_cap >= 50000000
-                  AND current_price >= 1.00
+                  AND market_cap >= %s
+                  AND current_price >= %s
                   AND exchange IN {major_exchanges}
                   AND country = 'United States'
                   AND quote_type = 'EQUITY'
+                  AND cik NOT IN (SELECT cik FROM us_collection_blacklist WHERE is_blocked = TRUE)
             """
-            cur.execute(entry_q)
+            cur.execute(entry_q, (settings.TARGET_MIN_MARKET_CAP, settings.TARGET_MIN_PRICE))
             logger.info(f"Entry logic applied. Added count: {cur.rowcount}")

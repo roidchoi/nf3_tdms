@@ -211,6 +211,14 @@ CREATE TABLE IF NOT EXISTS us_collection_blacklist (
 );
 CREATE INDEX IF NOT EXISTS idx_blacklist_status ON us_collection_blacklist(is_blocked);
 
+-- [10] 거래일 캘린더 (미국 주식 시장 휴장 판단용)
+CREATE TABLE IF NOT EXISTS trading_calendar (
+    dt         DATE        NOT NULL,               -- 날짜
+    opnd_yn    CHAR(1)     NOT NULL,               -- 개장 여부 ('Y'=개장, 'N'=휴장)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- 생성 시각
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- 마지막 업데이트 시각
+    PRIMARY KEY (dt)
+);
 
 -- [Analyst Role Setup]
 DO $$

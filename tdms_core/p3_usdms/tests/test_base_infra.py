@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 # 아직 미구현된 모듈들을 임포트 (Test-First 의도를 위해 작성)
 from p3_usdms.config import Settings, get_settings
 from p3_usdms.repositories.base import BaseRepository
-from p3_usdms.collectors.db_manager import DatabaseManager
 from p3_usdms.main import app
 
 def test_env_detector_resolves_local_development_env():
@@ -56,26 +55,7 @@ def test_startup_validator_passes_all_checks_on_dev(mocker):
     assert report.is_healthy is True
     assert report.volume_info.get("exists", True) is True
 
-def test_db_manager_shim_provides_compatible_context_cursor(mocker):
-    """TC-04: 레거시 코드가 DatabaseManager().get_cursor()를 사용할 때 context manager 및 dict 반환이 작동하는지 검증"""
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = {"cnt": 42}
-    # __enter__ 호출 시 mock_cursor 자신을 리턴하도록 설정하여 with 구문 매칭
-    mock_cursor.__enter__.return_value = mock_cursor
-    mock_conn.cursor.return_value = mock_cursor
-    
-    mock_pool = MagicMock()
-    mock_pool.get_conn.return_value = mock_conn
-    
-    with patch("p3_usdms.repositories.base.DbConnectionPool", return_value=mock_pool):
-        db = DatabaseManager()
-        db._pool = mock_pool
-        
-        with db.get_cursor() as cur:
-            assert cur == mock_cursor
-            res = cur.fetchone()
-            assert res["cnt"] == 42
+# DatabaseManager shim 및 테스트 삭제 완료 (T-008)
 
 def test_fastapi_lifespan_executes_startup_sequence(mocker):
     """TC-05: FastAPI 서비스가 구동(lifespan)될 때 StartupValidator 검증 및 DbConnectionPool 기동 로직이 작동하는지 검증"""
@@ -125,3 +105,66 @@ def test_backup_manager_handles_invalid_dest_path_and_logs_error():
     # pg_dump 명령어 실패 시 RuntimeError가 발생하는 것을 검증
     with pytest.raises(RuntimeError):
         backup_mgr.backup()
+
+
+def test_config_loads_targeting_thresholds(mocker):
+    """
+    [목적] Settings 객체가 신규 추가된 수집 기준 및 스케줄 환경변수들을 기본값 또는 .env로부터 정확히 파싱해내는지 검증
+    """
+    # get_settings 싱글톤 캐시 오염을 방지하기 위해 캐시 강제 무효화
+    mocker.patch("p3_usdms.config._settings", None)
+    
+    # 1. 디폴트 값 검증
+    settings = Settings(SEC_USER_AGENT="TestAgent name@test.com")
+    assert settings.TARGET_MIN_MARKET_CAP == 50000000.0
+    assert settings.TARGET_MIN_PRICE == 1.00
+    assert settings.TARGET_RETAIN_MARKET_CAP == 35000000.0
+    assert settings.TARGET_RETAIN_PRICE == 0.80
+    assert settings.SCHEDULE_DAILY_ROUTINE == "07:30"
+
+    # 2. Mock 환경변수 대입 시 파싱 검증
+    mocker.patch.dict("os.environ", {
+        "TARGET_MIN_MARKET_CAP": "100000000.0",
+        "TARGET_MIN_PRICE": "2.50",
+        "TARGET_RETAIN_MARKET_CAP": "80000000.0",
+        "TARGET_RETAIN_PRICE": "2.00",
+        "SCHEDULE_DAILY_ROUTINE": "08:15"
+    })
+    custom_settings = Settings()
+    assert custom_settings.TARGET_MIN_MARKET_CAP == 100000000.0
+    assert custom_settings.TARGET_MIN_PRICE == 2.50
+    assert custom_settings.TARGET_RETAIN_MARKET_CAP == 80000000.0
+    assert custom_settings.TARGET_RETAIN_PRICE == 2.00
+    assert custom_settings.SCHEDULE_DAILY_ROUTINE == "08:15"
+
+
+@pytest.mark.asyncio
+async def test_scheduler_daily_job_uses_configured_time(mocker):
+    """
+    [목적] lifespan 내의 APScheduler 등록 시 SCHEDULE_DAILY_ROUTINE으로 지정한 설정을 파싱(HH:MM)하여 add_job을 실행하는지 검증
+    """
+    mock_settings = Settings(
+        SEC_USER_AGENT="TestAgent name@test.com",
+        SCHEDULE_DAILY_ROUTINE="10:45"
+    )
+    mocker.patch("p3_usdms.main.get_settings", return_value=mock_settings)
+    
+    mock_scheduler = mocker.MagicMock()
+    mocker.patch("p3_usdms.main.AsyncIOScheduler", return_value=mock_scheduler)
+    
+    # StartupValidator 및 pool/validator 리포트 모킹
+    mocker.patch("p3_usdms.main.create_kdms_pool")
+    mock_validator = mocker.patch("p3_usdms.main.StartupValidator")
+    mock_validator.return_value.validate.return_value.is_healthy = True
+    
+    from p3_usdms.main import lifespan
+    from fastapi import FastAPI
+    
+    app = FastAPI()
+    async with lifespan(app):
+        pass
+        
+    # scheduler.add_job 이 mock_settings에 지정된 10시 45분으로 호출되었는지 검증
+    mock_scheduler.add_job.assert_any_call(
+        mocker.ANY, "cron", day_of_week="tue-sat", hour=10, minute=45, id="daily_collection_job"
+    )

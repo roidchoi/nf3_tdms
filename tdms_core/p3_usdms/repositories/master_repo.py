@@ -1,5 +1,6 @@
 from typing import Optional
 from p3_usdms.repositories.base import BaseRepository
+from p3_usdms.config import get_settings
 
 class MasterRepo(BaseRepository):
     """
@@ -119,10 +120,10 @@ class MasterRepo(BaseRepository):
 
     def apply_targeting_rules(
         self, 
-        min_market_cap_entry: float = 50000000.0, 
-        min_price_entry: float = 1.00,
-        min_market_cap_exit: float = 35000000.0,
-        min_price_exit: float = 0.80
+        min_market_cap_entry: Optional[float] = None, 
+        min_price_entry: Optional[float] = None,
+        min_market_cap_exit: Optional[float] = None,
+        min_price_exit: Optional[float] = None
     ) -> dict[str, int]:
         """
         Dynamic Targeting Rules를 SQL 트랜잭션으로 반영합니다.
@@ -130,6 +131,16 @@ class MasterRepo(BaseRepository):
         - Retention Criteria (Exit): 시가총액 < exit, 가격 < exit 이면 is_collect_target = FALSE
         반환값: {"dropped_count": N, "added_count": M}
         """
+        settings = get_settings()
+        
+        if min_market_cap_entry is None:
+            min_market_cap_entry = settings.TARGET_MIN_MARKET_CAP
+        if min_price_entry is None:
+            min_price_entry = settings.TARGET_MIN_PRICE
+        if min_market_cap_exit is None:
+            min_market_cap_exit = settings.TARGET_RETAIN_MARKET_CAP
+        if min_price_exit is None:
+            min_price_exit = settings.TARGET_RETAIN_PRICE
         # 1. 탈퇴 기준 (Retention Exit)
         exit_query = """
             UPDATE us_ticker_master

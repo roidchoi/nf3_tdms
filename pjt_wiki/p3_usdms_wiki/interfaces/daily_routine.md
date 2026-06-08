@@ -1,7 +1,7 @@
 # DailyRoutine (daily_routine.md)
 
 > **Sub Project**: p3_usdms  
-> **마지막 업데이트**: 2026-06-04  
+> **마지막 업데이트**: 2026-06-05  
 > **물리 경로**: `tdms_core/p3_usdms/tasks/daily_routine.py`  
 > **상태**: ✅ 완료
 
@@ -24,11 +24,14 @@ class DailyRoutine:
         (MasterSync, MarketDataLoader, FinancialParser, MetricCalculator, ValuationCalculator)
         """
 
-    async def run(self, test_limit: int = None) -> Dict[str, Any]:
+    async def run(self, test_limit: int = None, target_date: date = None) -> Dict[str, Any]:
         """
-        일일 수집 파이프라인의 5단계 전체 과정을 비동기로 실행합니다.
+        일일 수집 파이프라인의 전체 과정을 비동기로 실행합니다.
         
         [실행 절차]
+        - Step 0: 캘린더 자동 동기화 (`sync_trading_calendar`) 및 영업일 검사
+          * target_date(기본값: 오늘 - 1일) 시점까지 `trading_calendar` 테이블을 자동 갱신합니다.
+          * target_date가 미국 영업일이 아니면(is_us_trading_day가 False), 즉시 스킵 리포트(`"status": "SKIPPED", "msg": "Skipping Daily Routine: US Holiday or Weekend"`)를 생성하여 종료합니다.
         - Step 1: MasterSync 구동 (SEC 마스터 종목 및 이력 동기화)
         - 대상 추출: Active 수집 대상 중 Blacklist에 의해 차단되지 않은 CIK 목록을 스캔합니다.
         - 동적 Lookback 산출: DB 내 `us_daily_price` 최신 적재 날짜를 조회하여, 오늘 대비 공백 기간(days_diff)에 안전 마진(+2)을 준 동적 `lookback_days`를 결정합니다. (최소 10일, DB 데이터가 없으면 기본 30일)
@@ -39,12 +42,19 @@ class DailyRoutine:
         - Step 5: Health Check & Isolation (적재 데이터 변동 이상치 검사 및 오염 데이터 격리)
           * 시세 이상치(PRICE_SPIKE: 당일 cls_prc <= 0 또는 전일 대비 50% 초과 변동)
           * 밸류에이션 이상치(VALUATION_JUMP: 전일 대비 PE 지표 2.0배 초과 혹은 0.5배 미만 급등락)
-          * 이상 종목 감지 시, 당일 적재된 시세 및 가치평가 레코드를 DB에서 즉시 롤백(DELETE)하고 PARSE_ERROR_CRITICAL 사유로 블랙리스트 실패 누적을 기록합니다.
+          * 이상 종목 감지 시, target_date 당일 적재된 시세 및 가치평가 레코드를 DB에서 즉시 롤백(DELETE)하고 PARSE_ERROR_CRITICAL 사유로 블랙리스트 실패 누적을 기록합니다.
         
         Args:
             test_limit (int, optional): 테스트 스위트 구동 시 제한할 CIK 수
+            target_date (date, optional): 수집 대상일 (생략 시 KST 기준 수집 당일의 전날 날짜 적용)
         Returns:
             Dict[str, Any]: 각 단계의 성공/실패 여부, 소요 시간 및 수집 세부 사항이 포함된 리포트 딕셔너리
+        """
+
+    def sync_trading_calendar(self, limit_date: date) -> None:
+        """
+        `usdms_db`의 `trading_calendar` 테이블을 limit_date 시점까지 동기화합니다.
+        - DB의 MAX(dt)를 구한 뒤, MAX(dt) 다음 날부터 limit_date까지 순차적으로 `is_us_trading_day()`를 확인해 opnd_yn ('Y'/'N') 컬럼을 포함하여 `trading_calendar`에 인서트합니다.
         """
 
     def run_weekly_backfill(self) -> Dict[str, Any]:

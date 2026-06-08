@@ -22,11 +22,11 @@ def test_daily_routine_health_check_isolates_and_rolls_back_anomalies(mocker):
     mock_db.get_cursor.return_value.__enter__.return_value = mock_cursor
 
     from p3_usdms.tasks.daily_routine import DailyRoutine
+    from datetime import date
     routine = DailyRoutine()
     routine.db = mock_db
-    
     # Anomaly Detection 및 롤백 실행
-    anomalies = routine._detect_anomalies_and_quarantine()
+    anomalies = routine._detect_anomalies_and_quarantine(date.today())
     
     assert len(anomalies) == 1
     assert anomalies[0]["type"] == "PRICE_SPIKE"

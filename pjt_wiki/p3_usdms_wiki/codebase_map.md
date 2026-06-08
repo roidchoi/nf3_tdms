@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p3_usdms (미국 시장 데이터 백엔드)  
-> **마지막 업데이트**: 2026-06-04 (Task-005 완료)  
+> **마지막 업데이트**: 2026-06-05 (Task-008 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -51,7 +51,8 @@ tdms_core/p3_usdms/
 │   ├── test_valuation_metric.py # 가치평가, 재무비율, 대량 550종목 루프 성능 및 적재 통합 검증
 │   ├── test_blacklist.py # 블랙리스트 매니저 임계치 도달 및 자동 해제 검증
 │   ├── test_daily_routine.py # 일일 파이프라인 E2E, 이상치 격리 및 수동 API 락 검증
-│   └── test_health_auditors.py # 헬스 API 및 3종 Auditors 모킹 단위/통합 테스트 [NEW]
+│   ├── test_health_auditors.py # 헬스 API 및 3종 Auditors 모킹 단위/통합 테스트 [NEW]
+│   └── test_holiday_sync.py # 미국 영업일 판별, DailyRoutine 스킵 및 캘린더 동기화 검증 [NEW]
 ├── config.py             # 환경 설정 모듈 [✅완성]
 └── main.py               # FastAPI 애플리케이션 진입점 [✅완성]
 ```
@@ -129,6 +130,7 @@ tdms_core/p3_usdms/
 | `tests/test_blacklist.py` | BlacklistManager, BlacklistRepo | ✅ 통과 |
 | `tests/test_daily_routine.py` | DailyRoutine, routers/admin.py | ✅ 통과 |
 | `tests/test_health_auditors.py` | routers/health.py, routers/admin.py (WebSocket / schedules / status), Auditors 3종 | ✅ 통과 [NEW] |
+| `tests/test_holiday_sync.py` | is_us_trading_day, DailyRoutine 휴장 스킵, sync_trading_calendar | ✅ 통과 [NEW] |
 
 ---
 
@@ -153,3 +155,4 @@ tdms_core/p3_usdms/
 | Task-004 | PIT 기반 가치비율(5대 지표) 및 9대 재무비율/3대 YoY 성장률 엔진 구현, 550종목 실 데이터 벌크 캐싱 대용량 최적화 검증 완료 |
 | Task-005 | Blacklist Repo/Manager 구축, MasterEnricher(ADR 필터링), DailyRoutine 5단계 자동화 스케줄러 및 이상치 격리(Quarantine), 수동 실행 Lock API 및 자가 치유형 갭 복구 엔진 최적화 완료 |
 | Task-007 | 헬스체크 API(Freshness/Gaps/Blacklist), 어드민 스케줄 제어 및 WebSocket 로그 스트리밍, 재무/지표/수정주가 감사 엔진 3종 이식 및 CLI 진단 도구 완료 |
+| Task-008 | DatabaseManager 레거시 완전 제거, 수집 임계 기준 및 스케줄 시간 외부화, 미국 휴장 판단 및 trading_calendar 테이블 자동 동기화 구축 완료 |

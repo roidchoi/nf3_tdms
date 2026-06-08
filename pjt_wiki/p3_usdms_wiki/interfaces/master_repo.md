@@ -1,6 +1,6 @@
 # MasterRepo
 
-> 마지막 변경: Task-002-A
+> 마지막 변경: Task-008
 > 소스 위치: [master_repo.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p3_usdms/repositories/master_repo.py)
 
 ### 1. 개요 및 목적
@@ -22,6 +22,14 @@
 
 ##### 4. `get_cik_by_ticker(self, ticker: str) -> Optional[str]`
 - **동작**: 최신 티커명을 기준으로 연결된 CIK(10자리 패딩 문자열)를 역조회합니다. 없는 경우 `None`을 반환합니다.
+
+##### 5. `apply_targeting_rules(self, min_market_cap_entry=None, min_price_entry=None, min_market_cap_exit=None, min_price_exit=None) -> dict`
+- **동작**: 시가총액과 가격 기준에 의거하여 수집 대상 여부(`is_collect_target`)를 업데이트하는 룰을 반영합니다.
+- **매개변수**:
+  - `min_market_cap_entry` / `min_price_entry`: 진입용 시가총액/가격 하한 (None 일 경우 `get_settings()`에서 기본값 fallback)
+  - `min_market_cap_exit` / `min_price_exit`: 유지/탈퇴용 시가총액/가격 하한 (None 일 경우 `get_settings()`에서 기본값 fallback)
+- **반환값**: `{"dropped_count": N, "added_count": M}` 포맷의 딕셔너리
+- **특징**: 블랙리스트에 등재된 CIK는 타겟 선정 과정에서 자동으로 제외하는 조항이 함께 적용됩니다.
 
 ---
 

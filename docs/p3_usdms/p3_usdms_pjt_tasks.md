@@ -95,7 +95,7 @@ T-009 (p4_manager 연동 테스트)
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-008 | `db_manager.py` → `repositories/` 분리 리팩토링 | 원본 `db_manager.py`(GOD NODE, 11KB, 전 쿼리 단일 클래스) → 도메인별 Repository 완전 분리(`price_repo`, `financial_repo`, `valuation_repo`, `master_repo`), `kis_api_core.py` → `p1_shared/KisApiCore` 교체, `ops/` 레거시 스크립트 정리(`run_diagnostics.py` 진입점만 유지), 하드코딩 수집 기준(`$50M`, `$1.00`) `.env` 외부화, 전체 단위 테스트 통과 확인 | 대기 | Medium | T-007 | - | - |
+| T-008 | `db_manager.py` → `repositories/` 분리 리팩토링 | 원본 `db_manager.py`(GOD NODE, 11KB, 전 쿼리 단일 클래스) → 도메인별 Repository 완전 분리(`price_repo`, `financial_repo`, `valuation_repo`, `master_repo`), `kis_api_core.py` → `p1_shared/KisApiCore` 교체, `ops/` 레거시 스크립트 정리(`run_diagnostics.py` 진입점만 유지), 하드코딩 수집 기준(`$50M`, `$1.00`) `.env` 외부화, 전체 단위 테스트 통과 확인 | 완료 | Medium | T-007 | 2026-06-05 | 2026-06-05 |
 
 ### Phase 4: p4_manager 연동
 
@@ -142,9 +142,9 @@ T-009 (p4_manager 연동 테스트)
 | 구분 | 수량 |
 |------|------|
 | 전체 | 10개 |
-| 완료 | 7개 |
+| 완료 | 8개 |
 | 진행 중 | 0개 |
-| 대기 | 3개 |
+| 대기 | 2개 |
 
 ---
 
@@ -178,6 +178,7 @@ T-009 (p4_manager 연동 테스트)
 
 | 날짜 | 변경 내용 | 사유 |
 |------|----------|------|
+| 2026-06-05 | T-008 (db_manager.py 삭제, 설정 외부화, 미국 휴장 및 캘린더 동기화) 구현 완료 | TDD 및 실 DB 통합 테스트 포함 올 그린(GREEN) 패스, 레거시 파일 정리 완료 |
 | 2026-06-04 | T-006 (데이터 조회 REST API 완성) 구현 완료 | TDD 및 실 DB 통합 테스트 포함 올 그린(GREEN) 패스 |
 | 2026-06-03 | T-005 (Blacklist, MasterEnricher, DailyRoutine, APScheduler) 구현 완료 | Task-005 명세 기반 구현 및 TDD 올 그린(GREEN) 패스 |
 | 2026-05-28 | 초안 작성 (9개 Task, Phase 1~4) | PRD v1.0 + usdms_origin v5.0 코드베이스 직접 분석 기반 |

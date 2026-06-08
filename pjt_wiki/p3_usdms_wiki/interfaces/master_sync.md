@@ -1,6 +1,6 @@
 # MasterSync
 
-> 마지막 변경: Task-002-A
+> 마지막 변경: Task-008
 > 소스 위치: [master_sync.py](file:///home/roid2/pjt/nf3/01_nf3_tdms/tdms_core/p3_usdms/collectors/master_sync.py)
 
 ### 1. 개요 및 목적
@@ -40,8 +40,11 @@
 
 ##### 5. `_update_target_status(self)`
 - **동작**: 수집 타겟 조건(Retention 및 Entry)을 만족하는 대상의 `is_collect_target` 플래그를 정기 조정합니다.
-  - **이탈 기준 (Retention Out)**: `market_cap < 35,000,000 OR current_price < 0.80 OR exchange NOT IN ('NASDAQ', 'NYSE', 'AMEX') OR country != 'United States' OR quote_type != 'EQUITY' OR NULL 값`인 수집 타겟은 제외합니다.
-  - **유입 기준 (Entry In)**: `market_cap >= 50,000,000 AND current_price >= 1.00 AND exchange IN ('NASDAQ', 'NYSE', 'AMEX') AND country = 'United States' AND quote_type = 'EQUITY'` 이고 활성화된 종목을 새로운 수집 타겟으로 지정합니다.
+  - **이탈 기준 (Retention Out)**: `market_cap < TARGET_RETAIN_MARKET_CAP` 또는 `current_price < TARGET_RETAIN_PRICE` 또는 `exchange NOT IN ('NASDAQ', 'NYSE', 'AMEX')` 또는 `country != 'United States'` 또는 `quote_type != 'EQUITY'` 혹은 임계 필드가 `NULL`인 대상을 수집 타겟에서 배제합니다.
+  - **유입 기준 (Entry In)**: `market_cap >= TARGET_MIN_MARKET_CAP` 이고 `current_price >= TARGET_MIN_PRICE` 이고 `exchange IN ('NASDAQ', 'NYSE', 'AMEX')` 이고 `country = 'United States'` 이고 `quote_type = 'EQUITY'` 인 활성화된 종목을 새로운 수집 타겟으로 대입합니다.
+- **특징**:
+  - 임계 시가총액 및 가격은 하드코딩되지 않고 `.env`에 정의된 `TARGET_*` 환경변수를 바인딩하여 쿼리 인자로 안전하게 전달됩니다.
+  - 유입 기준 쿼리에 블랙리스트 CIK 제외 조건(`AND cik NOT IN (SELECT cik FROM us_collection_blacklist WHERE is_blocked = TRUE)`)이 추가되어 타겟 지정이 차단됩니다.
 
 ### 3. 주의사항 및 의존성
 - **yfinance 비동기 처리**: `yfinance`는 동기 블로킹 라이브러리이므로 `loop.run_in_executor`를 통해 ThreadPool로 작업을 위임합니다.

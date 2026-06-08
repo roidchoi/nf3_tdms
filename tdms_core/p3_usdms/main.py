@@ -78,8 +78,25 @@ async def lifespan(app: FastAPI):
     # 3. APScheduler 기동 및 태스크 등록
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     
-    # KST 매일 06:30 일일 수집 실행
-    scheduler.add_job(scheduled_daily, "cron", hour=6, minute=30, id="daily_collection_job")
+    # KST 매일 SCHEDULE_DAILY_ROUTINE (화~토) 일일 수집 실행 (T-008)
+    settings = get_settings()
+    try:
+        hour_str, minute_str = settings.SCHEDULE_DAILY_ROUTINE.split(":")
+        parsed_hour = int(hour_str)
+        parsed_minute = int(minute_str)
+    except Exception as e:
+        logger.warning(f"SCHEDULE_DAILY_ROUTINE '{settings.SCHEDULE_DAILY_ROUTINE}' parsing failed, falling back to 07:30 KST. Error: {e}")
+        parsed_hour = 7
+        parsed_minute = 30
+
+    scheduler.add_job(
+        scheduled_daily, 
+        "cron", 
+        day_of_week="tue-sat", 
+        hour=parsed_hour, 
+        minute=parsed_minute, 
+        id="daily_collection_job"
+    )
     
     # KST 매주 토요일 09:00 주간 백필 및 유지관리 실행
     scheduler.add_job(scheduled_weekly, "cron", day_of_week="sat", hour=9, minute=0, id="weekly_maintenance_job")

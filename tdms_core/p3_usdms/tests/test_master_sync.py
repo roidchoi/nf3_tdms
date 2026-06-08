@@ -124,4 +124,93 @@ async def test_master_sync_flow_with_real_db(real_pool):
         
     # Assert
     # (실제 sync_daily 구동 또는 master_repo를 활용하여 물리 DB의 상태가 올바르게 전이되었는지 검증)
-    ...
+    pass
+
+
+def test_master_sync_update_target_status_uses_settings_values(mocker):
+    """
+    [목적] MasterSync._update_target_status() 호출 시 하드코딩 대신 설정변수의 수집 타겟 값이 SQL 쿼리에 바인딩되는지 검증
+    [유도] _update_target_status 내부에서 settings의 값을 쿼리에 대입하여 DB 커서가 실행되도록 유도
+    """
+    from p3_usdms.collectors.master_sync import MasterSync
+    from p3_usdms.config import Settings
+    
+    mock_settings = Settings(
+        SEC_USER_AGENT="TestAgent name@test.com",
+        TARGET_MIN_MARKET_CAP=123456.0,
+        TARGET_MIN_PRICE=7.89,
+        TARGET_RETAIN_MARKET_CAP=10000.0,
+        TARGET_RETAIN_PRICE=5.55
+    )
+    mocker.patch("p3_usdms.collectors.master_sync.get_settings", return_value=mock_settings)
+    
+    sync = MasterSync()
+    # MasterSync._update_target_status()는 self.db.get_cursor()를 사용 (BaseRepository)
+    # contextmanager 체인 전체를 모킹해야 함
+    mock_cursor = MagicMock()
+    mock_ctx = MagicMock()
+    mock_ctx.__enter__ = MagicMock(return_value=mock_cursor)
+    mock_ctx.__exit__ = MagicMock(return_value=False)
+    sync.db.get_cursor = MagicMock(return_value=mock_ctx)
+    
+    sync._update_target_status()
+    
+    # execute가 두 번(retention 업데이트, entry 업데이트) 실행되었는지 확인
+    # 현재 _update_target_status 구현: retention_q는 f-string으로 상수 하드코딩 → T-008에서 settings 참조로 변경 예정
+    assert mock_cursor.execute.call_count == 2
+    
+    calls = mock_cursor.execute.call_args_list
+    
+    # 1. Retention 쿼리 인자 확인: exit 시가총액(10000.0), exit 가격(5.55)
+    # 현재 구현은 f-string 직접 삽입이므로, 리팩토링 후에는 파라미터 바인딩(%s) 방식으로 변경됨
+    retention_call_args = calls[0][0]  # (query, params_tuple) 형태
+    assert len(retention_call_args) == 2, "retention_q는 파라미터 튜플로 바인딩되어야 합니다"
+    assert 10000.0 in retention_call_args[1], "retention에 exit 시가총액이 바인딩되어야 합니다"
+    assert 5.55 in retention_call_args[1], "retention에 exit 가격이 바인딩되어야 합니다"
+    
+    # 2. Entry 쿼리 인자 확인: entry 시가총액(123456.0), entry 가격(7.89)
+    entry_call_args = calls[1][0]
+    assert len(entry_call_args) == 2, "entry_q는 파라미터 튜플로 바인딩되어야 합니다"
+    assert 123456.0 in entry_call_args[1], "entry에 진입 시가총액이 바인딩되어야 합니다"
+    assert 7.89 in entry_call_args[1], "entry에 진입 가격이 바인딩되어야 합니다"
+
+
+def test_master_repo_apply_targeting_rules_fallback_to_settings(mocker):
+    """
+    [목적] MasterRepo.apply_targeting_rules()에 명시적인 인자가 주어지지 않았을 때, get_settings()의 기본값들로 Fallback 처리되는지 검증
+    """
+    from p3_usdms.repositories.master_repo import MasterRepo
+    from p3_usdms.config import Settings
+    
+    mock_settings = Settings(
+        SEC_USER_AGENT="TestAgent name@test.com",
+        TARGET_MIN_MARKET_CAP=900000.0,
+        TARGET_MIN_PRICE=1.50,
+        TARGET_RETAIN_MARKET_CAP=800000.0,
+        TARGET_RETAIN_PRICE=1.20
+    )
+    mocker.patch("p3_usdms.repositories.master_repo.get_settings", return_value=mock_settings)
+    
+    repo = MasterRepo()
+    mock_cursor = MagicMock()
+    mock_ctx = MagicMock()
+    mock_ctx.__enter__ = MagicMock(return_value=mock_cursor)
+    mock_ctx.__exit__ = MagicMock(return_value=False)
+    repo.get_cursor = MagicMock(return_value=mock_ctx)
+    
+    repo.apply_targeting_rules() # 파라미터 전달 안 함
+    
+    # execute 호출 인자에서 mock_settings의 값이 적용되었는지 검증
+    calls = mock_cursor.execute.call_args_list
+    assert len(calls) == 2
+    
+    # exit_query 실행 시의 인자에 800000.0, 1.20이 바인딩 되었는지 검사
+    exit_args = calls[0][0][1] # tuple parameter
+    assert exit_args[0] == 800000.0
+    assert exit_args[1] == 1.20
+    
+    # entry_query 실행 시의 인자에 900000.0, 1.50이 바인딩 되었는지 검사
+    entry_args = calls[1][0][1]
+    assert entry_args[0] == 900000.0
+    assert entry_args[1] == 1.50
+

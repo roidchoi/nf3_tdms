@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-04
-> **총 등록 파일**: 29개
+> **마지막 업데이트**: 2026-06-05
+> **총 등록 파일**: 30개
 
 ---
 
@@ -45,6 +45,7 @@
 | `backup_manager.md` | BackupManager | **58** | pg_dump 백업, pre-data→data→post-data 강건 복원 |
 | `startup_validator.md` | StartupValidator | **48** | Docker 재기동 후 5종 검증, FastAPI lifespan 패턴 |
 | `physical_sync_manager.md` | PhysicalSyncManager | **20** | tar+SSH 물리 동기화, 5단계 파이프라인 |
+| `date_utils.md` | — | — | 한국 거래일 및 미국 주식시장 영업일 판별 공통 유틸리티 |
 | `kis_api_core.md` | KisApiCore | — | KIS REST API 연동, OAuth2 토큰 자동 관리, 지수 백오프 재시도 및 스로틀 지연 적용 |
 | `kiwoom_api_core.md` | KiwoomApiCore | — | Kiwoom REST API 연동, OAuth2 토큰 자동 관리, 초당 5회 제한 스로틀 0.25초 지연 적용 |
 
@@ -109,14 +110,15 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: ✅ T-007 완료 (헬스·어드민 API 및 Auditors, WebSocket, 진단 도구 완료 및 테스트 통과)
+> **상태**: ✅ T-008 완료 (DatabaseManager 레거시 제거, 수집 기준/스케줄 설정 외부화, 미국 휴장 판단 및 trading_calendar 동기화 완료)
 
 ### 코어 문서
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | 2026-06-04 |
-| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | 2026-06-04 |
+| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | 2026-06-05 |
+| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | 2026-06-05 |
+| `interfaces/schema_usdms_db.md` | usdms_db TimescaleDB 스키마 구성, 인덱스 및 관계 명세 | 2026-06-08 |
 
 ### interfaces/ (미국 시장 마스터 수집 핵심 인터페이스)
 
@@ -183,9 +185,10 @@
 
 ### 📐 최근 변경된 인터페이스
 
+- `DailyRoutine`: target_date 파라미터화, 미국 휴장일 자동 스킵 및 trading_calendar 테이블 자동 동기화 → `p3_usdms_wiki/interfaces/daily_routine.md`
+- `date_utils`: 미국 주식시장 영업일/공휴일 판정 및 마지막 영업일 산출 공통 유틸리티 → `p1_shared_wiki/interfaces/date_utils.md`
 - `Health/Admin API Endpoints`: Freshness/Gaps 판정 및 동적 스케줄링, WebSocket 실시간 로그 중계 → `p3_usdms_wiki/interfaces/health_admin_api.md`
 - `Auditors 3종`: 재무(항등식/Null), 지표(ROE/Outlier), 수정주가(KIS API 대조) 감사 엔진 → `p3_usdms_wiki/interfaces/auditors.md`
-- `DailyRoutine`: 5단계 일일 자동화 및 이상치 격리, 자가 치유 갭 복구 적용 → `p3_usdms_wiki/interfaces/daily_routine.md`
 - `BlacklistManager`: 일시적/영구적 에러 분기 및 쿨다운 자동 해제 관리 → `p3_usdms_wiki/interfaces/blacklist_manager.md`
 - `PhysicalSyncManager`: T-008에서 T-009 흡수, tar+SSH 파이프라인 확정 → `p1_shared_wiki/interfaces/physical_sync_manager.md`
 - `Data API Endpoints`: REST API 7종 및 Arrow IPC 스트리밍 지원 완료 → `p3_usdms_wiki/interfaces/data_api_endpoints.md`
@@ -193,9 +196,9 @@
 
 ### 🔄 진행중인 작업
 
-- p1_shared: ✅ 완료 (T-001~T-008)
+- p1_shared: ✅ 완료 (T-001~T-008, 미국 영업일 판별 추가 완료)
 - p2_kdms: 🔄 진행 중
-- p3_usdms: ✅ 완료 (T-001~T-007)
+- p3_usdms: ✅ 완료 (T-001~T-008)
 - p4_manager: ⬜ 미착수
 
 ---
