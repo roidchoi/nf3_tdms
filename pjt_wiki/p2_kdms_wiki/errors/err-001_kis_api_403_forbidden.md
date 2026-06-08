@@ -4,7 +4,7 @@ sub_project: p2_kdms
 severity: high
 status: confirmed
 last_seen: Task-010
-related: [[decisions/dec-004_kis_api_throttling_strategy.md]]
+related: [[p2_kdms_wiki/decisions/dec-004_kis_api_throttling_strategy.md]]
 ---
 
 # [p2ERR-001] KIS API 403 Forbidden IP 차단 장애

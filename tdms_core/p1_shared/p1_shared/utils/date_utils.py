@@ -19,9 +19,27 @@ def get_kr_trading_days(start_date: date, end_date: date) -> list[date]:
         current += timedelta(days=1)
     return days
 
-def last_kr_trading_day(reference: date) -> date:
-    """reference 기준 직전(과거) 영업일 반환."""
+def is_us_trading_day(dt: date) -> bool:
+    """미국 주식시장 영업일 여부를 확인합니다."""
+    us_holidays = holidays.US(years=dt.year)
+    return dt.weekday() < 5 and dt not in us_holidays
+
+def get_us_trading_days(start_date: date, end_date: date) -> list[date]:
+    """start_date ~ end_date(포함) 사이의 미국 영업일 목록 (오름차순)."""
+    if start_date > end_date:
+        raise ValueError("start_date cannot be after end_date")
+    days = []
+    current = start_date
+    while current <= end_date:
+        if is_us_trading_day(current):
+            days.append(current)
+        current += timedelta(days=1)
+    return days
+
+def last_us_trading_day(reference: date) -> date:
+    """reference 기준 직전(과거) 미국 영업일 반환."""
     current = reference - timedelta(days=1)
-    while not is_kr_trading_day(current):
+    while not is_us_trading_day(current):
         current -= timedelta(days=1)
     return current
+

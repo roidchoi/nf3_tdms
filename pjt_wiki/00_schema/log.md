@@ -12,6 +12,25 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-08] Task완료 | usdms_db TimescaleDB 11개 테이블의 컬럼, 고유키, 인덱스 및 관계 명세를 상세 수록한 schema_usdms_db.md 신규 지식화 완료. 테스트/임시 테이블 잔해 자동 탐색 및 정리 스크립트 cleanup_database.py 구축 완료. MoC(index.md) 현행화 완료.
+
+## [2026-06-05] Task완료 | p3_usdms 미국 시장 백엔드 T-008 완료에 따른 의존성/임계치/스케줄 설정 외부화 정보 environment.md 갱신, daily_routine.md 및 master_sync.md, master_repo.md 인터페이스 갱신 완료. 아울러 p1_shared 내 미국 주식시장 영업일 판별 기능 date_utils.md 신규 인터페이스 등록 및 codebase_map, MoC(index.md) 현행화 완료.
+
+## [2026-06-04] Task완료+의사결정 | p3_usdms 미국 시장 백엔드 T-007(헬스체크 및 어드민 API, Auditors 3종 마이그레이션, 실시간 WebSocket 로그 전송) 완료에 따른 신규 인터페이스 문서(health_admin_api.md, auditors.md) 등록 및 기존 레포지토리 인터페이스(price_repo.md, blacklist_repo.md), codebase_map, decisions(USDMS_DEC-004) 및 MoC(index.md) 현행화 완료.
+
+## [2026-06-04] Task완료 | p3_usdms 미국 시장 백엔드 T-006(데이터 조회 REST API 완성) 완료에 따른 REST API 7종 엔드포인트 명세(data_api_endpoints.md) 신규 등록, pyarrow 패키지 추가에 따른 환경 문서(environment.md) 및 MoC(index.md) 현행화 완료.
+
+
+## [2026-06-04] Task완료+의사결정+에러등록 | p3_usdms 미국 시장 백엔드 T-005(Blacklist + MasterEnricher + 일일 자동화) 완료에 따른 핵심 인터페이스(blacklist_repo, blacklist_manager, master_enricher, daily_routine) 추가, 60일 룩백 자가 치유 및 쿼리 병목 최적화(USDMS_DEC-002, USDMS-ERR-002), 이원화 에러 분기 및 자동 릴리즈(USDMS_DEC-003) 위키 지식화 완료.
+
+## [2026-06-02] Task완료 | p3_usdms 미국 시장 백엔드 T-004(가치평가 및 재무비율 대량 실 계산) 완료에 따른 핵심 인터페이스(valuation_repo, valuation_engine) 추가 및 550종목 DB 캐싱 최적화(Bulk Cache Caching) 위키 지식화 완료.
+
+## [2026-06-02] Task완료 | p3_usdms 미국 시장 백엔드 T-003(SEC XBRL 재무 파싱 + 주식수 이력) 완료에 따른 핵심 인터페이스(financial_parser, financial_repo, xbrl_mapper) 및 의사결정(USDMS_DEC-001) 위키 지식화 완료.
+
+## [2026-06-01] Task완료 | p3_usdms 미국 시장 백엔드 T-002-A 완료에 따른 핵심 인터페이스(sec_client, master_sync, master_repo) 문서화 완료 및 SECClient get_company_facts 누락 기능 복구 및 검증 완료.
+
+## [2026-05-29] 에러등록 | WSL2 도커 데스크탑 바인드 마운트 동기화 유실로 인한 빈 DB 기동 및 IP 변경 에러(USDMS-ERR-001) 등록 완료.
+
 ## [2026-05-28] 환경변경+의사결정 | Kiwoom REST API의 초당 5회 한도 초과 차단 방지를 위한 0.25초 스로틀링 딜레이(P2DEC-004) 도입 완료. 관련 pytest 6종 통과 검증 완료.
 
 ## [2026-05-28] 의사결정+에러등록+Task완료 | KIS API Rate Limit 차단 회피를 위한 안전 마진 스로틀링 지연 도입(P2DEC-004, p2ERR-001) 및 시가총액 bigint 정수 오버플로우 방어막 패치(p2ERR-002) 적용 완료. 전 종목 E2E 청정 데이터 수집 백필 완수.

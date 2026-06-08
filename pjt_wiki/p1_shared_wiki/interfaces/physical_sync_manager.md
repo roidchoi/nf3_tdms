@@ -3,7 +3,7 @@
 > **파일**: `tdms_core/p1_shared/p1_shared/ops/db_sync.py`
 > **Task**: T-008 (T-009 통합 흡수)
 > **Graphify God Node**: 20 edges
-> **관련**: `[[interfaces/env_detector.md]]`, `[[decisions/dec-001_physical_sync.md]]`
+> **관련**: `[[p1_shared_wiki/interfaces/env_detector.md]]`, `[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`
 
 ---
 

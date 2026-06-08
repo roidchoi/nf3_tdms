@@ -3,7 +3,7 @@
 > **파일**: `tdms_core/p1_shared/p1_shared/ops/backup_manager.py`
 > **Task**: T-006
 > **Graphify God Node**: 58 edges (3위)
-> **관련**: `[[interfaces/startup_validator.md]]`, `[[decisions/dec-001_physical_sync.md]]`
+> **관련**: `[[p1_shared_wiki/interfaces/startup_validator.md]]`, `[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`
 
 ---
 
@@ -104,7 +104,7 @@ vol_info = mgr.check_volume_exists()
 **`section_order=True` (pre-data → data → post-data)**:
 - `pg_restore -j 8` 병렬 복원 시 FK/인덱스가 먼저 생성되어 data INSERT가 실패하는 문제 발생
 - 섹션을 분리하여 순서대로 복원함으로써 해결
-- 참조: `[[decisions/dec-002_pg_restore_section_order.md]]`
+- 참조: `[[p1_shared_wiki/decisions/dec-002_pg_restore_section_order.md]]`
 
 **볼륨 경로**: `/var/lib/docker/volumes/{volume_name}/_data`
 - TimescaleDB의 실제 `PGDATA`는 컨테이너 내부 `/home/postgres/pgdata/data`

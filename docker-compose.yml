@@ -3,11 +3,11 @@ services:
   kdms_db:
     image: timescale/timescaledb-ha:pg16
     container_name: kdms_timescaledb
-    restart: always
+    restart: on-failure:5
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-roid}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-kdms_db}
+      POSTGRES_USER: ${DEV_KDMS_DB_USER:-roid}
+      POSTGRES_PASSWORD: ${DEV_KDMS_DB_PASSWORD:-password}
+      POSTGRES_DB: ${DEV_KDMS_DB_NAME:-kdms_db}
       PGDATA: /var/lib/postgresql/data
     volumes:
       - ./data/kdms_db:/var/lib/postgresql/data
@@ -16,16 +16,33 @@ services:
       - "5432:5432"
     networks:
       - tdms-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sleep 15
+        rm -f /var/lib/postgresql/data/postmaster.pid
+        (
+          sleep 30
+          until pg_isready -h localhost -p 5432 -d template1; do sleep 2; done
+          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM stock_info LIMIT 1;" > /dev/null 2>&1
+          if [ $$? -ne 0 ]; then
+            echo "❌ [KDMS 검증 실패] 물리 데이터 마운트 유실 또는 테이블 미존재 감지! 컨테이너를 중지합니다."
+            kill -3 1
+          else
+            echo "✅ [KDMS 검증 통과] 물리 데이터 마운트 정합성 확보 완료."
+          fi
+        ) &
+        exec docker-entrypoint.sh postgres
 
   # 2. USDMS 데이터베이스 (TimescaleDB - PG16 - 서버 버전 일치)
   usdms_db:
     image: timescale/timescaledb@sha256:9e9f50161784dc57d3f547b89ded4af73553f9acb4677345ed05f45af7c7f664
     container_name: usdms_timescaledb
-    restart: always
+    restart: on-failure:5
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-roid}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: usdms_db
+      POSTGRES_USER: ${DEV_USDMS_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DEV_USDMS_DB_PASSWORD:-password}
+      POSTGRES_DB: ${DEV_USDMS_DB_NAME:-usdms_db}
       PGDATA: /var/lib/postgresql/data
     volumes:
       - ./data/usdms_db:/var/lib/postgresql/data
@@ -34,6 +51,23 @@ services:
       - "5433:5432"
     networks:
       - tdms-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sleep 15
+        rm -f /var/lib/postgresql/data/postmaster.pid
+        (
+          sleep 30
+          until pg_isready -h localhost -p 5432 -d template1; do sleep 2; done
+          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM us_ticker_master LIMIT 1;" > /dev/null 2>&1
+          if [ $$? -ne 0 ]; then
+            echo "❌ [USDMS 검증 실패] 물리 데이터 마운트 유실 또는 테이블 미존재 감지! 컨테이너를 중지합니다."
+            kill -3 1
+          else
+            echo "✅ [USDMS 검증 통과] 물리 데이터 마운트 정합성 확보 완료."
+          fi
+        ) &
+        exec docker-entrypoint.sh postgres
 
 networks:
   tdms-net:

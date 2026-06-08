@@ -43,4 +43,4 @@ LIMIT 1;
 
 - `retrieved_at` 컬럼을 **인덱스의 DESC 기준**으로 구성하여 최신 데이터 조회 성능 확보
 - 동일 `(stk_cd, stac_yymm, div_cls_code)` 조합에 여러 버전 존재 가능 — 쿼리 시 `ORDER BY retrieved_at DESC LIMIT 1`로 최신 버전 조회
-- [[ref_kdms_wiki/interfaces/db_schema]] 의 `financial_statements` 스키마 참조
+- [[migration-pjt/ref_kdms_wiki/interfaces/db_schema.md]] 의 `financial_statements` 스키마 참조

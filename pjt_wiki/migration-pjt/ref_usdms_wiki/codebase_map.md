@@ -127,6 +127,6 @@ Step 6: Health Check (이상징후 감지)
 
 - **CIK 중심 관리**: Ticker 대신 SEC CIK(불변 식별자)를 PK로 → [[ref_usdms_wiki/interfaces/cik_centric_identity]]
 - **XBRL 파서 그룹화 로직**: `(FY, FP)` 기준 그룹화로 분기 이산값 역산 → [[ref_usdms_wiki/interfaces/financial_parser_logic]]
-- **PIT Valuation**: `pandas.merge_asof(direction='backward')` 기반 시점 매칭 → [[ref_usdms_wiki/interfaces/pit_sec_pattern]]
+- **PIT Valuation**: `pandas.merge_asof(direction='backward')` 기반 시점 매칭 → [[migration-pjt/ref_usdms_wiki/interfaces/pit_sec_pattern.md]]
 - **블랙리스트 관리**: `SEC_403`, `PARSE_ERROR`, `NO_DATA` 코드 체계 → `backend/utils/blacklist_manager.py`
-- **DB 이관 가이드**: KDMS 운영 PC와 공존 가능 (포트 5435/8005 분리) → [[ref_usdms_wiki/decisions/coexistence_with_kdms]]
+- **DB 이관 가이드**: KDMS 운영 PC와 공존 가능 (포트 5435/8005 분리) → [[migration-pjt/ref_usdms_wiki/decisions/coexistence_with_kdms.md]]

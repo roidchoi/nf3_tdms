@@ -2,7 +2,7 @@
 
 > **Sub Project**: p2_kdms
 > **마지막 업데이트**: 2026-05-26
-> **관련**: `[[interfaces/schema_kdms_db.md]]`, `[[interfaces/fastapi_lifespan.md]]`, `[[environment.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/schema_kdms_db.md]]`, `[[p2_kdms_wiki/interfaces/fastapi_lifespan.md]]`, `[[p2_kdms_wiki/environment.md]]`
 
 ---
 

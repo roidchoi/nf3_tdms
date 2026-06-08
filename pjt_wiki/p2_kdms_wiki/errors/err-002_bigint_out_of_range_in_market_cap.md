@@ -4,7 +4,7 @@ sub_project: p2_kdms
 severity: critical
 status: confirmed
 last_seen: Task-010
-related: [[interfaces/schema_kdms_db.md]], [[decisions/dec-004_kis_api_throttling_strategy.md]]
+related: [[p2_kdms_wiki/interfaces/schema_kdms_db.md]], [[p2_kdms_wiki/decisions/dec-004_kis_api_throttling_strategy.md]]
 ---
 
 # [p2ERR-002] 시가총액 벌크 적재 시 PostgreSQL bigint out of range 오류

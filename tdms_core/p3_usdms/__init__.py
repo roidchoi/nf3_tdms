@@ -1,0 +1,2 @@
+# p3_usdms package root
+__version__ = "0.1.0"

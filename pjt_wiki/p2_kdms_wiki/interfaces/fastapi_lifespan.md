@@ -2,7 +2,7 @@
 
 > **파일**: `tdms_core/p2_kdms/main.py`
 > **역할**: FastAPI 앱 진입점 — DB 풀 초기화, 검증, APScheduler 크론 등록
-> **관련**: `[[interfaces/data_api_endpoints.md]]`, `[[interfaces/settings_config.md]]`, `[[codebase_map.md]]`
+> **관련**: `[[p2_kdms_wiki/interfaces/data_api_endpoints.md]]`, `[[p2_kdms_wiki/interfaces/settings_config.md]]`, `[[p2_kdms_wiki/codebase_map.md]]`
 
 ---
 

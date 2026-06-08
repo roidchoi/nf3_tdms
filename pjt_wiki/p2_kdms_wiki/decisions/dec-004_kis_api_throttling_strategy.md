@@ -3,7 +3,7 @@
 > **Sub Project**: p2_kdms
 > **Status**: active
 > **Date**: 2026-05-28
-> **관련**: `[[errors/err-001_kis_api_403_forbidden.md]]`, `[[errors/err-002_bigint_out_of_range_in_market_cap.md]]`, `[[interfaces/schema_kdms_db.md]]`
+> **관련**: `[[p2_kdms_wiki/errors/err-001_kis_api_403_forbidden.md]]`, `[[p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md]]`, `[[p2_kdms_wiki/interfaces/schema_kdms_db.md]]`
 
 ---
 

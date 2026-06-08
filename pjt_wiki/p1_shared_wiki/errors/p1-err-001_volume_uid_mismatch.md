@@ -4,7 +4,7 @@
 > **Severity**: High
 > **발생 Task**: T-008 (KDMS 마이그레이션 2026-05-07)
 > **상태**: 해결됨
-> **관련**: `[[decisions/dec-001_physical_sync.md]]`, `[[interfaces/physical_sync_manager.md]]`
+> **관련**: `[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`, `[[p1_shared_wiki/interfaces/physical_sync_manager.md]]`
 
 ---
 
