@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useStatusStore } from '@/stores/statusStore'
 import TaskStatusCard from '@/components/dashboard/TaskStatusCard.vue'
+import LogTerminal from '@/components/dashboard/LogTerminal.vue'
 
 const statusStore = useStatusStore()
 
@@ -147,8 +148,18 @@ onUnmounted(() => {
         />
       </div>
     </main>
+
+    <!-- 실시간 로그 모니터링 섹션 -->
+    <section class="log-monitor-wrapper">
+      <div class="section-title">
+        <h2>📊 실시간 로그 스트리밍 (Output Stream)</h2>
+        <div class="divider"></div>
+      </div>
+      <LogTerminal />
+    </section>
   </div>
 </template>
+
 
 <style scoped>
 .dashboard-container {

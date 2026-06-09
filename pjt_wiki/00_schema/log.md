@@ -12,7 +12,10 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-09] Task완료 | p4_manager 통합 관리 레이어 T-004(WebSocket 로그 스트리밍 이중화 프록시) 완료에 따른 codebase_map.md, environment.md(websockets 패키지 버전 추가), interfaces/api_routing_map.md(WebSocket 프록시 엔드포인트 추가), interfaces/ws_proxy_logs.md(WebSocket 중계 프록시 API 상세 명세) 신규 지식화 및 MoC(index.md) 현행화 완료.
+
 ## [2026-06-09] Task완료 | p4_manager 통합 관리 레이어 T-003(통합 대시보드 UI 및 태스크 수동 제어) 완료에 따른 codebase_map.md, environment.md(Node/Vite/Vue3/Vitest 환경 추가, TS5101/TS6133 환경 해결법 수록), interfaces/api_routing_map.md(POST /api/mgr/run 추가), interfaces/post_run_task.md(수동 태스크 기동 API 명세) 신규 지식화 및 MoC(index.md) 현행화 완료.
+
 
 ## [2026-06-09] Task완료+의사결정+에러등록 | p4_manager 통합 관리 레이어 T-002(백엔드 통합 상태 집계 서비스 개발) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-002 백그라운드 캐싱 폴링 기법 및 실시간 API 장애 격리 레이어 적용), interfaces/get_integrated_status.md(통합 상태 집계 API 명세) 신규 지식화 및 errors/p4err-001_module_not_found_tdms_core.md(Docker 임포트 경로 환경 변수 해결) 추가 등록. MoC(index.md) 현행화 완료.
 

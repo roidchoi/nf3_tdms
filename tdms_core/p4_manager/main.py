@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from tdms_core.p4_manager.config import settings
-from tdms_core.p4_manager.routers import manager
+from tdms_core.p4_manager.routers import manager, proxy_ws
 from tdms_core.p4_manager.services.status_service import status_service
 
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="P4 Manager Backend", lifespan=lifespan)
 
 app.include_router(manager.router, prefix="/api/mgr")
+app.include_router(proxy_ws.router, prefix="/api/mgr")
 
 @app.get("/api/mgr/health")
 def health_check():
@@ -44,3 +45,4 @@ def health_check():
     p4 백엔드 상태를 반환하는 기본 헬스 체크 엔드포인트
     """
     return {"status": "ok", "service": "p4_backend"}
+

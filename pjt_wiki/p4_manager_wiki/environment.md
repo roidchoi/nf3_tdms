@@ -1,7 +1,7 @@
 # Sub Project 개발/운영 환경 (environment.md)
 
 > **Sub Project**: p4_manager  
-> **마지막 업데이트**: 2026-06-09  
+> **마지막 업데이트**: 2026-06-09 (T-004 완료)  
 > **타입**: Type E (배경/환경 지식)  
 > **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
 
@@ -11,7 +11,7 @@
 - **환경명**: `tdms_p4_env`
 - **생성 방법**: `conda create -n tdms_p4_env python=3.12 -y`
 - **활성화**: `conda activate tdms_p4_env`
-- **requirements**: `tdms_core/p4_manager/requirements.txt` (API 모킹용 `respx` 추가됨)
+- **requirements**: `tdms_core/p4_manager/requirements.txt` (API 모킹용 `respx`, 실시간 중계용 `websockets` 추가됨)
 - **editable install**: `conda run -n tdms_p4_env uv pip install -e .`
 - **프론트엔드 빌드 환경**: Node.js `v20` (Docker Build: `node:20-alpine`) / Package Manager: `npm`
 
@@ -31,6 +31,7 @@
 | pydantic-settings | 2.14.1 | 환경 변수 및 설정 데이터 인스턴스 검증 관리 |
 | httpx | 0.28.1 | 비동기 HTTP 호출 및 백엔드 간 비동기 폴링 |
 | pandas | 3.0.3 | 갭 체크 및 통계 등 테이블 지표 분석 연산 |
+| websockets | 12.0 | 비동기 WebSocket 업스트림 연결 클라이언트 라이브러리 |
 | pytest | 9.0.3 | TDD 단위/격리/통합 테스트 프레임워크 |
 | respx | 0.23.1 | HTTP API 모킹 테스트 및 격리 검증용 툴 |
 
@@ -56,7 +57,9 @@
 | p2_kdms (백엔드) | HTTP API (포트 8000) | 실시간 (프록시 라우팅) | Nginx `/api/kr/` 리버스 프록시 연동 |
 | p3_usdms (백엔드) | HTTP API (포트 8005) | 실시간 (프록시 라우팅) | Nginx `/api/us/` 리버스 프록시 연동 |
 | p4_backend (백엔드) | HTTP API (포트 8010) | 실시간 (프록시 라우팅) | Nginx `/api/mgr/` 리버스 프록시 연동 |
-| WebSocket logs | WS 프로토콜 | 실시간 (중계 프록시) | Nginx `/ws/logs/kr`, `/ws/logs/us` 중계 |
+| WebSocket logs | WS 프로토콜 | 실시간 (중계 프록시) | Nginx `/ws/logs/kr` 및 `us`를 P4 백엔드 `/api/mgr/ws/logs/*` 중계 경로로 대리 위임 |
+
+
 
 ---
 
