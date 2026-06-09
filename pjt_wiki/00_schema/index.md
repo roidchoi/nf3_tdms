@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-05
-> **총 등록 파일**: 30개
+> **마지막 업데이트**: 2026-06-09
+> **총 등록 파일**: 32개
 
 ---
 
@@ -161,21 +161,28 @@
 ## p4_manager_wiki (p4_manager 통합 관리 레이어)
 
 > **역할**: 한국/미국 백엔드 통합 모니터링 UI 및 오케스트레이션
-> **상태**: 🔄 MVP 인프라 구축 완료 (2026-06-09)
+> **상태**: 🔄 T-002 백엔드 상태 집계 서비스 완료 (2026-06-09)
 
 ### 코어 문서
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 9개 파일의 물리구조, 핵심 데이터 흐름, 테스트 현황 | T-001 |
-| `environment.md` | tdms_p4_env Conda, 패키지 실버전, Nginx & Docker 포트 매핑, Nginx resolver 장애이슈 해결법 | T-001 |
-| `decisions.md` | Nginx 동적 리졸브 및 변수 기반 프록시 패스 적용 결정 (P4DEC-001) | T-001 |
+| `codebase_map.md` | 13개 파일의 물리구조, 핵심 데이터 흐름, 테스트 현황 | T-002 |
+| `environment.md` | tdms_p4_env Conda, 패키지 실버전, Nginx & Docker 포트 매핑, P4ERR-001 도커 임포트 이슈 해결법 | T-002 |
+| `decisions.md` | Nginx 동적 리졸브(P4DEC-001) 및 백그라운드 캐싱 폴링/장애 격리(P4DEC-002) 적용 결정 | T-002 |
 
 ### interfaces/ (인터페이스 명세)
 
 | 파일 | 핵심 클래스/모듈 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|---|
 | `api_routing_map.md` | — | `/api/mgr/health` 헬스체크 API 명세 및 Nginx 80포트 리버스 프록시 / WebSocket 5종 라우팅 맵 | T-001 |
+| `get_integrated_status.md` | status_service | `/api/mgr/status` 통합 상태 집계 API 명세 및 KR/US 예외 격리(Fault Isolation) 리턴 스키마 | T-002 |
+
+### errors/ (해결된 에러 기록)
+
+| 파일 | 에러 요약 | Severity |
+|---|---|---|
+| `p4err-001_module_not_found_tdms_core.md` | 도커 백엔드 기동 시 `tdms_core` 임포트 불가 (PYTHONPATH 부재) -> Dockerfile 내 `ENV PYTHONPATH="/app"` 추가 주입 | High |
 
 ---
 
@@ -192,6 +199,7 @@
 
 ### 📐 최근 변경된 인터페이스
 
+- `get_integrated_status`: `/api/mgr/status` 통합 상태 집계 API 명세 및 KR/US 예외 격리 리턴 스키마 → `p4_manager_wiki/interfaces/get_integrated_status.md`
 - `api_routing_map`: `/api/mgr/health` 백엔드 API 명세 및 Nginx 리버스 프록시/WS 중계 경로 맵 → `p4_manager_wiki/interfaces/api_routing_map.md`
 - `DailyRoutine`: target_date 파라미터화, 미국 휴장일 자동 스킵 및 trading_calendar 테이블 자동 동기화 → `p3_usdms_wiki/interfaces/daily_routine.md`
 - `date_utils`: 미국 주식시장 영업일/공휴일 판정 및 마지막 영업일 산출 공통 유틸리티 → `p1_shared_wiki/interfaces/date_utils.md`
@@ -207,7 +215,7 @@
 - p1_shared: ✅ 완료 (T-001~T-008, 미국 영업일 판별 추가 완료)
 - p2_kdms: 🔄 진행 중
 - p3_usdms: ✅ 완료 (T-001~T-008)
-- p4_manager: 🔄 진행 중 (T-001 완료)
+- p4_manager: 🔄 진행 중 (T-002 완료)
 
 ---
 

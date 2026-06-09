@@ -12,7 +12,7 @@
 - **환경명**: `tdms_p4_env`
 - **생성 방법**: `conda create -n tdms_p4_env python=3.12 -y`
 - **활성화**: `conda activate tdms_p4_env`
-- **requirements**: `tdms_core/p4_manager/requirements.txt`
+- **requirements**: `tdms_core/p4_manager/requirements.txt` (API 모킹용 `respx` 추가됨)
 - **editable install**: `conda run -n tdms_p4_env uv pip install -e .`
 
 ---
@@ -31,6 +31,7 @@
 | httpx | 0.28.1 | 비동기 HTTP 호출 및 백엔드 간 비동기 폴링 |
 | pandas | 3.0.3 | 갭 체크 및 통계 등 테이블 지표 분석 연산 |
 | pytest | 9.0.3 | TDD 단위/격리/통합 테스트 프레임워크 |
+| respx | 0.23.1 | HTTP API 모킹 테스트 및 격리 검증용 툴 |
 
 ---
 
@@ -71,3 +72,4 @@
 | 이슈 | 발생 조건 | 해결법 |
 |---|---|---|
 | **Upstream 호스트 미조인으로 인한 Nginx 기동 불가** | Nginx 컨테이너 부팅 시, 연동 백엔드 컨테이너(`p2_kdms`, `p3_usdms`)가 가동 전이거나 도커 DNS에 등록되지 않은 경우 Nginx가 `upstream host not found` 에러로 크래시 발생 | `nginx.conf` 내에 도커 내장 DNS(`resolver 127.0.0.11 valid=10s;`)를 정의하고, `set $variable host;` 구문과 `rewrite ^... break;`를 적용하여 런타임에 동적으로 대상을 Resolve하도록 구성합니다.<br>*(주의: `set` 지시어는 `rewrite ... break;`보다 먼저 수행되도록 배치되어야 함)* |
+| **도커 백엔드 기동 시 모듈 임포트 실패 (P4ERR-001)** | `p4_backend` 컨테이너 기동 시 상위 `tdms_core` 패키지를 찾지 못해 `ModuleNotFoundError: No module named 'tdms_core'` 에러가 나면서 무한 재기동 루프에 빠짐 | `backend.Dockerfile` 내부에 환경 변수 `ENV PYTHONPATH="/app"`을 설정하여 파이썬 런타임이 패키지 루트를 항상 찾을 수 있도록 보완합니다. |

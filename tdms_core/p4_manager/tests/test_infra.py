@@ -74,6 +74,12 @@ def test_docker_compose_up_and_nginx_routing():
         response = requests.get("http://localhost:80/api/mgr/health", timeout=3)
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
+
+        # status API 프록시 호출 및 오프라인 예외 격리 검증
+        status_response = requests.get("http://localhost:80/api/mgr/status", timeout=3)
+        assert status_response.status_code == 200
+        assert "kr" in status_response.json()
+        assert "us" in status_response.json()
     finally:
         # 테스트 종료 후 컨테이너 자동 소멸 처리 (클린업)
         down_cmd = ["docker-compose", "-f", compose_path, "down"]

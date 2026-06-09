@@ -12,6 +12,8 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-09] Task완료+의사결정+에러등록 | p4_manager 통합 관리 레이어 T-002(백엔드 통합 상태 집계 서비스 개발) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-002 백그라운드 캐싱 폴링 기법 및 실시간 API 장애 격리 레이어 적용), interfaces/get_integrated_status.md(통합 상태 집계 API 명세) 신규 지식화 및 errors/p4err-001_module_not_found_tdms_core.md(Docker 임포트 경로 환경 변수 해결) 추가 등록. MoC(index.md) 현행화 완료.
+
 ## [2026-06-09] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-001(개발 환경 및 Nginx 프록시 인프라 구축) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-001 Nginx 동적 리졸브 및 변수 기반 프록시 패스 적용), interfaces/api_routing_map.md(헬스체크 및 5종 라우팅 프록시/WS 중계 맵) 신규 지식화 및 MoC(index.md) 현행화 완료.
 
 ## [2026-06-08] Task완료 | usdms_db TimescaleDB 11개 테이블의 컬럼, 고유키, 인덱스 및 관계 명세를 상세 수록한 schema_usdms_db.md 신규 지식화 완료. 테스트/임시 테이블 잔해 자동 탐색 및 정리 스크립트 cleanup_database.py 구축 완료. MoC(index.md) 현행화 완료.

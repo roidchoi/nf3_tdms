@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # uv 설치
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv/bin/uv
 ENV PATH="/uv/bin:${PATH}"
+ENV PYTHONPATH="/app"
 
 # 패키지 복사
 COPY tdms_core/p1_shared /app/tdms_core/p1_shared
