@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  p4_backend:
+    build:
+      context: ../../
+      dockerfile: tdms_core/p4_manager/backend.Dockerfile
+    container_name: p4_backend
+    expose:
+      - "8010"
+    networks:
+      - tdms-net
+    restart: unless-stopped
+
+  p4_frontend:
+    build:
+      context: ../../
+      dockerfile: tdms_core/p4_manager/frontend.Dockerfile
+    container_name: p4_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - p4_backend
+    networks:
+      - tdms-net
+    restart: unless-stopped
+
+networks:
+  tdms-net:
+    external: true

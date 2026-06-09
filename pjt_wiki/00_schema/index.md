@@ -161,14 +161,21 @@
 ## p4_manager_wiki (p4_manager 통합 관리 레이어)
 
 > **역할**: 한국/미국 백엔드 통합 모니터링 UI 및 오케스트레이션
-> **상태**: ⬜ 미착수 (템플릿 상태)
+> **상태**: 🔄 MVP 인프라 구축 완료 (2026-06-09)
 
 ### 코어 문서
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 통합 관리자 코드베이스 물리 구조 및 모듈 상태 | — |
-| `environment.md` | p4_manager 개발 환경 및 의존성 패키지 | — |
+| `codebase_map.md` | 9개 파일의 물리구조, 핵심 데이터 흐름, 테스트 현황 | T-001 |
+| `environment.md` | tdms_p4_env Conda, 패키지 실버전, Nginx & Docker 포트 매핑, Nginx resolver 장애이슈 해결법 | T-001 |
+| `decisions.md` | Nginx 동적 리졸브 및 변수 기반 프록시 패스 적용 결정 (P4DEC-001) | T-001 |
+
+### interfaces/ (인터페이스 명세)
+
+| 파일 | 핵심 클래스/모듈 | 내용 요약 | 마지막 업데이트 |
+|---|---|---|---|
+| `api_routing_map.md` | — | `/api/mgr/health` 헬스체크 API 명세 및 Nginx 80포트 리버스 프록시 / WebSocket 5종 라우팅 맵 | T-001 |
 
 ---
 
@@ -185,6 +192,7 @@
 
 ### 📐 최근 변경된 인터페이스
 
+- `api_routing_map`: `/api/mgr/health` 백엔드 API 명세 및 Nginx 리버스 프록시/WS 중계 경로 맵 → `p4_manager_wiki/interfaces/api_routing_map.md`
 - `DailyRoutine`: target_date 파라미터화, 미국 휴장일 자동 스킵 및 trading_calendar 테이블 자동 동기화 → `p3_usdms_wiki/interfaces/daily_routine.md`
 - `date_utils`: 미국 주식시장 영업일/공휴일 판정 및 마지막 영업일 산출 공통 유틸리티 → `p1_shared_wiki/interfaces/date_utils.md`
 - `Health/Admin API Endpoints`: Freshness/Gaps 판정 및 동적 스케줄링, WebSocket 실시간 로그 중계 → `p3_usdms_wiki/interfaces/health_admin_api.md`
@@ -199,7 +207,7 @@
 - p1_shared: ✅ 완료 (T-001~T-008, 미국 영업일 판별 추가 완료)
 - p2_kdms: 🔄 진행 중
 - p3_usdms: ✅ 완료 (T-001~T-008)
-- p4_manager: ⬜ 미착수
+- p4_manager: 🔄 진행 중 (T-001 완료)
 
 ---
 

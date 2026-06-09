@@ -60,7 +60,7 @@ UI는 `p4_manager`가 담당하며, p3은 데이터 수집·저장·API 제공�
 - **저장 테이블**: `us_daily_price` (Hypertable, dt 파티셔닝, chunk 1 day)
 - **저장 원칙**: **Raw 원본 가격만 저장** (수정주가 저장 금지)
 - **수집 대상**: `is_collect_target = TRUE` 종목
-- **수집 주기**: 미국 시장 마감 후 1회 (기본 07:00 KST 화~토)
+- **수집 주기**: 매주 수요일 및 토요일 07:30 KST (3시간 소요 고려)
 - **원본 참조**: `usdms_origin/backend/collectors/market_data_loader.py`
 
 #### F-04: 가격 수정계수 관리 (PriceEngine)
@@ -181,7 +181,7 @@ Step 6: Health Check        → DailyRoutine._detect_anomalies()
 
 | Job ID | 실행 시간 (KST) | 기능 |
 |---|---|---|
-| `daily_routine` | 화~토 07:00 | Step 1~6 전체 일일 루틴 |
+| `daily_routine` | 수요일, 토요일 07:30 | Step 1~6 전체 일일 루틴 (3시간 소요) |
 | `weekly_backfill` | 일 03:00 | 과거 이력 갭 복구 |
 
 - **스케줄러**: `APScheduler AsyncIOScheduler`
@@ -366,7 +366,7 @@ TARGET_RETAIN_MARKET_CAP=35000000   # $3.5천만 (유지 기준)
 TARGET_RETAIN_PRICE=0.80
 
 # 스케줄
-SCHEDULE_DAILY_ROUTINE=07:00        # KST, 화~토
+SCHEDULE_USDMS_DAILY_ROUTINE=wed,sat:07:30        # KST, 수요일/토요일 (.env 중앙화)
 
 # 운영 설정
 LOG_LEVEL=INFO

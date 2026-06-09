@@ -12,6 +12,8 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-09] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-001(개발 환경 및 Nginx 프록시 인프라 구축) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-001 Nginx 동적 리졸브 및 변수 기반 프록시 패스 적용), interfaces/api_routing_map.md(헬스체크 및 5종 라우팅 프록시/WS 중계 맵) 신규 지식화 및 MoC(index.md) 현행화 완료.
+
 ## [2026-06-08] Task완료 | usdms_db TimescaleDB 11개 테이블의 컬럼, 고유키, 인덱스 및 관계 명세를 상세 수록한 schema_usdms_db.md 신규 지식화 완료. 테스트/임시 테이블 잔해 자동 탐색 및 정리 스크립트 cleanup_database.py 구축 완료. MoC(index.md) 현행화 완료.
 
 ## [2026-06-05] Task완료 | p3_usdms 미국 시장 백엔드 T-008 완료에 따른 의존성/임계치/스케줄 설정 외부화 정보 environment.md 갱신, daily_routine.md 및 master_sync.md, master_repo.md 인터페이스 갱신 완료. 아울러 p1_shared 내 미국 주식시장 영업일 판별 기능 date_utils.md 신규 인터페이스 등록 및 codebase_map, MoC(index.md) 현행화 완료.
