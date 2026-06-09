@@ -142,4 +142,40 @@ class StatusService:
                 "tasks": None
             }
 
+    async def run_task(self, market: str, task_id: str, is_test: bool = True) -> Dict[str, Any]:
+        if market not in ["kr", "us"]:
+            raise ValueError(f"Invalid market: {market}")
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            try:
+                if market == "kr":
+                    url = f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/{task_id}/run"
+                    resp = await client.post(url, json={"test_mode": is_test})
+                else:  # us
+                    url = f"{settings.P3_USDMS_URL}/api/admin/tasks/{task_id}/run"
+                    resp = await client.post(url)
+                
+                if resp.status_code >= 400:
+                    return {
+                        "status": "error",
+                        "message": f"Target backend returned status code {resp.status_code}",
+                        "details": resp.text
+                    }
+                
+                # JSON 응답 안전 파싱
+                try:
+                    details = resp.json()
+                except ValueError:
+                    details = resp.text
+
+                return {
+                    "status": "success",
+                    "message": f"Task {task_id} triggered successfully",
+                    "details": details
+                }
+            except httpx.RequestError as e:
+                logger.error(f"Error triggering task on {market} backend: {e}")
+                raise e
+
 status_service = StatusService()
+

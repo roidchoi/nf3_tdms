@@ -1,7 +1,7 @@
 # P4 API 및 Nginx 프록시 라우팅 맵 (api_routing_map.md)
 
-> 마지막 변경: T-001  
-> 소스 위치: `tdms_core/p4_manager/main.py:17`, `tdms_core/p4_manager/nginx/nginx.conf:27`
+> 마지막 변경: T-003  
+> 소스 위치: `tdms_core/p4_manager/main.py:17`, `tdms_core/p4_manager/routers/manager.py:15`, `tdms_core/p4_manager/nginx/nginx.conf:27`
 
 ### 1. 개요 및 목적
 *   P4 Manager 오케스트레이션 레이어 내부 백엔드 API와 외부 Nginx 리버스 프록시 및 WebSocket 중계를 매핑하는 핵심 인터페이스 규격입니다.
@@ -23,7 +23,16 @@
     }
     ```
 
-#### 2.2. Nginx 리버스 프록시 라우팅 규칙
+#### 2.2. P4 백엔드 수동 태스크 기동 API
+*   **엔드포인트**: `POST /api/mgr/run`
+*   **소스 위치**: `tdms_core/p4_manager/routers/manager.py:15`
+*   **입력 파라미터**: `market` (query), `task_id` (query), `is_test` (query)
+*   **출력 형식**:
+    *   반환 타입: `dict` (JSON)
+    *   상세 명세: [[p4_manager_wiki/interfaces/post_run_task]]
+
+
+#### 2.3. Nginx 리버스 프록시 라우팅 규칙
 *   **수신 포트**: 호스트 포트 `80` (컨테이너 포트 `80` 바인딩)
 *   **설정 위치**: `tdms_core/p4_manager/nginx/nginx.conf:27`
 

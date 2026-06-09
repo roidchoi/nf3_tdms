@@ -136,3 +136,75 @@ def test_real_backend_status_integration():
         assert data["us"]["status"] in ["ONLINE", "OFFLINE"]
     except httpx.ConnectError:
         pytest.skip("로컬 Nginx 포트 80(통합 환경)이 기동되어 있지 않아 실제 통합 테스트를 스킵합니다.")
+
+
+def test_run_kr_task_success():
+    """
+    [Tier 2 - 격리 통합]
+    [목적] POST /api/mgr/run?market=kr&task_id=daily_update 호출 시
+           FastAPI 백엔드가 p2_kdms에 POST 요청을 보내고 200 응답을 정상 중계하는지 검증.
+    """
+    if client is None:
+        pytest.fail("FastAPI 앱을 임포트할 수 없습니다.")
+        
+    with respx.mock:
+        respx.post("http://p2_kdms:8000/api/v1/admin/tasks/daily_update/run").mock(
+            return_value=Response(200, json={"status": "success"})
+        )
+        
+        response = client.post("/api/mgr/run?market=kr&task_id=daily_update&is_test=true")
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
+def test_run_us_task_success():
+    """
+    [Tier 2 - 격리 통합]
+    [목적] POST /api/mgr/run?market=us&task_id=daily_routine 호출 시
+           FastAPI 백엔드가 p3_usdms에 POST 요청을 보내고 200 응답을 정상 중계하는지 검증.
+    """
+    if client is None:
+        pytest.fail("FastAPI 앱을 임포트할 수 없습니다.")
+
+    with respx.mock:
+        respx.post("http://p3_usdms:8005/api/admin/tasks/daily_routine/run").mock(
+            return_value=Response(200, json={"status": "success"})
+        )
+        
+        response = client.post("/api/mgr/run?market=us&task_id=daily_routine")
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
+def test_run_task_invalid_params():
+    """
+    [Tier 2 - 격리 통합]
+    [목적] 잘못된 market 파라미터 전달 시 400 Bad Request 에러 반환 검증.
+    """
+    if client is None:
+        pytest.fail("FastAPI 앱을 임포트할 수 없습니다.")
+
+    response = client.post("/api/mgr/run?market=invalid&task_id=daily_update")
+    assert response.status_code == 400
+    assert "Invalid market" in response.json()["detail"]
+
+
+def test_run_task_backend_offline_fault_isolation():
+    """
+    [Tier 2 - 격리 통합]
+    [목적] 대상 백엔드가 오프라인이거나 에러를 발생시킬 때 503 Service Unavailable 및 장애 격리 메시지 반환 검증.
+    """
+    if client is None:
+        pytest.fail("FastAPI 앱을 임포트할 수 없습니다.")
+
+    import httpx
+    with respx.mock:
+        respx.post("http://p3_usdms:8005/api/admin/tasks/daily_routine/run").mock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
+        
+        response = client.post("/api/mgr/run?market=us&task_id=daily_routine")
+        assert response.status_code == 503
+        assert response.json()["status"] == "error"
+        assert "offline" in response.json()["message"]
+
