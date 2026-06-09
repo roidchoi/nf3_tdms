@@ -2,7 +2,7 @@
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
 > **마지막 업데이트**: 2026-06-09
-> **총 등록 파일**: 34개
+> **총 등록 파일**: 38개
 
 
 ---
@@ -162,24 +162,28 @@
 ## p4_manager_wiki (p4_manager 통합 관리 레이어)
 
 > **역할**: 한국/미국 백엔드 통합 모니터링 UI 및 오케스트레이션
-> **상태**: 🔄 T-004 WebSocket 로그 스트리밍 이중화 프록시 완료 (2026-06-09)
+> **상태**: ✅ T-006 공통 헬스 모니터링 및 시장별 특화 패널 완료 (2026-06-09)
 
 ### 코어 문서
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 13개 파일의 물리구조, 새로 구성된 Vue SPA 프론트엔드 폴더 구조 및 테스트 현황 | T-004 |
+| `codebase_map.md` | 17개 파일의 물리구조, 새로 구성된 Vue SPA 프론트엔드 폴더 구조 및 테스트 현황 | T-006 |
 | `environment.md` | tdms_p4_env Conda/Node.js 런타임 환경, 주요 패키지(fastapi, vue3, vitest, websockets) 버전, Nginx 프록시 해결책 및 TS5101/TS6133 빌드 오류 대안 기록 | T-004 |
-| `decisions.md` | Nginx 동적 리졸브(P4DEC-001) 및 백그라운드 캐싱 폴링/장애 격리(P4DEC-002) 적용 결정 | T-002 |
+| `decisions.md` | Nginx 동적 리졸브(P4DEC-001) 및 백그라운드 캐싱 폴링/장애 격리(P4DEC-002), 데이터 갭 정규화 및 API 동적 예외 격리(P4DEC-003) 적용 결정 | T-006 |
 
 ### interfaces/ (인터페이스 명세)
 
 | 파일 | 핵심 클래스/모듈 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|---|
-| `api_routing_map.md` | — | `/api/mgr/health`, `/api/mgr/run`, WebSocket `/api/mgr/ws/logs/{market}` API 명세, Nginx 80포트 리버스 프록시 / WebSocket 5종 라우팅 맵 | T-004 |
+| `api_routing_map.md` | — | `/api/mgr/health`, `/api/mgr/run`, 스케줄 3종 및 헬스 6종 API 명세, Nginx 80포트 리버스 프록시 / WebSocket 5종 라우팅 맵 | T-006 |
 | `get_integrated_status.md` | status_service | `/api/mgr/status` 통합 상태 집계 API 명세 및 KR/US 예외 격리(Fault Isolation) 리턴 스키마 | T-002 |
 | `post_run_task.md` | status_service / routers/manager.py | `/api/mgr/run` 수동 태스크 기동 API 및 KR/US 동적 중계 규격 | T-003 |
 | `ws_proxy_logs.md` | proxy_ws.py | `/api/mgr/ws/logs/{market}` WebSocket 중계 프록시 API 명세 및 리소스 누수 방지 설계 결정 | T-004 |
+| `get_health_freshness.md` | routers/manager.py | `/api/mgr/health/freshness/{market}` 데이터 수집 신선도 중계 API 명세 | T-006 |
+| `get_health_gaps.md` | routers/manager.py | `/api/mgr/health/gaps/{market}` 데이터 누락 갭 정규화 및 중계 API 명세 | T-006 |
+| `post_blacklist_release.md` | routers/manager.py | `/api/mgr/health/us/blacklist/{cik}/release` 미국 CIK 수집 차단 해제 중계 API 명세 | T-006 |
+| `kr_milestones.md` | routers/manager.py | `/api/mgr/health/kr/milestones` 한국 마일스톤 생성/조회 중계 API 명세 | T-006 |
 
 
 ### errors/ (해결된 에러 기록)
@@ -204,12 +208,16 @@
 ### 📐 최근 변경된 인터페이스
 
 - `post_run_task`: `/api/mgr/run` 수동 태스크 기동 API 및 KR/US 동적 중계 규격 → `p4_manager_wiki/interfaces/post_run_task.md`
-- `get_integrated_status`: `/api/mgr/status` 통합 상태 집계 API 명세 및 KR/US 예외 격리 리턴 스키마 → `p4_manager_wiki/interfaces/get_integrated_status.md`
+- `get_integrated_status`: `/api/mgr/status` 통합 상태 집계 API 명세 및 KR/US 예외 격리(Fault Isolation) 리턴 스키마 → `p4_manager_wiki/interfaces/get_integrated_status.md`
 - `ws_proxy_logs`: `/api/mgr/ws/logs/{market}` WebSocket 로그 중계 프록시 API 스펙 및 자원 방출 설계 결정 → `p4_manager_wiki/interfaces/ws_proxy_logs.md`
-- `api_routing_map`: `/api/mgr/health` 및 `/api/mgr/run`, WebSocket `/api/mgr/ws/logs/{market}` API 명세, Nginx 리버스 프록시/WS 중계 경로 맵 → `p4_manager_wiki/interfaces/api_routing_map.md`
+- `api_routing_map`: `/api/mgr/health` 및 `/api/mgr/run`, 스케줄 3종 및 헬스 6종 API 명세, Nginx 리버스 프록시/WS 중계 경로 맵 → `p4_manager_wiki/interfaces/api_routing_map.md`
+- `get_health_freshness`: `/api/mgr/health/freshness/{market}` 데이터 수집 신선도 중계 API 명세 → `p4_manager_wiki/interfaces/get_health_freshness.md`
+- `get_health_gaps`: `/api/mgr/health/gaps/{market}` 데이터 누락 갭 정규화 및 중계 API 명세 → `p4_manager_wiki/interfaces/get_health_gaps.md`
+- `post_blacklist_release`: `/api/mgr/health/us/blacklist/{cik}/release` 미국 CIK 수집 차단 해제 중계 API 명세 → `p4_manager_wiki/interfaces/post_blacklist_release.md`
+- `kr_milestones`: `/api/mgr/health/kr/milestones` 한국 마일스톤 생성/조회 중계 API 명세 → `p4_manager_wiki/interfaces/kr_milestones.md`
 - `DailyRoutine`: target_date 파라미터화, 미국 휴장일 자동 스킵 및 trading_calendar 테이블 자동 동기화 → `p3_usdms_wiki/interfaces/daily_routine.md`
 - `date_utils`: 미국 주식시장 영업일/공휴일 판정 및 마지막 영업일 산출 공통 유틸리티 → `p1_shared_wiki/interfaces/date_utils.md`
-- `Health/Admin API Endpoints`: Freshness/Gaps 판정 및 동적 스케줄링, WebSocket 실시간 로그 중계 → `p3_usdms_wiki/interfaces/health_admin_api.md`
+- `Health/Admin API Endpoints`: Freshness/Gaps 판정, 차단 해제 API 신설, 동적 스케줄링 및 WebSocket 실시간 로그 중계 → `p3_usdms_wiki/interfaces/health_admin_api.md`
 - `Auditors 3종`: 재무(항등식/Null), 지표(ROE/Outlier), 수정주가(KIS API 대조) 감사 엔진 → `p3_usdms_wiki/interfaces/auditors.md`
 - `BlacklistManager`: 일시적/영구적 에러 분기 및 쿨다운 자동 해제 관리 → `p3_usdms_wiki/interfaces/blacklist_manager.md`
 - `PhysicalSyncManager`: T-008에서 T-009 흡수, tar+SSH 파이프라인 확정 → `p1_shared_wiki/interfaces/physical_sync_manager.md`
@@ -221,7 +229,7 @@
 - p1_shared: ✅ 완료 (T-001~T-008, 미국 영업일 판별 추가 완료)
 - p2_kdms: 🔄 진행 중
 - p3_usdms: ✅ 완료 (T-001~T-008)
-- p4_manager: 🔄 진행 중 (T-004 완료)
+- p4_manager: 🔄 진행 중 (T-006 완료)
 
 
 

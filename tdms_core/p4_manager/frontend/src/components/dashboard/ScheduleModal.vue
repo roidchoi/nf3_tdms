@@ -58,7 +58,8 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, ref, computed, watch } from 'vue';
+import { defineComponent, ref, computed, watch } from 'vue';
+import type { PropType } from 'vue';
 
 export interface ModalJobInfo {
   job_id: string;

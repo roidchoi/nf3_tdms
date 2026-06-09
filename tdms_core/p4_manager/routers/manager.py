@@ -139,3 +139,176 @@ async def toggle_integrated_schedule(market: str, job_id: str, action: str = Que
             return resp.json()
         except httpx.RequestError as e:
             raise HTTPException(status_code=503, detail=f"{market.upper()} 백엔드 통신 실패: {str(e)}")
+
+
+# =================================================================
+# 4. 공통 헬스 모니터링 중계 및 장애 격리 API
+# =================================================================
+
+@router.get("/health/freshness/{market}")
+async def get_integrated_freshness(market: str):
+    """
+    시장(kr/us)별 수집 신선도(Freshness)를 중계 조회합니다.
+    """
+    if market not in ["kr", "us"]:
+        raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
+        
+    url = (
+        "http://p2_kdms:8000/api/health/freshness"
+        if market == "kr"
+        else "http://p3_usdms:8005/api/health/freshness"
+    )
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, timeout=5.0)
+            if resp.status_code == 200:
+                return resp.json()
+            return {"status": "RED", "offline": True, "message": f"Backend returned status {resp.status_code}"}
+        except Exception as e:
+            return {"status": "RED", "offline": True, "message": f"Backend communication error: {str(e)}"}
+
+
+@router.get("/health/gaps/{market}")
+async def get_integrated_gaps(
+    market: str,
+    start_date: str = Query(None),
+    end_date: str = Query(None)
+):
+    """
+    시장(kr/us)별 수집 누락 갭을 중계 조회하고 단일 규격으로 정규화합니다.
+    """
+    if market not in ["kr", "us"]:
+        raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
+        
+    url = (
+        "http://p2_kdms:8000/api/health/gaps"
+        if market == "kr"
+        else "http://p3_usdms:8005/api/health/gaps"
+    )
+    
+    params = {}
+    if start_date:
+        params["start_date"] = start_date
+    if end_date:
+        params["end_date"] = end_date
+        
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, params=params, timeout=5.0)
+            if resp.status_code != 200:
+                return {
+                    "market": market,
+                    "start_date": start_date or "",
+                    "end_date": end_date or "",
+                    "gaps": [],
+                    "offline": True,
+                    "message": f"Backend returned status {resp.status_code}"
+                }
+                
+            raw_data = resp.json()
+            standardized_gaps = []
+            
+            # minute_gaps 배열 파싱
+            minute_gaps = raw_data.get("minute_gaps", [])
+            for mg in minute_gaps:
+                if market == "kr":
+                    standardized_gaps.append({
+                        "date": mg.get("date"),
+                        "status": mg.get("status", "GREEN"),
+                        "total_targets": mg.get("total_targets", 0),
+                        "valid_targets": mg.get("valid_targets", 0),
+                        "missing_count": mg.get("missing_stocks_count", 0),
+                        "missing_items": mg.get("missing_stocks", [])
+                    })
+                else:
+                    standardized_gaps.append({
+                        "date": mg.get("date"),
+                        "status": "YELLOW" if mg.get("gaps_count", 0) > 0 else "GREEN",
+                        "total_targets": mg.get("total_targets", 0),
+                        "valid_targets": mg.get("valid_targets", 0),
+                        "missing_count": mg.get("gaps_count", 0),
+                        "missing_items": []  # 미국은 티커 목록 미제공
+                    })
+                    
+            return {
+                "market": market,
+                "start_date": raw_data.get("start_date", start_date or ""),
+                "end_date": raw_data.get("end_date", end_date or ""),
+                "gaps": standardized_gaps
+            }
+            
+        except Exception as e:
+            return {
+                "market": market,
+                "start_date": start_date or "",
+                "end_date": end_date or "",
+                "gaps": [],
+                "offline": True,
+                "message": f"Backend communication error: {str(e)}"
+            }
+
+
+@router.get("/health/kr/milestones")
+async def get_kr_milestones():
+    """
+    [KR 전용] 한국 마케팅 마일스톤 이력 조회 중계
+    """
+    url = "http://p2_kdms:8000/api/health/milestones"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, timeout=5.0)
+            if resp.status_code == 200:
+                return resp.json()
+            return []
+        except Exception:
+            return []
+
+
+@router.post("/health/kr/milestones")
+async def post_kr_milestone(payload: dict):
+    """
+    [KR 전용] 한국 마케팅 마일스톤 생성/수정 중계
+    """
+    url = "http://p2_kdms:8000/api/health/milestones"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(url, json=payload, timeout=5.0)
+            if resp.status_code == 200:
+                return resp.json()
+            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"KDMS 백엔드 연결 오류: {str(e)}")
+
+
+@router.get("/health/us/blacklist")
+async def get_us_blacklist():
+    """
+    [US 전용] 미국 차단 종목(블랙리스트) 목록 조회 중계
+    """
+    url = "http://p3_usdms:8005/api/health/blacklist"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, timeout=5.0)
+            if resp.status_code == 200:
+                return resp.json()
+            return {"status": "error", "blocked_count": 0, "blacklist": [], "offline": True}
+        except Exception:
+            return {"status": "error", "blocked_count": 0, "blacklist": [], "offline": True}
+
+
+@router.post("/health/us/blacklist/{cik}/release")
+async def release_us_blacklist(cik: str):
+    """
+    [US 전용] 미국 특정 CIK 차단 해제 중계
+    """
+    url = f"http://p3_usdms:8005/api/health/blacklist/{cik}/release"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(url, timeout=5.0)
+            if resp.status_code == 200:
+                return resp.json()
+            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"USDMS 백엔드 연결 오류: {str(e)}")
+

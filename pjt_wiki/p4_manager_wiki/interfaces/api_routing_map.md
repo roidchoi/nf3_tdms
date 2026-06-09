@@ -1,6 +1,6 @@
 # P4 API 및 Nginx 프록시 라우팅 맵 (api_routing_map.md)
 
-> 마지막 변경: T-005  
+> 마지막 변경: T-006  
 > 소스 위치: `tdms_core/p4_manager/main.py:17`, `tdms_core/p4_manager/routers/manager.py:15`, `tdms_core/p4_manager/routers/proxy_ws.py:11`, `tdms_core/p4_manager/nginx/nginx.conf:59`
 
 ### 1. 개요 및 목적
@@ -50,7 +50,23 @@
 *   **소스 위치**: `tdms_core/p4_manager/routers/manager.py:45`
 
 
-#### 2.5. Nginx 리버스 프록시 라우팅 규칙
+#### 2.5. P4 통합 데이터 헬스 모니터링 API
+*   **데이터 신선도 조회 중계**: `GET /api/mgr/health/freshness/{market}`
+    *   **설명**: 한국/미국 주식 데이터 수집 신선도(최종 영업일 대비 당일 일봉 수집 비율) 정보를 중계 조회합니다.
+*   **데이터 갭 검출 및 정규화 중계**: `GET /api/mgr/health/gaps/{market}`
+    *   **설명**: 한국의 분봉 누락 리스트와 미국의 수집 실패 갭 정보를 단일화된 공통 스키마(`gaps: [GapItem]`)로 정규화 매핑하여 반환합니다.
+*   **한국 마일스톤 이력 조회**: `GET /api/mgr/health/kr/milestones`
+    *   **설명**: 한국 백엔드(KDMS)에 기록된 데이터 수집/정제 마일스톤 랜드마크 이력을 중계 조회합니다.
+*   **한국 마일스톤 등록/수정**: `POST /api/mgr/health/kr/milestones`
+    *   **설명**: 새로운 한국 마일스톤 이력을 추가하거나 수정합니다.
+*   **미국 수집 차단 블랙리스트 조회**: `GET /api/mgr/health/us/blacklist`
+    *   **설명**: 미국 백엔드(USDMS)에 기록된 CIK 수집 실패 임계치 초과 차단 목록을 조회합니다.
+*   **미국 블랙리스트 차단 해제**: `POST /api/mgr/health/us/blacklist/{cik}/release`
+    *   **설명**: 특정 미국 수집 CIK의 차단 상태를 강제로 해제하고 재수집을 승인합니다.
+*   **소스 위치**: `tdms_core/p4_manager/routers/manager.py:143`
+
+
+#### 2.6. Nginx 리버스 프록시 라우팅 규칙
 *   **수신 포트**: 호스트 포트 `80` (컨테이너 포트 `80` 바인딩)
 *   **설정 위치**: `tdms_core/p4_manager/nginx/nginx.conf:59`
 

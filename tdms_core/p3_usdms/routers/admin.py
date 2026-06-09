@@ -5,7 +5,7 @@ import logging
 import asyncio
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
+from fastapi import APIRouter, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Request, Query
 
 from p3_usdms.tasks.daily_routine import DailyRoutine
 
@@ -170,8 +170,8 @@ def update_schedule(
 @router.post("/schedules/{job_id}/toggle", summary="스케줄러 작업 일시정지 또는 재개")
 def toggle_job(
     job_id: str,
-    action: str = Query(..., description="작업 ('pause' 또는 'resume')"),
-    request: Request
+    request: Request,
+    action: str = Query(..., description="작업 ('pause' 또는 'resume')")
 ) -> Dict[str, Any]:
     """
     특정 작업(job_id)을 일시 정지(pause) 또는 재개(resume)합니다.

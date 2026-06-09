@@ -2,7 +2,7 @@
 
 > **Sub Project**: p4_manager  
 > **범위**: 이 Sub Project 내부에만 영향을 미치는 결정  
-> **마지막 업데이트**: 2026-06-09 (T-001 완료)
+> **마지막 업데이트**: 2026-06-09 (T-006 완료)
 
 ---
 
@@ -18,6 +18,7 @@
 |---|---|---|---|
 | P4DEC-001 | Nginx 동적 Upstream 리졸브 및 변수 기반 프록시 패스 적용 | T-001 | active |
 | P4DEC-002 | 백그라운드 캐싱 폴링 기법 및 실시간 API 장애 격리(Fault Isolation) 레이어 적용 | T-002 | active |
+| P4DEC-003 | 이종 갭 검출 데이터의 정규화(Normalization) 및 실시간 API 장애 격리(Fault Isolation) | T-006 | active |
 
 ---
 
@@ -68,3 +69,23 @@
 ### 관련 링크
 *   `status_service.py` (폴링 및 에러 격리 구현부)
 *   `get_integrated_status.md` (통합 상태 API 인터페이스 정의)
+
+---
+
+## [P4DEC-003] 이종 갭 검출 데이터의 정규화(Normalization) 및 실시간 API 장애 격리(Fault Isolation) (T-006)
+
+### 배경
+*   한국 주식 백엔드(KDMS)와 미국 주식 백엔드(USDMS)의 수집 신선도 및 누락 갭 데이터 포맷이 서로 다릅니다. KDMS는 미수집 분봉 리스트를 반환하고 USDMS는 daily_gap과 minute_gap의 일간 누락 수를 제공하기 때문에, 프론트엔드에서 일관된 그리드 및 신선도 차트를 그리기 힘듭니다.
+*   단순 조회가 아닌 차단 해제(`POST .../release`)나 마일스톤 생성(`POST .../milestones`) 등 리프레시 성격의 API는 장애 격리 시 200 OK 폴백을 리턴하면 클라이언트가 등록에 성공했다고 오인하는 중대한 흐름 왜곡이 생깁니다.
+
+### 결정 내용
+*   **구조 정규화(Normalization)**: P4 백엔드 레이어에서 KDMS/USDMS 로우 데이터를 단일 가시성 모델(`gaps: [GapItem]`)로 사전 가공하여 전달하도록 라우터를 보강했습니다.
+*   **동적 예외 차별화**: 단순 상태 조회성 API(freshness, gaps, milestones get, blacklist get)는 예외 발생 시 `200 OK` 와 `offline: true` 캐스팅 객체를 제공하여 화면이 크래시되지 않게 막았습니다. 반면 변경 유발 API(milestones post, release post)는 통신 실패 시 `502 Bad Gateway` 및 구체적인 에러 메시지를 던져 클라이언트 단에서 트랜잭션 오류를 확실히 포착하게 유도했습니다.
+
+### 영향 범위
+*   `tdms_core/p4_manager/routers/manager.py` (정규화 및 장애 격리 분기 로직)
+*   `tdms_core/p4_manager/tests/test_health_bridge.py` (API 6종 및 예외 격리 검증)
+
+### 관련 링크
+*   `get_health_freshness.md`, `get_health_gaps.md` (정규화 중계 스펙 정의)
+*   `post_blacklist_release.md`, `kr_milestones.md` (액션 중계 및 502 예외 전달 정의)

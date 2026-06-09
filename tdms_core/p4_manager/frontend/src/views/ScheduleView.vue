@@ -93,8 +93,10 @@
 
 <script lang="ts">
 import { defineComponent, ref, computed, onMounted } from 'vue';
-import { useScheduleStore, ScheduleJob } from '../stores/scheduleStore';
-import ScheduleModal, { ModalJobInfo } from '../components/dashboard/ScheduleModal.vue';
+import { useScheduleStore } from '../stores/scheduleStore';
+import type { ScheduleJob } from '../stores/scheduleStore';
+import ScheduleModal from '../components/dashboard/ScheduleModal.vue';
+import type { ModalJobInfo } from '../components/dashboard/ScheduleModal.vue';
 
 export default defineComponent({
   name: 'ScheduleView',

@@ -4,9 +4,10 @@ import { useStatusStore } from '@/stores/statusStore'
 import TaskStatusCard from '@/components/dashboard/TaskStatusCard.vue'
 import LogTerminal from '@/components/dashboard/LogTerminal.vue'
 import ScheduleView from '@/views/ScheduleView.vue'
+import HealthView from '@/views/HealthView.vue'
 
 const statusStore = useStatusStore()
-const activeTab = ref<'dashboard' | 'schedules'>('dashboard')
+const activeTab = ref<'dashboard' | 'schedules' | 'health'>('dashboard')
 
 // 2초 주기 상태 폴링
 let pollInterval: ReturnType<typeof setInterval> | null = null
@@ -50,6 +51,13 @@ onUnmounted(() => {
             @click="activeTab = 'schedules'"
           >
             📅 스케줄 및 크론
+          </button>
+          <button 
+            class="nav-tab-btn" 
+            :class="{ active: activeTab === 'health' }" 
+            @click="activeTab = 'health'"
+          >
+            🏥 데이터 헬스 모니터
           </button>
         </nav>
       </div>
@@ -184,8 +192,13 @@ onUnmounted(() => {
     </div>
 
     <!-- 2. 스케줄 오케스트레이션 탭 콘텐츠 -->
-    <div v-else-if="activeTab === 'schedules'" class="tab-content-wrapper">
+    <div v-if="activeTab === 'schedules'" class="tab-content-wrapper">
       <ScheduleView />
+    </div>
+
+    <!-- 3. 데이터 헬스 모니터 탭 콘텐츠 -->
+    <div v-else-if="activeTab === 'health'" class="tab-content-wrapper">
+      <HealthView />
     </div>
   </div>
 </template>

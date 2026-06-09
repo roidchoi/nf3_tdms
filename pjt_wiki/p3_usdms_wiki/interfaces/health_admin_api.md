@@ -1,7 +1,7 @@
 # 인터페이스: 헬스 및 어드민 API (health_admin_api.md)
 
 > **Sub Project**: p3_usdms  
-> **마지막 업데이트**: 2026-06-04 (Task-007)  
+> **마지막 업데이트**: 2026-06-09 (Task-006)  
 > **물리 경로**: 
 > - `tdms_core/p3_usdms/routers/health.py`
 > - `tdms_core/p3_usdms/routers/admin.py`
@@ -58,6 +58,21 @@ USDMS 시스템의 데이터 최신성(Freshness), 수집 누락(Gaps), 수집 �
 
 ### ③ `GET /blacklist`
 현재 차단된 상태(`is_blocked=True`)인 수집 블랙리스트 상세 내역 목록을 반환합니다.
+
+### ④ `POST /blacklist/{cik}/release`
+특정 CIK(`10자리` 보장)의 블랙리스트 수집 차단을 강제로 해제합니다.
+* **동작 메커니즘**:
+  - `is_blocked` 필드를 `False`로 변경하고, `release_date`에 현재 시각 기록 및 메모(`detail`)에 관리자 릴리즈 내역을 덧붙입니다.
+  - 다음 수집 스케줄 실행 시 해당 종목의 수집이 재시도됩니다. (실패 횟수는 0으로 초기화됨)
+* **요청 예시**:
+  `POST /api/health/blacklist/0000320193/release`
+* **반환 예시**:
+  ```json
+  {
+    "status": "success",
+    "released_cik": "0000320193"
+  }
+  ```
 
 ---
 
