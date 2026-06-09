@@ -166,9 +166,45 @@ def update_schedule(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to reschedule job {job_id}: {str(e)}")
 
+
+@router.post("/schedules/{job_id}/toggle", summary="스케줄러 작업 일시정지 또는 재개")
+def toggle_job(
+    job_id: str,
+    action: str = Query(..., description="작업 ('pause' 또는 'resume')"),
+    request: Request
+) -> Dict[str, Any]:
+    """
+    특정 작업(job_id)을 일시 정지(pause) 또는 재개(resume)합니다.
+    """
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if not scheduler:
+        raise HTTPException(status_code=500, detail="Scheduler is not running or not registered.")
+        
+    if action not in ["pause", "resume"]:
+        raise HTTPException(status_code=400, detail="Action must be 'pause' or 'resume'.")
+        
+    job = scheduler.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+        
+    try:
+        if action == "pause":
+            job.pause()
+            logger.info(f"Successfully paused job {job_id}.")
+            return {"status": "PAUSED", "job_id": job_id}
+        elif action == "resume":
+            job.resume()
+            logger.info(f"Successfully resumed job {job_id}.")
+            return {"status": "RESUMED", "job_id": job_id}
+    except Exception as e:
+        logger.error(f"Failed to toggle job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to change job state: {str(e)}")
+
+
 # =================================================================
 # 4. 실시간 로그 스트리밍 WebSocket
 # =================================================================
+
 
 @router.websocket("/ws/logs")
 async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = None):

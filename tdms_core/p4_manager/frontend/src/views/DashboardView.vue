@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useStatusStore } from '@/stores/statusStore'
 import TaskStatusCard from '@/components/dashboard/TaskStatusCard.vue'
 import LogTerminal from '@/components/dashboard/LogTerminal.vue'
+import ScheduleView from '@/views/ScheduleView.vue'
 
 const statusStore = useStatusStore()
+const activeTab = ref<'dashboard' | 'schedules'>('dashboard')
 
 // 2초 주기 상태 폴링
 let pollInterval: ReturnType<typeof setInterval> | null = null
@@ -27,136 +29,164 @@ onUnmounted(() => {
   <div class="dashboard-container">
     <!-- 대시보드 상단 타이틀 -->
     <header class="dashboard-header">
-      <div class="logo-area">
-        <span class="neon-dot"></span>
-        <h1>TDMS Integrated Manager</h1>
+      <div class="header-main-row">
+        <div class="logo-area">
+          <span class="neon-dot"></span>
+          <h1>TDMS Integrated Manager</h1>
+        </div>
+        
+        <!-- 대시보드 메인 내비게이션 탭 -->
+        <nav class="main-navigation">
+          <button 
+            class="nav-tab-btn" 
+            :class="{ active: activeTab === 'dashboard' }" 
+            @click="activeTab = 'dashboard'"
+          >
+            📊 모니터링 보드
+          </button>
+          <button 
+            class="nav-tab-btn" 
+            :class="{ active: activeTab === 'schedules' }" 
+            @click="activeTab = 'schedules'"
+          >
+            📅 스케줄 및 크론
+          </button>
+        </nav>
       </div>
       <p class="subtitle">글로벌 금융 데이터 수집 및 적재 시스템 모니터링</p>
     </header>
 
-    <!-- 통합 게이트웨이 / 시장 헬스 보드 -->
-    <section class="health-board">
-      <!-- 한국 시장(KDMS) -->
-      <div class="health-card" :class="statusStore.status.kr.status.toLowerCase()">
-        <div class="health-info">
-          <div class="market-tag">
-            <span class="flag">🇰🇷</span>
-            <span>한국 시장 (KDMS)</span>
+    <!-- 1. 모니터링 대시보드 탭 콘텐츠 -->
+    <div v-if="activeTab === 'dashboard'" class="tab-content-wrapper">
+      <!-- 통합 게이트웨이 / 시장 헬스 보드 -->
+      <section class="health-board">
+        <!-- 한국 시장(KDMS) -->
+        <div class="health-card" :class="statusStore.status.kr.status.toLowerCase()">
+          <div class="health-info">
+            <div class="market-tag">
+              <span class="flag">🇰🇷</span>
+              <span>한국 시장 (KDMS)</span>
+            </div>
+            <div class="status-indicator">
+              <span class="pulse-dot"></span>
+              <span class="status-text">{{ statusStore.status.kr.status }}</span>
+            </div>
           </div>
-          <div class="status-indicator">
-            <span class="pulse-dot"></span>
-            <span class="status-text">{{ statusStore.status.kr.status }}</span>
+          <div class="freshness-details" v-if="statusStore.status.kr.freshness">
+            <div class="metric">
+              <span class="m-label">최종 수집일</span>
+              <span class="m-value">{{ statusStore.status.kr.freshness.latest_trading_date || '-' }}</span>
+            </div>
+            <div class="metric">
+              <span class="m-label">수집 완료율</span>
+              <span class="m-value">{{ (statusStore.status.kr.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+            </div>
+            <div class="metric">
+              <span class="m-label">신선도 상태</span>
+              <span class="status-badge" :style="{ backgroundColor: statusStore.status.kr.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
+                {{ statusStore.status.kr.freshness.status }}
+              </span>
+            </div>
           </div>
-        </div>
-        <div class="freshness-details" v-if="statusStore.status.kr.freshness">
-          <div class="metric">
-            <span class="m-label">최종 수집일</span>
-            <span class="m-value">{{ statusStore.status.kr.freshness.latest_trading_date || '-' }}</span>
-          </div>
-          <div class="metric">
-            <span class="m-label">수집 완료율</span>
-            <span class="m-value">{{ (statusStore.status.kr.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
-          </div>
-          <div class="metric">
-            <span class="m-label">신선도 상태</span>
-            <span class="status-badge" :style="{ backgroundColor: statusStore.status.kr.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
-              {{ statusStore.status.kr.freshness.status }}
-            </span>
-          </div>
-        </div>
-        <div class="offline-placeholder" v-else>
-          <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
-        </div>
-      </div>
-
-      <!-- 미국 시장(USDMS) -->
-      <div class="health-card" :class="statusStore.status.us.status.toLowerCase()">
-        <div class="health-info">
-          <div class="market-tag">
-            <span class="flag">🇺🇸</span>
-            <span>미국 시장 (USDMS)</span>
-          </div>
-          <div class="status-indicator">
-            <span class="pulse-dot"></span>
-            <span class="status-text">{{ statusStore.status.us.status }}</span>
+          <div class="offline-placeholder" v-else>
+            <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
           </div>
         </div>
-        <div class="freshness-details" v-if="statusStore.status.us.freshness">
-          <div class="metric">
-            <span class="m-label">최종 수집일</span>
-            <span class="m-value">{{ statusStore.status.us.freshness.latest_trading_date || '-' }}</span>
+
+        <!-- 미국 시장(USDMS) -->
+        <div class="health-card" :class="statusStore.status.us.status.toLowerCase()">
+          <div class="health-info">
+            <div class="market-tag">
+              <span class="flag">🇺🇸</span>
+              <span>미국 시장 (USDMS)</span>
+            </div>
+            <div class="status-indicator">
+              <span class="pulse-dot"></span>
+              <span class="status-text">{{ statusStore.status.us.status }}</span>
+            </div>
           </div>
-          <div class="metric">
-            <span class="m-label">수집 완료율</span>
-            <span class="m-value">{{ (statusStore.status.us.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+          <div class="freshness-details" v-if="statusStore.status.us.freshness">
+            <div class="metric">
+              <span class="m-label">최종 수집일</span>
+              <span class="m-value">{{ statusStore.status.us.freshness.latest_trading_date || '-' }}</span>
+            </div>
+            <div class="metric">
+              <span class="m-label">수집 완료율</span>
+              <span class="m-value">{{ (statusStore.status.us.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+            </div>
+            <div class="metric">
+              <span class="m-label">신선도 상태</span>
+              <span class="status-badge" :style="{ backgroundColor: statusStore.status.us.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
+                {{ statusStore.status.us.freshness.status }}
+              </span>
+            </div>
           </div>
-          <div class="metric">
-            <span class="m-label">신선도 상태</span>
-            <span class="status-badge" :style="{ backgroundColor: statusStore.status.us.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
-              {{ statusStore.status.us.freshness.status }}
-            </span>
+          <div class="offline-placeholder" v-else>
+            <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
           </div>
         </div>
-        <div class="offline-placeholder" v-else>
-          <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
+      </section>
+
+      <!-- 수집 태스크 제어 섹션 -->
+      <main class="tasks-section">
+        <div class="section-title">
+          <h2>⚡ 실시간 태스크 제어 및 수동 기동</h2>
+          <div class="divider"></div>
         </div>
-      </div>
-    </section>
 
-    <!-- 수집 태스크 제어 섹션 -->
-    <main class="tasks-section">
-      <div class="section-title">
-        <h2>⚡ 실시간 태스크 제어 및 수동 기동</h2>
-        <div class="divider"></div>
-      </div>
+        <div class="tasks-grid">
+          <!-- 한국: 일일 수집 -->
+          <TaskStatusCard 
+            market="kr"
+            taskId="daily_update"
+            title="일일 업데이트"
+            icon="📅"
+            :status="statusStore.status.kr.tasks"
+          />
 
-      <div class="tasks-grid">
-        <!-- 한국: 일일 수집 -->
-        <TaskStatusCard 
-          market="kr"
-          taskId="daily_update"
-          title="일일 업데이트"
-          icon="📅"
-          :status="statusStore.status.kr.tasks"
-        />
+          <!-- 한국: 재무 제표 -->
+          <TaskStatusCard 
+            market="kr"
+            taskId="financial_update"
+            title="재무 업데이트"
+            icon="💵"
+            :status="statusStore.status.kr.tasks"
+          />
 
-        <!-- 한국: 재무 제표 -->
-        <TaskStatusCard 
-          market="kr"
-          taskId="financial_update"
-          title="재무 업데이트"
-          icon="💵"
-          :status="statusStore.status.kr.tasks"
-        />
+          <!-- 미국: 일일 Routine -->
+          <TaskStatusCard 
+            market="us"
+            taskId="daily_routine"
+            title="Daily Routine"
+            icon="🇺🇸"
+            :status="statusStore.status.us.tasks"
+          />
 
-        <!-- 미국: 일일 Routine -->
-        <TaskStatusCard 
-          market="us"
-          taskId="daily_routine"
-          title="Daily Routine"
-          icon="🇺🇸"
-          :status="statusStore.status.us.tasks"
-        />
+          <!-- 미국: 주간 Backfill -->
+          <TaskStatusCard 
+            market="us"
+            taskId="weekly_backfill"
+            title="Weekly Backfill"
+            icon="⏳"
+            :status="statusStore.status.us.tasks"
+          />
+        </div>
+      </main>
 
-        <!-- 미국: 주간 Backfill -->
-        <TaskStatusCard 
-          market="us"
-          taskId="weekly_backfill"
-          title="Weekly Backfill"
-          icon="⏳"
-          :status="statusStore.status.us.tasks"
-        />
-      </div>
-    </main>
+      <!-- 실시간 로그 모니터링 섹션 -->
+      <section class="log-monitor-wrapper">
+        <div class="section-title">
+          <h2>📊 실시간 로그 스트리밍 (Output Stream)</h2>
+          <div class="divider"></div>
+        </div>
+        <LogTerminal />
+      </section>
+    </div>
 
-    <!-- 실시간 로그 모니터링 섹션 -->
-    <section class="log-monitor-wrapper">
-      <div class="section-title">
-        <h2>📊 실시간 로그 스트리밍 (Output Stream)</h2>
-        <div class="divider"></div>
-      </div>
-      <LogTerminal />
-    </section>
+    <!-- 2. 스케줄 오케스트레이션 탭 콘텐츠 -->
+    <div v-else-if="activeTab === 'schedules'" class="tab-content-wrapper">
+      <ScheduleView />
+    </div>
   </div>
 </template>
 
@@ -169,6 +199,42 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
+}
+
+.header-main-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.main-navigation {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.nav-tab-btn {
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #94a3b8;
+  padding: 8px 16px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-tab-btn:hover {
+  background: rgba(30, 41, 59, 0.7);
+  color: #f1f5f9;
+}
+
+.nav-tab-btn.active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
 }
 
 .dashboard-header {

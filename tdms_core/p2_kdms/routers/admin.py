@@ -204,3 +204,25 @@ async def toggle_job(
         logger.error(f"스케줄러 작업 상태 변경 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"작업 상태 변경에 실패했습니다: {str(e)}")
 
+
+@router.put("/scheduler", summary="스케줄러 작업 실행 시간 변경")
+async def reschedule_job(
+    job_id: str,
+    hour: int,
+    minute: int
+):
+    """
+    특정 작업(job_id)의 매일 실행 시간(hour, minute)을 동적으로 변경(reschedule)합니다.
+    """
+    if scheduler is None:
+        raise HTTPException(status_code=500, detail="스케줄러 시스템이 정상적으로 기동되지 않았습니다.")
+        
+    try:
+        scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
+        logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {hour:02d}:{minute:02d}")
+        return {"status": "SUCCESS", "job_id": job_id, "hour": hour, "minute": minute}
+    except Exception as e:
+        logger.error(f"스케줄러 일정 변경 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"스케줄 일정 변경에 실패했습니다: {str(e)}")
+
+

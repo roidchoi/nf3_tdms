@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p4_manager (통합 관리 레이어)  
-> **마지막 업데이트**: 2026-06-09 (T-004 완료)  
+> **마지막 업데이트**: 2026-06-09 (T-005 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -16,16 +16,21 @@ tdms_core/p4_manager/
 │   │   │   └── http.ts     # Axios API 인스턴스 [✅완성]
 │   │   ├── components/dashboard/
 │   │   │   ├── TaskStatusCard.vue  # 수동 태스크 제어 및 안전 경고 카드 [✅완성]
-│   │   │   └── LogTerminal.vue     # 실시간 로그 스트리밍 다크 터미널 [✅완성]
+│   │   │   ├── LogTerminal.vue     # 실시간 로그 스트리밍 다크 터미널 [✅완성]
+│   │   │   └── ScheduleModal.vue   # 드롭다운 시간변경 및 이중 타임존/안전장치 모달 [✅완성]
 │   │   ├── stores/
 │   │   │   ├── statusStore.ts # Pinia 상태관리 스토어 [✅완성]
-│   │   │   └── logStore.ts    # 실시간 로그 웹소켓 및 링버퍼(500줄) 관리 스토어 [✅완성]
+│   │   │   ├── logStore.ts    # 실시간 로그 웹소켓 및 링버퍼(500줄) 관리 스토어 [✅완성]
+│   │   │   └── scheduleStore.ts # 한국/미국 스케줄러 관리 및 API 제어 스토어 [✅완성]
 │   │   ├── views/
-│   │   │   └── DashboardView.vue  # 통합 모니터링 메인 뷰 [✅완성]
+│   │   │   ├── DashboardView.vue  # 통합 모니터링 메인 뷰 (상단 탭 내비게이션 포함) [✅완성]
+│   │   │   └── ScheduleView.vue   # 한국/미국 스케줄러 관리 탭 뷰 (Paused 그레이아웃 필터) [✅완성]
 │   │   ├── tests/
 │   │   │   ├── TaskStatusCard.spec.ts  # 컴포넌트 렌더링 및 이중 컨펌 동작 테스트 [✅완성]
 │   │   │   ├── DashboardView.spec.ts   # 대시보드 뷰 스토어 연동 테스트 [✅완성]
-│   │   │   └── logStore.spec.ts        # 500줄 버퍼 제한 및 최선행 라인 탈락 테스트 [✅완성]
+│   │   │   ├── logStore.spec.ts        # 500줄 버퍼 제한 및 최선행 라인 탈락 테스트 [✅완성]
+│   │   │   ├── ScheduleModal.spec.ts   # EST 시차 환산 및 장중 변경 안전 확인 테스트 [✅완성]
+│   │   │   └── scheduleStore.spec.ts   # fetch/update/toggle API 동작 스토어 테스트 [✅완성]
 │   │   ├── App.vue         # 메인 프레임 [✅완성]
 │   │   ├── shims-vue.d.ts  # TypeScript Vue shim [✅완성]
 │   │   ├── main.ts         # Pinia 바인딩 및 앱 런타임 엔트리포인트 [✅완성]
@@ -35,7 +40,7 @@ tdms_core/p4_manager/
 ├── nginx/
 │   └── nginx.conf          # Nginx 리버스 프록시 및 WS 중계 설정 [✅완성]
 ├── routers/
-│   ├── manager.py          # GET /status 및 POST /run 통합 관리 API 라우터 [✅완성]
+│   ├── manager.py          # GET/PUT/POST 통합 관리 API 라우터 (스케줄 중계 추가) [✅완성]
 │   └── proxy_ws.py         # /ws/logs/{market} 웹소켓 중계 프록시 라우터 [✅완성]
 ├── services/
 │   └── status_service.py   # 비동기 상태 수집, 캐싱 및 수동 기동 중계 서비스 [✅완성]
@@ -43,7 +48,8 @@ tdms_core/p4_manager/
 │   ├── conftest.py         # pytest 커스텀 런타임 옵션 정의 [✅완성]
 │   ├── test_infra.py       # 인프라 3단계 TDD 검증 코드 [✅완성]
 │   ├── test_status.py      # 비동기 수집, 수동 실행 및 예외 격리 검증 코드 [✅완성]
-│   └── test_proxy_ws.py    # 웹소켓 중계 및 연결 누수 방지 TDD 검증 코드 [✅완성]
+│   ├── test_proxy_ws.py    # 웹소켓 중계 및 연결 누수 방지 TDD 검증 코드 [✅완성]
+│   └── test_scheduler_bridge.py # 스케줄러 중계 API 동작 및 예외 처리 검증 코드 [✅완성]
 ├── backend.Dockerfile      # FastAPI 백엔드 이미지 빌드 명세 [✅완성]
 ├── frontend.Dockerfile     # Vue 컴파일 및 Nginx 프로덕션 Multi-stage 빌드 명세 [✅완성]
 ├── docker-compose.yml      # 멀티 컨테이너 환경 및 tdms-net 정의 [✅완성]
@@ -102,9 +108,12 @@ tdms_core/p4_manager/
 | tests/test_status.py | 백엔드 장애 격리 (Fault Isolation) | ✅통과 |
 | tests/test_status.py | 태스크 즉시 실행 API (`POST /run`) 및 예외 처리 검증 | ✅통과 |
 | tests/test_proxy_ws.py | WebSocket 이중 프록시 중계 및 커넥션 탈출 시 자원 해제 보장 | ✅통과 |
+| tests/test_scheduler_bridge.py | 크론 시간 변경, 토글 제어 중계 API 및 예외 격리 검증 | ✅통과 |
 | frontend/src/tests/TaskStatusCard.spec.ts | 수동 기동 UI 렌더링, 스위치 토글, 거래시간 안전장치 및 스토어 연동 | ✅통과 |
 | frontend/src/tests/DashboardView.spec.ts | 통합 헬스 요약 정보 스토어 연동 렌더링 | ✅통과 |
 | frontend/src/tests/logStore.spec.ts | Pinia 스토어 웹소켓 수신 및 링 버퍼 500줄 용량 제어 검증 | ✅통과 |
+| frontend/src/tests/ScheduleModal.spec.ts | 미국 EST 시간대 환산 및 한국/미국 장중 변경 통제 "변경승인" 이중 안전장치 검증 | ✅통과 |
+| frontend/src/tests/scheduleStore.spec.ts | Pinia scheduleStore 스케줄 fetch/toggle/reschedule API 연동 검증 | ✅통과 |
 
 ---
 
@@ -127,3 +136,4 @@ tdms_core/p4_manager/
 | T-002 | 백엔드 통합 상태 집계 서비스 개발 및 예외 격리(Fault Isolation) 적용 완료 |
 | T-003 | 통합 대시보드 UI 개발, 태스크 수동 실행 POST API 중계 연동 및 Multi-stage Docker 빌드 적용 완료 |
 | T-004 | WebSocket 로그 스트리밍 이중 중계 프록시 API, Pinia logStore 500줄 링 버퍼 및 다크 터미널 UI 구현 완료 |
+| T-005 | 백엔드 한국/미국 스케줄 API 교차 보완, P4 스케줄 중계 및 통합 API 3종, 프론트엔드 ScheduleView/Modal 안전 통제 장치 구현 완료 |

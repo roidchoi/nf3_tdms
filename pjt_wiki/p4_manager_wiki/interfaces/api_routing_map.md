@@ -1,6 +1,6 @@
 # P4 API 및 Nginx 프록시 라우팅 맵 (api_routing_map.md)
 
-> 마지막 변경: T-004  
+> 마지막 변경: T-005  
 > 소스 위치: `tdms_core/p4_manager/main.py:17`, `tdms_core/p4_manager/routers/manager.py:15`, `tdms_core/p4_manager/routers/proxy_ws.py:11`, `tdms_core/p4_manager/nginx/nginx.conf:59`
 
 ### 1. 개요 및 목적
@@ -36,11 +36,21 @@
 *   **소스 위치**: `tdms_core/p4_manager/routers/proxy_ws.py:11`
 *   **입력 파라미터**: `market` (Path), `log_file` (Query)
 *   **출력 형식**:
-    *   반환 타입: 실시간 스트리밍 텍스트 (줄 단위)
-    *   상세 명세: [[p4_manager_wiki/interfaces/ws_proxy_logs]]
+*   반환 타입: 실시간 스트리밍 텍스트 (줄 단위)
+*   상세 명세: [[p4_manager_wiki/interfaces/ws_proxy_logs]]
 
 
-#### 2.4. Nginx 리버스 프록시 라우팅 규칙
+#### 2.4. P4 통합 스케줄 제어 API
+*   **스케줄 목록 조회**: `GET /api/mgr/schedules/{market}`
+    *   **설명**: 한국(kr) 또는 미국(us) 백엔드의 스케줄 정보를 단일 정규화 스키마(`job_id`, `name`, `next_run_time`, `trigger`, `is_paused`)로 정렬하여 반환합니다.
+*   **스케줄 일정 변경**: `PUT /api/mgr/schedules/{market}/{job_id}`
+    *   **설명**: 시장별 스케줄러 내 특정 작업(job_id)의 크론 매일 기동 일정(hour, minute)을 동적으로 재조정합니다.
+*   **스케줄 활성 토글**: `POST /api/mgr/schedules/{market}/{job_id}/toggle`
+    *   **설명**: 시장별 스케줄러 내 특정 작업(job_id)을 일시정지(pause) 또는 재개(resume) 처리합니다.
+*   **소스 위치**: `tdms_core/p4_manager/routers/manager.py:45`
+
+
+#### 2.5. Nginx 리버스 프록시 라우팅 규칙
 *   **수신 포트**: 호스트 포트 `80` (컨테이너 포트 `80` 바인딩)
 *   **설정 위치**: `tdms_core/p4_manager/nginx/nginx.conf:59`
 
