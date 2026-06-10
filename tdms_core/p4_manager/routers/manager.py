@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 import httpx
 from tdms_core.p4_manager.config import settings
 from tdms_core.p4_manager.services.status_service import status_service
+from tdms_core.p4_manager.services.backup_service import backup_service
 
 router = APIRouter()
 
@@ -442,4 +443,31 @@ async def get_preview_table(
                 "data": [],
                 "message": f"Backend communication error: {str(e)}"
             }
+
+
+@router.get("/env")
+def get_env_profile():
+    """현재 백엔드 구동 시스템의 환경을 조회합니다."""
+    return {"env": backup_service.get_env()}
+
+
+@router.post("/backup")
+def create_backup(tag: str = Query("manual", description="백업 식별용 태그")):
+    """
+    개발 PC 로컬 DB의 물리적 스냅샷 백업을 생성합니다. (서버 PC에서는 403 Forbidden 기각)
+    """
+    try:
+        return backup_service.create_backup(tag=tag)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/backup/list")
+def list_backups():
+    """보관된 물리 백업 스냅샷 목록을 반환합니다."""
+    return backup_service.list_backups()
 

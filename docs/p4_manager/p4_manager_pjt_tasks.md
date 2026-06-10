@@ -77,9 +77,9 @@ T-001 (인프라) → T-002 (집계 API) → T-003 (대시보드 UI)
 
 | ID | Task명 | 구현 범위 요약 | 상태 | 우선순위 | 의존성 | 시작일 | 완료일 |
 |----|--------|--------------|------|---------|--------|--------|--------|
-| T-008 | DB 백업 실행 및 이력 관리 | `p1_shared.BackupManager` 래핑 서비스, 비동기 백업 API, PostgreSQL dump 헤더 검증 API(`/verify`) 및 `BackupView.vue` 이력 표출 | 대기 | High | T-007 | - | - |
-| T-009 | 안전 복구 제어 및 무결성 진단 연동 | 복구 전 최신 백업 자동 강제 생성 옵션, 더블 컨펌 복구 API 및 완료 후 무결성 진단(`run_diagnostics`) 결과 표출 UI 연동 | 대기 | High | T-008 | - | - |
-| T-010 | DB 물리 동기화 연동 및 감사 리포팅 | 백엔드 `PhysicalSyncManager` 래핑 API(Pull/Push), 컨테이너 정지/재기동 경고 모달, 실시간 중계 터미널 및 감사 도구(`audit_fast` 등) 리포트 UI 구현 | 대기 | High | T-009 | - | - |
+| T-008 | DB 백업 실행 및 이력 관리 | 개발 PC 로컬 물리 백업(tar.gz) API, 서버 PC 환경 식별 및 API 백업 생성 원천 차단(403), `BackupView.vue` 스냅샷 이력 및 서버 환경 버튼 비활성화 구현 | 대기 | High | T-007 | - | - |
+| T-009 | 안전 복구 제어 및 무결성 진단 연동 | 개발 PC 로컬 물리 스냅샷 복구 API, Maintenance Mode 오케스트레이션(타 백엔드 컨테이너 중지/재개), Direct-text Match 이중 컨펌(`RESTORE LOCAL DB`) 및 `StartupValidator` 검증 연동 | 대기 | High | T-008 | - | - |
+| T-010 | DB 물리 동기화 연동 및 감사 리포팅 | 개발 PC ↔ 서버 PC `PhysicalSyncManager` 연동 API(Pull/Push), UI 환경 시각화(상단 배너 및 적색/녹색 테마), `PUSH`/`PULL` 텍스트 이중 컨펌 및 `audit_deep` 감사 결과 표출 UI 구현 | 대기 | High | T-009 | - | - |
 | T-011 | 스케줄 환경 변수 통합 마이그레이션 | `.env` 파일에 `SCHEDULE_KDMS_*` 및 `SCHEDULE_USDMS_*` 규격 일원화 적용, p2/p3 백엔드 코드의 기존 스케줄 연동 부분 중앙화 동기화 | 대기 | Medium | T-010 | - | - |
 
 ---
@@ -103,6 +103,7 @@ T-001 (인프라) → T-002 (집계 API) → T-003 (대시보드 UI)
 | F-13 | 복구 실행 | T-009 |
 | F-14 | DB 물리 동기화 실행 | T-010 |
 | F-15 | 동기화 로그 중계 및 정밀 감사 결과 표출 | T-010 |
+| F-16 | 환경 식별 및 오제어 차단 안전장치 | T-008, T-009, T-010 |
 
 **미커버 항목:** 없음
 

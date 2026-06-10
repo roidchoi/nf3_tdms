@@ -1,7 +1,7 @@
 # Sub Project 개발/운영 환경 (environment.md)
 
 > **Sub Project**: p4_manager  
-> **마지막 업데이트**: 2026-06-10 (T-007 완료)  
+> **마지막 업데이트**: 2026-06-10 (T-008 완료)  
 > **타입**: Type E (배경/환경 지식)  
 > **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
 
@@ -73,7 +73,7 @@
 | `package.json` | `tdms_core/p4_manager/frontend/package.json` | ✅ | 프론트엔드 의존성 및 실행 스크립트(`build`, `test`) 정의 |
 | `tsconfig.app.json` | `tdms_core/p4_manager/frontend/tsconfig.app.json` | ✅ | TypeScript 에일리어스(`@/*`) 및 컴파일 타겟 지시 규칙 정의 |
 | `vite.config.ts` | `tdms_core/p4_manager/frontend/vite.config.ts` | ✅ | Vitest `jsdom` 환경 및 paths 별칭 resolve 규칙 매핑 |
-| `.env` | `.env` (루트) | ❌ | 공통 환경변수 (`SCHEDULE_KDMS_*`, `SCHEDULE_USDMS_*` 등) 로드 |
+| `.env` | `.env` (루트) | ❌ | 공통 환경변수 (`SCHEDULE_KDMS_*`, `SCHEDULE_USDMS_*` 등) 및 DB 물리 경로(`data_path` = `"/app/data"`), 백업 보관 경로(`BACKUP_BASE_DIR` = `"/app/backups"`) 로드 |
 
 ---
 
@@ -81,7 +81,8 @@
 
 | 종류 | 경로 | git 포함 | 비고 |
 |---|---|---|---|
-| 없음 | - | - | p4_manager는 상태를 유지하지 않는 무상태(Stateless) 아키텍처로 구현됨 |
+| DB 백업 아카이브 | `/app/backups/` | ❌ | 백업 실행(POST `/backup`) 시 생성되는 `tar.gz` 백업 아카이브가 저장되는 물리 경로 |
+| TimescaleDB 볼륨 | `/app/data/` | ❌ | 백업 대상이 되는 실물 데이터 볼륨 마운트 경로 (kdms_db, usdms_db 수록) |
 
 ---
 

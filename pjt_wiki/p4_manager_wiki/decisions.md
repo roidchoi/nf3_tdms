@@ -19,6 +19,7 @@
 | P4DEC-001 | Nginx 동적 Upstream 리졸브 및 변수 기반 프록시 패스 적용 | T-001 | active |
 | P4DEC-002 | 백그라운드 캐싱 폴링 기법 및 실시간 API 장애 격리(Fault Isolation) 레이어 적용 | T-002 | active |
 | P4DEC-003 | 이종 갭 검출 데이터의 정규화(Normalization) 및 실시간 API 장애 격리(Fault Isolation) | T-006 | active |
+| P4DEC-004 | 개발 PC 백업 허브 프로파일 식별 및 서버 PC 물리 차단 안전장치 아키텍처 | T-008 | active |
 
 ---
 
@@ -89,3 +90,28 @@
 ### 관련 링크
 *   `get_health_freshness.md`, `get_health_gaps.md` (정규화 중계 스펙 정의)
 *   `post_blacklist_release.md`, `kr_milestones.md` (액션 중계 및 502 예외 전달 정의)
+
+---
+
+## [P4DEC-004] 개발 PC 백업 허브 프로파일 식별 및 서버 PC 물리 차단 안전장치 아키텍처 (T-008)
+
+### 배경
+*   통합 관리 기능에 로컬 DB 물리 스냅샷 아카이빙(tar.gz) 기능을 탑재하게 되면서, 서버 PC(운영계)에서 이 기능이 구동될 경우 실시간 지속 수집으로 돌아가는 TimescaleDB의 I/O 경합 및 데이터 정합성 교란이 초래될 우려가 제기되었습니다.
+*   특히 개발 PC와 서버 PC 간에 동일한 매니저 웹 콘솔이 기동될 수 있으므로, 운영자의 조작 실수로 인한 실서버에서의 스냅샷 생성을 예방할 수 있는 엄격하고 강건한 설계 안전장치가 요구되었습니다.
+
+### 결정 내용
+*   **백엔드 API 수준 원천 봉쇄**: `p1_shared.utils.env_detector`를 사용하여 구동 장비가 `server`일 경우, `POST /api/mgr/backup` 요청에 대해 즉각 `403 Forbidden` 예외를 던지며 백업 아카이빙 프로세스(tar)의 실행 시도 자체를 원천 차단합니다.
+*   **프론트엔드 UI/UX 다중 경고 및 비활성화**:
+    *   글로벌 헤더 우측에 `GET /api/mgr/env` 결과를 기반으로 한 실시간 접속 환경 식별 배지(개발 PC: 🟢녹색 표시 / 서버 PC: 🔴적색 점멸 표시)를 영구 노출하여 운영자에게 시각적 경각심을 줍니다.
+    *   `BackupView.vue` 내에서 `server` 환경일 경우, 스냅샷 백업 실행 관련 모든 컨트롤(태그 입력 폼, 백업 실행 버튼)을 비활성화(`:disabled`) 처리하고 눈에 띄는 적색 차단 가이드 배너를 상단에 배치합니다.
+*   **통합 테스트 데이터 격리**: 실물 tar 아카이브 검증 시, 66GB에 달하는 실제 TimescaleDB 볼륨 압축에 걸리는 I/O 부하와 오랜 시간을 피하기 위해, 테스트 기동 전 일시적으로 설정 객체의 `data_path`를 테스트용 더미 물리 디렉토리로 변경(오버라이드)하여 검증하고 원복시키는 방식을 취함으로써 안전하고 신속한 실 subprocess 검증을 수행합니다.
+
+### 영향 범위
+*   `tdms_core/p4_manager/services/backup_service.py`
+*   `tdms_core/p4_manager/routers/manager.py`
+*   `tdms_core/p4_manager/frontend/src/views/BackupView.vue`
+*   `tdms_core/p4_manager/frontend/src/views/DashboardView.vue`
+*   `tdms_core/p4_manager/tests/test_backup.py`
+
+### 관련 링크
+*   `backup_api.md` (환경 식별 및 물리 백업 API 명세)

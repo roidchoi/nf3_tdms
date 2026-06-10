@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     P2_KDMS_URL: str = "http://p2_kdms:8000"
     P3_USDMS_URL: str = "http://p3_usdms:8005"
     TASK_POLL_INTERVAL: int = 30  # 백그라운드 폴링 주기 (초)
+    BACKUP_BASE_DIR: str = "/app/backups"
+    data_path: str = "/app/data"
     
     class Config:
         env_file = ".env"

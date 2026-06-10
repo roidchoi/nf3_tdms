@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useStatusStore } from '@/stores/statusStore'
+import { useBackupStore } from '@/stores/backupStore'
 import TaskStatusCard from '@/components/dashboard/TaskStatusCard.vue'
 import LogTerminal from '@/components/dashboard/LogTerminal.vue'
 import ScheduleView from '@/views/ScheduleView.vue'
 import HealthView from '@/views/HealthView.vue'
 import ExplorerView from '@/views/ExplorerView.vue'
+import BackupView from '@/views/BackupView.vue'
 
 const statusStore = useStatusStore()
-const activeTab = ref<'dashboard' | 'schedules' | 'health' | 'explorer'>('dashboard')
+const backupStore = useBackupStore()
+const activeTab = ref<'dashboard' | 'schedules' | 'health' | 'explorer' | 'backup'>('dashboard')
 
 // 2초 주기 상태 폴링
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
   await statusStore.fetchStatus()
+  await backupStore.fetchEnv()
   pollInterval = setInterval(() => {
     statusStore.fetchStatus()
   }, 2000)
@@ -35,6 +39,31 @@ onUnmounted(() => {
         <div class="logo-area">
           <span class="neon-dot"></span>
           <h1>TDMS Integrated Manager</h1>
+          
+          <!-- 실시간 접속 환경 식별 배지 -->
+          <div class="env-badge-container">
+            <span 
+              v-if="backupStore.currentEnv === 'dev'" 
+              class="env-badge dev"
+            >
+              <span class="badge-dot"></span>
+              개발 PC 환경
+            </span>
+            <span 
+              v-else-if="backupStore.currentEnv === 'server'" 
+              class="env-badge server"
+            >
+              <span class="badge-dot blink"></span>
+              서버 PC (운영계)
+            </span>
+            <span 
+              v-else 
+              class="env-badge unknown"
+            >
+              <span class="badge-dot"></span>
+              연결 확인중...
+            </span>
+          </div>
         </div>
         
         <!-- 대시보드 메인 내비게이션 탭 -->
@@ -66,6 +95,13 @@ onUnmounted(() => {
             @click="activeTab = 'explorer'"
           >
             🔍 데이터 익스플로러
+          </button>
+          <button 
+            class="nav-tab-btn" 
+            :class="{ active: activeTab === 'backup' }" 
+            @click="activeTab = 'backup'"
+          >
+            💾 백업 및 복구
           </button>
         </nav>
       </div>
@@ -212,6 +248,11 @@ onUnmounted(() => {
     <!-- 4. 데이터 익스플로러 탭 콘텐츠 -->
     <div v-else-if="activeTab === 'explorer'" class="tab-content-wrapper">
       <ExplorerView />
+    </div>
+
+    <!-- 5. 백업 및 복구 탭 콘텐츠 -->
+    <div v-else-if="activeTab === 'backup'" class="tab-content-wrapper">
+      <BackupView />
     </div>
   </div>
 </template>
@@ -447,5 +488,73 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
+}
+
+/* 환경 배지 */
+.env-badge-container {
+  margin-left: 1rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.env-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.env-badge.dev {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.env-badge.dev .badge-dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--color-emerald);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--color-emerald);
+}
+
+.env-badge.server {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f87171;
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.env-badge.server .badge-dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--color-rose);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--color-rose);
+}
+
+.env-badge.unknown {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.env-badge.unknown .badge-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #94a3b8;
+  border-radius: 50%;
+}
+
+.badge-dot.blink {
+  animation: blink-dot 1.5s infinite;
+}
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; box-shadow: 0 0 8px var(--color-rose); }
 }
 </style>
