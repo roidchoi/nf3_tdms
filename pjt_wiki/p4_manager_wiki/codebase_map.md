@@ -23,18 +23,22 @@ tdms_core/p4_manager/
 │   │   │   ├── statusStore.ts  # Pinia 상태관리 스토어 [✅완성]
 │   │   │   ├── logStore.ts     # 실시간 로그 웹소켓 및 링버퍼(500줄) 관리 스토어 [✅완성]
 │   │   │   ├── scheduleStore.ts # 한국/미국 스케줄러 관리 및 API 제어 스토어 [✅완성]
-│   │   │   └── healthStore.ts  # 신선도/갭/마일스톤/블랙리스트 통합 헬스 스토어 [✅완성]
+│   │   │   ├── healthStore.ts  # 신선도/갭/마일스톤/블랙리스트 통합 헬스 스토어 [✅완성]
+│   │   │   └── explorerStore.ts # 동적 테이블 미리보기 조회 관리 스토어 [✅완성]
 │   │   ├── views/
 │   │   │   ├── DashboardView.vue   # 통합 모니터링 메인 뷰 (탭 컨트롤 포함) [✅완성]
 │   │   │   ├── ScheduleView.vue    # 한국/미국 스케줄러 관리 탭 뷰 [✅완성]
-│   │   │   └── HealthView.vue      # 데이터 헬스 모니터링 통합 탭 뷰 (신선도/갭/특화패널) [✅완성]
+│   │   │   ├── HealthView.vue      # 데이터 헬스 모니터링 통합 탭 뷰 (신선도/갭/특화패널) [✅완성]
+│   │   │   └── ExplorerView.vue    # 데이터 익스플로러 동적 미리보기 탭 뷰 [✅완성]
 │   │   ├── tests/
 │   │   │   ├── TaskStatusCard.spec.ts   # 컴포넌트 렌더링 및 이중 컨펌 동작 테스트 [✅완성]
 │   │   │   ├── DashboardView.spec.ts    # 대시보드 뷰 스토어 연동 테스트 [✅완성]
 │   │   │   ├── logStore.spec.ts         # 500줄 버퍼 제한 테스트 [✅완성]
 │   │   │   ├── ScheduleModal.spec.ts    # EST 시차 환산 및 장중 변경 안전 확인 테스트 [✅완성]
 │   │   │   ├── scheduleStore.spec.ts    # 스케줄 API 동작 스토어 테스트 [✅완성]
-│   │   │   └── healthStore.spec.ts      # 헬스 스토어 fetch 및 차단해제 API 연동 테스트 [✅완성]
+│   │   │   ├── healthStore.spec.ts      # health 스토어 fetch 및 차단해제 API 연동 테스트 [✅완성]
+│   │   │   ├── explorerStore.spec.ts    # explorer 스토어 fetch 및 상태 보관 테스트 [✅완성]
+│   │   │   └── ExplorerView.spec.ts     # ExplorerView 렌더링, 스켈레톤 및 오프라인 배너 테스트 [✅완성]
 │   │   ├── App.vue         # 메인 프레임 [✅완성]
 │   │   ├── shims-vue.d.ts  # TypeScript Vue shim [✅완성]
 │   │   ├── main.ts         # Pinia 바인딩 및 앱 런타임 엔트리포인트 [✅완성]
@@ -54,7 +58,8 @@ tdms_core/p4_manager/
 │   ├── test_status.py      # 비동기 상태 수집 검증 코드 [✅완성]
 │   ├── test_proxy_ws.py    # 웹소켓 중계 검증 코드 [✅완성]
 │   ├── test_scheduler_bridge.py # 스케줄러 중계 검증 코드 [✅완성]
-│   └── test_health_bridge.py # 헬스 중계 API 6종 및 장애 격리 검증 코드 [✅완성]
+│   ├── test_health_bridge.py # 헬스 중계 API 6종 및 장애 격리 검증 코드 [✅완성]
+│   └── test_explorer_bridge.py # 데이터 익스플로러 테이블 미리보기 중계 검증 코드 [✅완성]
 ├── backend.Dockerfile      # FastAPI 백엔드 이미지 빌드 명세 [✅완성]
 ├── frontend.Dockerfile     # Vue 컴파일 및 Nginx 프로덕션 Multi-stage 빌드 명세 [✅완성]
 ├── docker-compose.yml      # 멀티 컨테이너 환경 및 tdms-net 정의 [✅완성]
@@ -120,6 +125,9 @@ tdms_core/p4_manager/
 | frontend/src/tests/ScheduleModal.spec.ts | 미국 EST 시간대 환산 및 한국/미국 장중 변경 통제 "변경승인" 이중 안전장치 검증 | ✅통과 |
 | frontend/src/tests/scheduleStore.spec.ts | Pinia scheduleStore 스케줄 fetch/toggle/reschedule API 연동 검증 | ✅통과 |
 | frontend/src/tests/healthStore.spec.ts | Pinia healthStore 헬스 데이터 fetch 및 차단 해제 연동 검증 | ✅통과 |
+| frontend/src/tests/explorerStore.spec.ts | Pinia explorerStore 메타/데이터 API 연동 및 오프라인 검증 | ✅통과 |
+| frontend/src/tests/ExplorerView.spec.ts | ExplorerView UI 렌더링, 스켈레톤, 오프라인 에러 배너 검증 | ✅통과 |
+| tests/test_explorer_bridge.py | 백엔드 미리보기 중계 API 2종 및 하위 백엔드 장애 격리 검증 | ✅통과 |
 
 ---
 
@@ -144,3 +152,4 @@ tdms_core/p4_manager/
 | T-004 | WebSocket 로그 스트리밍 이중 중계 프록시 API, Pinia logStore 500줄 링 버퍼 및 다크 터미널 UI 구현 완료 |
 | T-005 | 백엔드 한국/미국 스케줄 API 교차 보완, P4 스케줄 중계 및 통합 API 3종, 프론트엔드 ScheduleView/Modal 안전 통제 장치 구현 완료 |
 | T-006 | 백엔드 미국 CIK 차단 해제 API 신설, P4 헬스 중계 및 장애 격리 API 6종, 프론트엔드 HealthView 및 한국 마일스톤 타임라인, 미국 블랙리스트 제어 패널 구현 완료 |
+| T-007 | 백엔드 미리보기 중계 및 장애 격리 API 2종, 프론트엔드 ExplorerView 및 스토어 구현 완료 |

@@ -1,6 +1,6 @@
 # P4 API 및 Nginx 프록시 라우팅 맵 (api_routing_map.md)
 
-> 마지막 변경: T-006  
+> 마지막 변경: T-007  
 > 소스 위치: `tdms_core/p4_manager/main.py:17`, `tdms_core/p4_manager/routers/manager.py:15`, `tdms_core/p4_manager/routers/proxy_ws.py:11`, `tdms_core/p4_manager/nginx/nginx.conf:59`
 
 ### 1. 개요 및 목적
@@ -66,7 +66,17 @@
 *   **소스 위치**: `tdms_core/p4_manager/routers/manager.py:143`
 
 
-#### 2.6. Nginx 리버스 프록시 라우팅 규칙
+#### 2.6. P4 통합 데이터 미리보기 중계 API
+*   **테이블 메타데이터 조회**: `GET /api/mgr/preview/meta`
+    *   **설명**: 한국(kr) 및 미국(us) 시장별 미리보기가 지원되는 테이블 화이트리스트 10종의 영문 식별자와 한글 표시명을 반환합니다.
+    *   **상세 명세**: [[p4_manager_wiki/interfaces/get_preview_meta]]
+*   **테이블 데이터 미리보기 중계**: `GET /api/mgr/preview/{market}/{table}`
+    *   **설명**: 시장별 미리보기 데이터를 한글 종목코드 필터, 날짜 및 페이징 파라미터와 함께 비동기 중계하며, 통신 장애 시 200 OK와 `offline: true` 객체로 격리 처리합니다.
+    *   **상세 명세**: [[p4_manager_wiki/interfaces/get_preview_table]]
+*   **소스 위치**: `tdms_core/p4_manager/routers/manager.py:314`
+
+
+#### 2.7. Nginx 리버스 프록시 라우팅 규칙
 *   **수신 포트**: 호스트 포트 `80` (컨테이너 포트 `80` 바인딩)
 *   **설정 위치**: `tdms_core/p4_manager/nginx/nginx.conf:59`
 

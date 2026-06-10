@@ -1,7 +1,7 @@
 # Sub Project 개발/운영 환경 (environment.md)
 
 > **Sub Project**: p4_manager  
-> **마지막 업데이트**: 2026-06-09 (T-004 완료)  
+> **마지막 업데이트**: 2026-06-10 (T-007 완료)  
 > **타입**: Type E (배경/환경 지식)  
 > **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
 

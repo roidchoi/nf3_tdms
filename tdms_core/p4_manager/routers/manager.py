@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 import httpx
+from tdms_core.p4_manager.config import settings
 from tdms_core.p4_manager.services.status_service import status_service
 
 router = APIRouter()
@@ -311,4 +312,134 @@ async def release_us_blacklist(cik: str):
             raise HTTPException(status_code=resp.status_code, detail=resp.text)
         except httpx.RequestError as e:
             raise HTTPException(status_code=503, detail=f"USDMS 백엔드 연결 오류: {str(e)}")
+
+
+# =================================================================
+# 5. 데이터 익스플로러 테이블 미리보기 중계 API
+# =================================================================
+
+ALLOWED_TABLES_KR = {
+    "stock_info",
+    "daily_ohlcv",
+    "daily_market_cap",
+    "minute_ohlcv",
+    "financial_statements",
+    "financial_ratios",
+    "price_adjustment_factors",
+    "system_milestones",
+    "trading_calendar",
+    "minute_target_history",
+}
+
+ALLOWED_TABLES_US = {
+    "us_ticker_master",
+    "us_ticker_history",
+    "us_collection_blacklist",
+    "us_financial_facts",
+    "us_standard_financials",
+    "us_share_history",
+    "us_daily_price",
+    "us_price_adjustment_factors",
+    "us_daily_valuation",
+    "us_financial_metrics",
+}
+
+
+@router.get("/preview/meta")
+def get_preview_metadata():
+    """
+    각 시장별 조회 가능한 테이블 메타데이터 목록을 반환합니다.
+    """
+    return {
+        "kr": [
+            { "table": "stock_info", "name": "종목 마스터 정보" },
+            { "table": "daily_ohlcv", "name": "일봉 시세" },
+            { "table": "daily_market_cap", "name": "일별 시가총액" },
+            { "table": "minute_ohlcv", "name": "분봉 시세" },
+            { "table": "financial_statements", "name": "PIT 재무제표" },
+            { "table": "financial_ratios", "name": "PIT 재무비율" },
+            { "table": "price_adjustment_factors", "name": "수정주가 팩터" },
+            { "table": "system_milestones", "name": "수집 마일스톤 이력" },
+            { "table": "trading_calendar", "name": "영업일 달력" },
+            { "table": "minute_target_history", "name": "수집 대상 이력" }
+        ],
+        "us": [
+            { "table": "us_ticker_master", "name": "미국 티커 마스터" },
+            { "table": "us_ticker_history", "name": "티커 변경 이력" },
+            { "table": "us_collection_blacklist", "name": "차단 종목 목록" },
+            { "table": "us_financial_facts", "name": "SEC XBRL 수시 공시 재무 팩트" },
+            { "table": "us_standard_financials", "name": "PIT 표준재무제표" },
+            { "table": "us_share_history", "name": "주식수 변동 이력" },
+            { "table": "us_daily_price", "name": "일봉 시세" },
+            { "table": "us_price_adjustment_factors", "name": "수정주가 팩터" },
+            { "table": "us_daily_valuation", "name": "일별 가치평가 지표" },
+            { "table": "us_financial_metrics", "name": "분기별 재무비율" }
+        ]
+    }
+
+
+@router.get("/preview/{market}/{table}")
+async def get_preview_table(
+    market: str,
+    table: str,
+    limit: int = Query(50, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    stk_cd: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None)
+):
+    """
+    시장(kr/us)별 테이블 미리보기 데이터를 조회하여 중계하고 장애를 격리합니다.
+    """
+    if market not in ["kr", "us"]:
+        raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
+        
+    if market == "kr" and table not in ALLOWED_TABLES_KR:
+        raise HTTPException(status_code=400, detail=f"Table '{table}' is not allowed in KR market.")
+    elif market == "us" and table not in ALLOWED_TABLES_US:
+        raise HTTPException(status_code=400, detail=f"Table '{table}' is not allowed in US market.")
+        
+    url = (
+        f"{settings.P2_KDMS_URL}/api/data/preview/{table}"
+        if market == "kr"
+        else f"{settings.P3_USDMS_URL}/api/data/preview/{table}"
+    )
+    
+    params = {
+        "limit": limit,
+        "offset": offset
+    }
+    if stk_cd:
+        params["stk_cd"] = stk_cd
+    if start_date:
+        params["start_date"] = start_date
+    if end_date:
+        params["end_date"] = end_date
+        
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, params=params, timeout=5.0)
+            if resp.status_code == 200:
+                res_data = resp.json()
+                return {
+                    "offline": False,
+                    "table": res_data.get("table", table),
+                    "count": res_data.get("count", 0),
+                    "data": res_data.get("data", [])
+                }
+            return {
+                "offline": True,
+                "table": table,
+                "count": 0,
+                "data": [],
+                "message": f"Backend returned status {resp.status_code}: {resp.text}"
+            }
+        except Exception as e:
+            return {
+                "offline": True,
+                "table": table,
+                "count": 0,
+                "data": [],
+                "message": f"Backend communication error: {str(e)}"
+            }
 

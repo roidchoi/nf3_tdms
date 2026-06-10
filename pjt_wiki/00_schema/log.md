@@ -12,6 +12,8 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-10] Task완료 | p4_manager 통합 관리 레이어 T-007(데이터 익스플로러 테이블 동적 미리보기) 완료에 따른 codebase_map.md, environment.md, interfaces/api_routing_map.md(동적 미리보기/메타 API 추가), interfaces/get_preview_meta.md(테이블 목록 메타 API 명세), interfaces/get_preview_table.md(테이블 미리보기 및 예외격리 API 명세) 신규 지식화 및 MoC(index.md) 현행화 완료.
+
 ## [2026-06-09] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-006(공통 헬스 모니터링 및 시장별 특화 패널) 완료에 따른 codebase_map.md, decisions.md(P4DEC-003 정규화 및 API 동적 예외 격리), interfaces/get_health_freshness.md(신선도 중계), interfaces/get_health_gaps.md(누락 갭 정규화 중계), interfaces/post_blacklist_release.md(미국 차단 해제 중계), interfaces/kr_milestones.md(한국 마일스톤 중계) 신규 지식화 및 MoC(index.md) 현행화 완료. 아울러 p3_usdms 내 차단 해제 API 신설에 따라 health_admin_api.md 인터페이스 내용 갱신 완료.
 
 ## [2026-06-09] Task완료 | p4_manager 통합 관리 레이어 T-004(WebSocket 로그 스트리밍 이중화 프록시) 완료에 따른 codebase_map.md, environment.md(websockets 패키지 버전 추가), interfaces/api_routing_map.md(WebSocket 프록시 엔드포인트 추가), interfaces/ws_proxy_logs.md(WebSocket 중계 프록시 API 상세 명세) 신규 지식화 및 MoC(index.md) 현행화 완료.
