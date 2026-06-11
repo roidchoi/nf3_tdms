@@ -8,6 +8,10 @@ services:
     container_name: p4_backend
     expose:
       - "8010"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../data:/app/data
+      - ../../backups:/app/backups
     networks:
       - tdms-net
     restart: unless-stopped

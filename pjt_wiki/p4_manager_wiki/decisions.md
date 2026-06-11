@@ -20,6 +20,8 @@
 | P4DEC-002 | 백그라운드 캐싱 폴링 기법 및 실시간 API 장애 격리(Fault Isolation) 레이어 적용 | T-002 | active |
 | P4DEC-003 | 이종 갭 검출 데이터의 정규화(Normalization) 및 실시간 API 장애 격리(Fault Isolation) | T-006 | active |
 | P4DEC-004 | 개발 PC 백업 허브 프로파일 식별 및 서버 PC 물리 차단 안전장치 아키텍처 | T-008 | active |
+| P4DEC-005 | 컨테이너 재생성 시 백업 유실 방지를 위한 데이터 볼륨 바인딩 및 호스트 Docker.sock 연동 | T-009 | active |
+| P4DEC-006 | 시장 격리형 물리 백업 및 개별 복구 오케스트레이션 아키텍처 | T-009 | active |
 
 ---
 
@@ -115,3 +117,56 @@
 
 ### 관련 링크
 *   `backup_api.md` (환경 식별 및 물리 백업 API 명세)
+
+---
+
+## [P4DEC-005] 컨테이너 재생성 시 백업 유실 방지를 위한 데이터 볼륨 바인딩 및 호스트 Docker.sock 연동 (T-009)
+
+### 배경
+*   P4 백엔드 매니저 서비스(`p4_backend`) 컨테이너는 빌드 및 구동 시점의 임시 파일 시스템을 사용하므로, 컨테이너 재생성/재빌드 시 내부에 보관하고 있던 로컬 백업 아카이브(`.tar.gz`)들이 유실되는 심각한 결함이 식별되었습니다.
+*   또한, 개발 PC 환경에서 복구 실행 시 타 도커 DB 및 API 서버 컨테이너들을 기동/중지(`docker stop`/`start`) 시켜야 하지만, 컨테이너 내부에 `docker` CLI 명령어가 없으며 호스트 도커 데몬 소켓과의 통신로가 차단되어 물리 복구 라이프사이클 오케스트레이션이 불가능했습니다.
+
+### 결정 내용
+*   **물리 볼륨 바인딩 설계**:
+    - `docker-compose.yml` 에서 `p4_backend` 컨테이너에 호스트의 데이터 폴더(`../../data`)와 백업 폴더(`../../backups`)를 각각 `/app/data` 및 `/app/backups` 경로로 직접 이중 바인딩 매핑하도록 보강하였습니다.
+    - 이를 통해 도커 이미지가 리빌드되거나 소멸 후 재기동되더라도 호스트의 물리 백업본은 절대로 소실되지 않는 강건성을 확보했습니다.
+*   **호스트 도커 소켓 및 CLI 내장**:
+    - 호스트의 도커 소켓 `/var/run/docker.sock`을 컨테이너 내부의 동일한 위치로 마운트하여 컨테이너 내부 프로세스가 호스트의 도커 데몬에게 직접 제어 패킷을 날릴 수 있도록 연결로를 개방했습니다.
+    - `backend.Dockerfile` 내부에 static Docker CLI 정적 바이너리를 curl로 다운로드하여 설치하는 과정을 보강하여 컨테이너 환경 내에서도 `subprocess.run(["docker", "stop", ...])` 명령어 구동이 완벽하게 가동되도록 조치했습니다.
+
+### 영향 범위
+*   `tdms_core/p4_manager/docker-compose.yml` (볼륨 마운트 매핑)
+*   `tdms_core/p4_manager/backend.Dockerfile` (docker CLI 내장화)
+*   `tdms_core/p4_manager/services/backup_service.py` (컨테이너 내 subprocess 실행성 보장)
+
+### 관련 링크
+*   `backup_api.md` (물리 백업 및 복구 명세서)
+
+---
+
+## [P4DEC-006] 시장 격리형 물리 백업 및 개별 복구 오케스트레이션 아키텍처 (T-009)
+
+### 배경
+*   기존 통합 물리 백업(`all` 옵션)은 88GB(KDMS 66GB + USDMS 22GB)의 전체 데이터베이스를 한꺼번에 압축하므로 기기 리소스 소모 및 압축 시간(I/O 과부하)이 극대화되는 문제가 있었습니다.
+*   또한, 시장별(`kdms`/`usdms`)로 데이터 관리 주체와 변경 지점이 서로 다름에도 불구하고, 복구 시 모든 데이터가 동시에 롤백되어 의도치 않은 시장의 최신 수집 데이터가 유실되는 사고 가능성이 존재했습니다.
+*   TimescaleDB 데이터 디렉토리 권한이 `700`으로 묶여 있어 일반 권한으로는 아카이빙 시 데이터가 누락되는(빈 껍데기만 압축되어 용량이 비정상적으로 작아지는) 결함이 발견되어, 컨테이너 내외부를 아우르는 동적 권한 보정 래퍼가 필수적이었습니다.
+
+### 결정 내용
+*   **통합 백업 제거 및 시장 격리형 백업/복구 구현**:
+    - 물리 백업 및 복구 프로세스에서 `all` 옵션을 완전히 도려내고, 오직 시장별(`kdms`/`usdms`) 개별 격리 트랜잭션만 수행하도록 구조를 개편했습니다.
+    - `kdms` 복구 시에는 오직 `["p2_kdms", "kdms_backend", "kdms_timescaledb"]` 컨테이너들만 정지 후 복구하며, `usdms` 복구 시에는 오직 `["p3_usdms", "usdms_backend", "usdms_timescaledb"]` 컨테이너들만 제어하여 상호 간섭 및 데이터 오염을 완벽히 차단합니다.
+*   **동적 권한 보정 래퍼 적용**:
+    - 백엔드 서비스 실행 환경의 `sudo` 명령어 탑재 여부와 현재 UID(`os.geteuid()`)를 판별하여, 필요한 경우 `sudo tar` 및 `sudo chown` 명령어로 자동 래핑하여 88GB 원본 데이터가 유실 없이 원본 용량 그대로 안전하게 압축 및 소유권 복구되도록 설계했습니다.
+*   **StartupValidator 결과 필터링**:
+    - 특정 시장 복구 이후의 자가 진단(StartupValidator) 결과를 호출된 해당 시장 정보만으로 필터링하여 불필요한 시장 정보 노출 및 예외 발생 가능성을 억제했습니다.
+
+### 영향 범위
+*   `tdms_core/p4_manager/services/backup_service.py`
+*   `tdms_core/p4_manager/routers/manager.py`
+*   `tdms_core/p4_manager/tests/test_restore.py`
+*   `tdms_core/p4_manager/frontend/src/stores/backupStore.ts`
+*   `tdms_core/p4_manager/frontend/src/views/BackupView.vue`
+*   `tdms_core/p4_manager/frontend/src/tests/BackupView.spec.ts`
+
+### 관련 링크
+*   `backup_api.md` (시장 구분 필드가 적용된 API 규격 명세)

@@ -452,12 +452,15 @@ def get_env_profile():
 
 
 @router.post("/backup")
-def create_backup(tag: str = Query("manual", description="백업 식별용 태그")):
+def create_backup(
+    market: str = Query(..., description="시장 구분 (kdms 또는 usdms)"),
+    tag: str = Query("manual", description="백업 식별용 태그")
+):
     """
     개발 PC 로컬 DB의 물리적 스냅샷 백업을 생성합니다. (서버 PC에서는 403 Forbidden 기각)
     """
     try:
-        return backup_service.create_backup(tag=tag)
+        return backup_service.create_backup(market=market, tag=tag)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except FileNotFoundError as e:
@@ -470,4 +473,36 @@ def create_backup(tag: str = Query("manual", description="백업 식별용 태�
 def list_backups():
     """보관된 물리 백업 스냅샷 목록을 반환합니다."""
     return backup_service.list_backups()
+
+
+from pydantic import BaseModel, Field
+
+class RestoreRequest(BaseModel):
+    market: str = Field(..., description="시장 구분 (kdms 또는 usdms)")
+    tag: str = Field(..., description="백업 태그명")
+    filename: str = Field(..., description="복구 대상 백업 파일명 (.tar.gz)")
+    confirm_text: str = Field(..., description="이중 확인 텍스트 (RESTORE LOCAL DB)")
+
+@router.post("/restore")
+def restore_backup(payload: RestoreRequest):
+    """
+    지정된 백업 스냅샷 아카이브를 이용해 로컬 개발 PC DB를 복구합니다.
+    서버 환경 차단 및 오작동 방지 이중 텍스트 검증이 포함되어 있습니다.
+    """
+    try:
+        return backup_service.restore_backup(
+            market=payload.market,
+            tag=payload.tag,
+            filename=payload.filename,
+            confirm_text=payload.confirm_text
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 

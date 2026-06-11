@@ -7,7 +7,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     gcc \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Docker CLI 정적 바이너리 설치 (호스트 도커 데몬 제어용)
+RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-26.1.4.tgz -o docker.tgz \
+    && tar -xzf docker.tgz \
+    && mv docker/docker /usr/local/bin/ \
+    && rm -rf docker docker.tgz
 
 # uv 설치
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv/bin/uv

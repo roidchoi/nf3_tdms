@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-10
-> **총 등록 파일**: 40개
+> **마지막 업데이트**: 2026-06-11
+> **총 등록 파일**: 41개
 
 
 ---
@@ -162,15 +162,15 @@
 ## p4_manager_wiki (p4_manager 통합 관리 레이어)
 
 > **역할**: 한국/미국 백엔드 통합 모니터링 UI 및 오케스트레이션
-> **상태**: ✅ T-008 DB 백업 실행 및 이력 관리 완료 (2026-06-10)
+> **상태**: ✅ T-009 안전 복구 제어 및 무결성 진단 연동 완료 (2026-06-11)
 
 ### 코어 문서
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 17개 파일의 물리구조, 새로 구성된 Vue SPA 프론트엔드 폴더 구조 및 테스트 현황 | T-008 |
-| `environment.md` | tdms_p4_env Conda/Node.js 런타임 환경, 주요 패키지(fastapi, vue3, vitest, websockets) 버전, Nginx 프록시 해결책 및 TS5101/TS6133 빌드 오류 대안 기록 | T-008 |
-| `decisions.md` | Nginx 동적 리졸브(P4DEC-001) 및 백그라운드 캐싱 폴링/장애 격리(P4DEC-002), 데이터 갭 정규화 및 API 동적 예외 격리(P4DEC-003) 적용 결정, 서버 백업 물리 차단 안전장치(P4DEC-004) 적용 | T-008 |
+| `codebase_map.md` | 17개 파일의 물리구조, 새로 구성된 Vue SPA 프론트엔드 폴더 구조 및 테스트 현황 | T-009 |
+| `environment.md` | tdms_p4_env Conda/Node.js 런타임 환경, 주요 패키지(fastapi, vue3, vitest, websockets) 버전, Nginx 프록시 해결책 및 TS5101/TS6133 빌드 오류 대안 기록 | T-009 |
+| `decisions.md` | Nginx 동적 리졸브(P4DEC-001) 및 백그라운드 캐싱 폴링/장애 격리(P4DEC-002), 데이터 갭 정규화 및 API 동적 예외 격리(P4DEC-003) 적용 결정, 서버 백업 물리 차단 안전장치(P4DEC-004) 적용, 볼륨 바인딩(P4DEC-005), 시장 격리 백업/복구 및 권한 래퍼 아키텍처(P4DEC-006) 결정 추가 | T-009 |
 
 ### interfaces/ (인터페이스 명세)
 
@@ -186,7 +186,7 @@
 | `kr_milestones.md` | routers/manager.py | `/api/mgr/health/kr/milestones` 한국 마일스톤 생성/조회 중계 API 명세 | T-006 |
 | `get_preview_meta.md` | routers/manager.py | `/api/mgr/preview/meta` 데이터 탐색기 지원 테이블 메타조회 API 명세 | T-007 |
 | `get_preview_table.md` | routers/manager.py | `/api/mgr/preview/{market}/{table}` 데이터 100건 동적 조회 및 장애 격리 API 명세 | T-007 |
-| `backup_api.md` | routers/manager.py | `/api/mgr/env`, `/api/mgr/backup`, `/api/mgr/backup/list` 물리 백업 및 환경 프로파일 API 명세 | T-008 |
+| `backup_api.md` | routers/manager.py | `/api/mgr/env`, `/api/mgr/backup`, `/api/mgr/backup/list`, `/api/mgr/restore` 물리 백업/복구 및 환경 프로파일 API 명세 | T-009 |
 
 
 ### errors/ (해결된 에러 기록)
@@ -195,6 +195,7 @@
 |---|---|---|
 | `p4err-001_module_not_found_tdms_core.md` | 도커 백엔드 기동 시 `tdms_core` 임포트 불가 (PYTHONPATH 부재) -> Dockerfile 내 `ENV PYTHONPATH="/app"` 추가 주입 | High |
 | `p4err-002_real_db_volume_tar_permission.md` | 대용량 Docker 볼륨(66GB) 백업 시 I/O 병목 및 권한 미획득 -> 테스트용 격리 디렉토리 주입 우회 구현 | High |
+| `p4err-003_host_cli_backup_execution_trouble.md` | 로컬 CLI 기동 시 data_path 누락 및 싱글톤 인스턴스 미활용, 비동기(await) 혼선에 따른 3종 에러 -> DATA_PATH 명시 및 인스턴스 동기 호출 | Medium |
 
 ---
 
@@ -209,10 +210,11 @@
 - [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 - [P4-ERR-002] 대용량 DB 볼륨 tar 백업 권한 장애 → `p4_manager_wiki/errors/p4err-002_real_db_volume_tar_permission.md`
+- [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
 
 ### 📐 최근 변경된 인터페이스
 
-- `backup_api`: `/api/mgr/env`, `/api/mgr/backup`, `/api/mgr/backup/list` 물리 백업 아카이빙 및 서버 환경 차단 API 명세 → `p4_manager_wiki/interfaces/backup_api.md`
+- `backup_api`: `/api/mgr/env`, `/api/mgr/backup`, `/api/mgr/backup/list`, `/api/mgr/restore` 물리 백업/복구 및 서버 환경 차단 API 명세 → `p4_manager_wiki/interfaces/backup_api.md`
 
 - `post_run_task`: `/api/mgr/run` 수동 태스크 기동 API 및 KR/US 동적 중계 규격 → `p4_manager_wiki/interfaces/post_run_task.md`
 - `get_integrated_status`: `/api/mgr/status` 통합 상태 집계 API 명세 및 KR/US 예외 격리(Fault Isolation) 리턴 스키마 → `p4_manager_wiki/interfaces/get_integrated_status.md`
@@ -238,7 +240,7 @@
 - p1_shared: ✅ 완료 (T-001~T-008, 미국 영업일 판별 추가 완료)
 - p2_kdms: 🔄 진행 중
 - p3_usdms: ✅ 완료 (T-008 완료)
-- p4_manager: ✅ 완료 (T-008 완료)
+- p4_manager: ✅ 완료 (T-009 완료)
 
 
 

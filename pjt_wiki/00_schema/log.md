@@ -12,6 +12,10 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-11] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-009 고도화(시장 격리형 물리 백업 및 개별 복구 오케스트레이션) 완료에 따른 decisions.md(P4DEC-006 시장 격리 및 동적 권한 보정 래퍼 추가), interfaces/backup_api.md(시장 격리 API 스펙 갱신) 지식화 완료.
+
+## [2026-06-10] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-009(안전 복구 및 무결성 진단 연동) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-005 볼륨 바인딩 및 docker.sock 연동 의사결정 추가), interfaces/backup_api.md(물리 복구 API 명세 추가) 지식화 및 MoC(index.md) 현행화 완료.
+
 ## [2026-06-10] Task완료 | p4_manager 통합 관리 레이어 T-008(DB 백업 실행 및 이력 관리) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-004 서버 백업 차단 아키텍처 의사결정), interfaces/backup_api.md(환경 프로파일 및 백업 API 명세) 신규 지식화 및 MoC(index.md) 현행화 완료.
 
 ## [2026-06-10] Task완료 | p4_manager 통합 관리 레이어 T-007(데이터 익스플로러 테이블 동적 미리보기) 완료에 따른 codebase_map.md, environment.md, interfaces/api_routing_map.md(동적 미리보기/메타 API 추가), interfaces/get_preview_meta.md(테이블 목록 메타 API 명세), interfaces/get_preview_table.md(테이블 미리보기 및 예외격리 API 명세) 신규 지식화 및 MoC(index.md) 현행화 완료.

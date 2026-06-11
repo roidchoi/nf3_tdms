@@ -5,6 +5,7 @@ import axios from 'axios'
 export interface BackupInfo {
   path: string
   filename: string
+  market: string
   tag: string
   created_at: string
   size_bytes: number
@@ -41,11 +42,11 @@ export const useBackupStore = defineStore('backup', {
         this.loading = false
       }
     },
-    async createBackup(tag: string = 'manual') {
+    async createBackup(market: string, tag: string = 'manual') {
       this.loading = true
       this.error = null
       try {
-        const response = await http.post(`/backup?tag=${tag}`, {}, {
+        const response = await http.post(`/backup?market=${market}&tag=${tag}`, {}, {
           timeout: 60000 // 백업은 파일 압축이 있으므로 타임아웃을 60초로 넉넉하게 설정
         })
         await this.fetchBackups()
@@ -62,6 +63,33 @@ export const useBackupStore = defineStore('backup', {
       } finally {
         this.loading = false
       }
+    },
+    async restoreBackup(market: string, tag: string, filename: string, confirmText: string) {
+      this.loading = true
+      this.error = null
+      try {
+        const response = await http.post('/restore', {
+          market,
+          tag,
+          filename,
+          confirm_text: confirmText
+        }, {
+          timeout: 60000
+        })
+        return response.data
+      } catch (error) {
+        console.error('Failed to restore backup:', error)
+        if (axios.isAxiosError(error) && error.response) {
+          const detail = error.response.data?.detail
+          this.error = detail || '복구에 실패했습니다.'
+        } else {
+          this.error = '복구에 실패했습니다. 네트워크 상태를 확인하세요.'
+        }
+        throw new Error(this.error || '복구에 실패했습니다.')
+      } finally {
+        this.loading = false
+      }
     }
   }
 })
+
