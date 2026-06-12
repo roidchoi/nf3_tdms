@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p4_manager (통합 관리 레이어)  
-> **마지막 업데이트**: 2026-06-10 (T-008 완료)  
+> **마지막 업데이트**: 2026-06-12 (T-010 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -52,7 +52,8 @@ tdms_core/p4_manager/
 │   └── nginx.conf          # Nginx 리버스 프록시 및 WS 중계 설정 [✅완성]
 ├── services/
 │   ├── status_service.py   # 비동기 상태 수집, 캐싱 및 수동 기동 중계 서비스 [✅완성]
-│   └── backup_service.py   # DB 물리 볼륨 압축 아카이빙 및 이력 조회 서비스 [✅완성]
+│   ├── backup_service.py   # DB 물리 볼륨 압축 아카이빙 및 이력 조회 서비스 [✅완성]
+│   └── sync_service.py     # DB 물리 동기화 및 네트워크 IP 자가 탐색 서비스 [✅완성]
 ├── routers/
 │   ├── manager.py          # GET/PUT/POST 통합 관리 API 라우터 (헬스/스케줄 중계 및 물리 백업 추가) [✅완성]
 │   └── proxy_ws.py         # /ws/logs/{market} 웹소켓 중계 프록시 라우터 [✅완성]
@@ -64,7 +65,8 @@ tdms_core/p4_manager/
 │   ├── test_scheduler_bridge.py # 스케줄러 중계 검증 코드 [✅완성]
 │   ├── test_health_bridge.py # 헬스 중계 API 6종 및 장애 격리 검증 코드 [✅완성]
 │   ├── test_explorer_bridge.py # 데이터 익스플로러 테이블 미리보기 중계 검증 코드 [✅완성]
-│   └── test_backup.py      # 백업 및 장비 환경감지 API 검증 코드 [✅완성]
+│   ├── test_backup.py      # 백업 및 장비 환경감지 API 검증 코드 [✅완성]
+│   └── test_sync_service.py # 물리 동기화 및 자가 탐색 API 6종 검증 코드 [✅완성]
 ├── backend.Dockerfile      # FastAPI 백엔드 이미지 빌드 명세 [✅완성]
 ├── frontend.Dockerfile     # Vue 컴파일 및 Nginx 프로덕션 Multi-stage 빌드 명세 [✅완성]
 ├── docker-compose.yml      # 멀티 컨테이너 환경 및 tdms-net 정의 [✅완성]
@@ -96,8 +98,8 @@ tdms_core/p4_manager/
 | frontend | ✅완성 | `DashboardView.vue`, `TaskStatusCard.vue`, `LogTerminal.vue` | 다크 테마 대시보드 화면 및 태스크 즉시 실행 조작 UI, 실시간 로그 터미널 제공 |
 | nginx | ✅완성 | `nginx.conf` | 포트 80 수신 및 각 백엔드(p2, p3, p4) 프록시 및 WebSocket 중계 위임 |
 | routers | ✅완성 | `manager.py`, `proxy_ws.py` | 통합 관리자 전용 API 라우터 및 실시간 웹소켓 중계 프록시 엔드포인트 제공 |
-| services | ✅완성 | `status_service.py` | p2/p3 백엔드 헬스 및 태스크 상태 실시간 비동기 수집/캐싱 및 포맷 정규화 |
-| tests | ✅완성 | `test_infra.py`, `test_status.py`, `test_proxy_ws.py` | 헬스체크 및 프록시 검증, 비동기 상태 수집 및 에러 격리, 웹소켓 이중 프록시 중계 동작 검증 |
+| services | ✅완성 | `status_service.py`, `backup_service.py`, `sync_service.py` | p2/p3 백엔드 상태/태스크 캐싱, 로컬 DB 백업/복구 제어 및 DB 물리 동기화/IP 네트워크 자가 탐색 제공 |
+| tests | ✅완성 | `test_infra.py`, `test_status.py`, `test_proxy_ws.py`, `test_sync_service.py` | 헬스체크 및 프록시 검증, 비동기 상태 수집 및 에러 격리, 웹소켓 중계 및 동기화/네트워크 자가 탐색 기능 검증 |
 | 루트 패키지 | ✅완성 | `main.py`, `config.py` | p4 통합 관리 백엔드 설정 로드 및 lifespan 이벤트 루프 처리 |
 
 ---
@@ -134,6 +136,12 @@ tdms_core/p4_manager/
 | frontend/src/tests/ExplorerView.spec.ts | ExplorerView UI 렌더링, 스켈레톤, 오프라인 에러 배너 검증 | ✅통과 |
 | tests/test_explorer_bridge.py | 백엔드 미리보기 중계 API 2종 및 하위 백엔드 장애 격리 검증 | ✅통과 |
 | tests/test_backup.py | 백엔드 장비 환경 식별 API 및 개발 환경 물리 DB 백업/조회 API 검증 | ✅통과 |
+| tests/test_sync_service.py | 이중 확인 텍스트 불일치 및 서버 환경 push 쓰기 동작 차단 검증 | ✅통과 |
+| tests/test_sync_service.py | 로컬/원격 무인화 sudoers NOPASSWD 비밀번호 요구 검증 | ✅통과 |
+| tests/test_sync_service.py | powershell.exe 우회 DNS 서버 IP 탐색 및 소켓 연결 테스트 검증 | ✅통과 |
+| tests/test_sync_service.py | asyncio C클래스 포트 스캔 및 서버 감지 실패 예외 처리 검증 | ✅통과 |
+| tests/test_sync_service.py | 정규식 기반 .env 내 DEV_IP/SERVER_IP 갱신 및 메모리 변수 적용 검증 | ✅통과 |
+| tests/test_sync_service.py | API 동기화(/sync), 탐색(/detect-server), 갱신(/sync-ip), 검증(/test-connection) 엔드포인트 검증 | ✅통과 |
 | frontend/src/tests/BackupView.spec.ts | BackupView UI 렌더링, 접속 환경 인식 및 서버 통제 작동 검증 | ✅통과 |
 
 ---
@@ -161,3 +169,4 @@ tdms_core/p4_manager/
 | T-006 | 백엔드 미국 CIK 차단 해제 API 신설, P4 헬스 중계 및 장애 격리 API 6종, 프론트엔드 HealthView 및 한국 마일스톤 타임라인, 미국 블랙리스트 제어 패널 구현 완료 |
 | T-007 | 백엔드 미리보기 중계 및 장애 격리 API 2종, 프론트엔드 ExplorerView 및 스토어 구현 완료 |
 | T-008 | DB 백업 실행 및 이력 관리 기능 구현, 서버 환경 차단 물리 안전장치 적용 완료 |
+| T-010 | 물리 동기화 백라운드 파이프라인, 로컬/원격 sudo NOPASSWD 사전 점검, powershell.exe DNS 우회 쿼리, asyncio 사설 대역 비동기 스캔 및 .env 실시간 갱신 구현 완료 |

@@ -12,6 +12,14 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-12] 에러등록 | 통합 관리자 대시보드 내 대한민국(KDMS) 스케줄 탭 조회 시 누락된 접두사(/tasks) 매핑 불일치로 발생했던 404 Not Found 에러 극복 가이드(p4err-005_scheduler_api_404_not_found.md) 등록 및 codebase_map.md, environment.md, MoC(index.md) 일제 갱신 완료.
+
+## [2026-06-12] 에러등록 | WSL2 가상망 내에서 AI 에이전트 브라우저 실행 차단 장애를 극복하기 위해 Windows Chrome 원격 디버깅(--remote-debugging-port=9222) 포트 프록시 매핑(netsh) 및 WSL2 socat 백그라운드 터널 중계 연동 가이드(p4err-004_wsl2_agent_browser_forwarding.md) 신규 지식화 및 MoC(index.md) 현행화 완료.
+
+## [2026-06-11] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-010(물리 동기화 및 감사 리포팅 연동) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-007 Windows PowerShell 우회 DNS 쿼리 및 Async C클래스 포트 스캔을 통한 서버 IP 자가 갱신), interfaces/physical_sync.md(물리 동기화 API), interfaces/network_api.md(네트워크 자가 감지 및 연결 검증 API) 신규 지식화 및 MoC(index.md) 현행화 완료.
+
+## [2026-06-11] 환경변경 | 서버 PC 리소스 부족 해소를 위한 미사용 Docker 볼륨(68.79GB) 및 과거 백업본(15.4GB) 정리 완료, 윈도우 호스트 C드라이브 용량 환수(WSL2 vhdx Shrink) 및 SSH/sudoers 무인화 가이드 수립에 따른 environment.md 갱신 완료.
+
 ## [2026-06-11] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-009 고도화(시장 격리형 물리 백업 및 개별 복구 오케스트레이션) 완료에 따른 decisions.md(P4DEC-006 시장 격리 및 동적 권한 보정 래퍼 추가), interfaces/backup_api.md(시장 격리 API 스펙 갱신) 지식화 완료.
 
 ## [2026-06-10] Task완료+의사결정 | p4_manager 통합 관리 레이어 T-009(안전 복구 및 무결성 진단 연동) 완료에 따른 codebase_map.md, environment.md, decisions.md(P4DEC-005 볼륨 바인딩 및 docker.sock 연동 의사결정 추가), interfaces/backup_api.md(물리 복구 API 명세 추가) 지식화 및 MoC(index.md) 현행화 완료.

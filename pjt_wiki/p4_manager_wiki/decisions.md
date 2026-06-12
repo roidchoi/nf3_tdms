@@ -22,6 +22,7 @@
 | P4DEC-004 | 개발 PC 백업 허브 프로파일 식별 및 서버 PC 물리 차단 안전장치 아키텍처 | T-008 | active |
 | P4DEC-005 | 컨테이너 재생성 시 백업 유실 방지를 위한 데이터 볼륨 바인딩 및 호스트 Docker.sock 연동 | T-009 | active |
 | P4DEC-006 | 시장 격리형 물리 백업 및 개별 복구 오케스트레이션 아키텍처 | T-009 | active |
+| P4DEC-007 | Windows PowerShell 우회 DNS 쿼리 및 Async C클래스 포트 스캔을 통한 서버 IP 자가 갱신 | T-010 | active |
 
 ---
 
@@ -170,3 +171,31 @@
 
 ### 관련 링크
 *   `backup_api.md` (시장 구분 필드가 적용된 API 규격 명세)
+
+---
+
+## [P4DEC-007] Windows PowerShell 우회 DNS 쿼리 및 Async C클래스 포트 스캔을 통한 서버 IP 자가 갱신 (T-010)
+
+### 배경
+*   물리 DB 동기화 파이프라인(`db_sync.py`)은 대용량 파일 전송을 위해 로컬 개발 PC와 원격 서버 PC의 정확한 IP를 `.env` 프로필에서 조회하여 SSH 채널을 수립합니다.
+*   그러나 개발 PC나 서버 PC의 재부팅, 또는 DHCP IP 재할당 문제로 인해 IP 불일치가 빈번하게 발생하여 동기화 작업이 멈추거나 실패하는 장애가 발생했습니다.
+*   특히 WSL2 환경에서 실행되는 리눅스 커널에서는 윈도우 호스트의 DNS 리졸버와의 브릿지 특성상 서버 호스트명(`SERVER_HOSTNAME`)을 정상 파싱하지 못하는 환경적 결함이 있었습니다.
+
+### 결정 내용
+*   **PowerShell 우회 DNS 리졸빙 (DNS Resolution Bypass)**:
+    - WSL2 내 리눅스 네트워크 한계를 우회하기 위해, 리눅스 셸에서 `powershell.exe` 서브프로세스를 기동하여 Windows OS Native의 DNS API `[System.Net.Dns]::GetHostAddresses()` 를 우회 쿼리함으로써 원격 서버 IP를 강제 확보하도록 설계했습니다.
+*   **비동기 사설 C클래스 포트 스캔 (Async C-Class Port Scanning)**:
+    - DNS 리졸브마저 작동하지 않는 극단적 장애 상황에 대비하여, 개발 PC의 로컬 사설 C클래스 대역(`192.168.35.0/24`)에 대해 Port 8000 커넥션을 `asyncio` 기반으로 초고속 동시 스캔하는 자가 치유(Self-Healing) 탐색 루틴을 구축했습니다.
+    - 스캔된 후보 호스트에 대해 `/api/mgr/env` GET 요청을 질의하고, 응답에서 `{"env": "server"}`를 식별하여 현재 활성화된 운영 서버의 IP를 동적으로 확정합니다.
+*   **원터치 .env 갱신 및 OS Environ 즉시 투영**:
+    - 탐색 완료된 IP를 API를 통해 `.env` 파일의 기존 다른 키-값을 훼손하지 않고 정규표현식으로 정밀 치환 기입하도록 하였으며, `os.environ` 값도 즉각 업데이트하여 백엔드 컴포넌트 재기동 없이 네트워크 경로 설정이 핫플러깅되도록 개선했습니다.
+
+### 영향 범위
+*   `tdms_core/p4_manager/services/sync_service.py` (우회 DNS 및 비동기 스캔 코어 탑재)
+*   `tdms_core/p4_manager/routers/manager.py` (네트워크 및 동기화 제어 엔드포인트 노출)
+*   `tdms_core/p4_manager/tests/test_sync_service.py` (비동기 스캔 모의 및 PowerShell 호출 검증용 격리 테스트 추가)
+*   `tdms_core/p4_manager/docker-compose.yml` (.env 바인드 마운트 볼륨 매핑)
+
+### 관련 링크
+*   `network_api.md` (서버 IP 자동 탐색 및 환경변수 갱신 API 명세)
+*   `physical_sync.md` (물리 동기화 및 사전 검증 인터페이스 명세)

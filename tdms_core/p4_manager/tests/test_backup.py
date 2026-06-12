@@ -22,7 +22,7 @@ def test_post_backup_on_server_raises_403_forbidden(mocker):
     [유도] EnvDetector.detect()가 "server"를 리턴할 시 403 HTTP 예외를 발생시키고 지정된 에러 메시지를 넘기도록 유도
     """
     mocker.patch("p1_shared.utils.env_detector.EnvDetector.detect", return_value="server")
-    response = client.post("/api/mgr/backup?tag=manual")
+    response = client.post("/api/mgr/backup?market=kdms&tag=manual")
     assert response.status_code == 403
     assert "서버 PC는 로컬 스냅샷 백업" in response.json()["detail"]
 
@@ -51,9 +51,11 @@ def test_post_backup_on_dev_success(mocker, tmp_path):
     def mock_tar_exec(*args, **kwargs):
         from pathlib import Path
         cmd = args[0]
-        backup_file_path = cmd[2]
-        Path(backup_file_path).parent.mkdir(exist_ok=True, parents=True)
-        Path(backup_file_path).write_bytes(b"dummy_tar_content")
+        # .tar.gz로 끝나는 경로 요소를 찾음
+        backup_file_path = next((x for x in cmd if isinstance(x, str) and x.endswith(".tar.gz")), None)
+        if backup_file_path:
+            Path(backup_file_path).parent.mkdir(exist_ok=True, parents=True)
+            Path(backup_file_path).write_bytes(b"dummy_tar_content")
         
         # subprocess.run의 성공 응답 리턴
         mock_process = mocker.Mock()
@@ -63,12 +65,12 @@ def test_post_backup_on_dev_success(mocker, tmp_path):
     mocker.patch("subprocess.run", side_effect=mock_tar_exec)
 
     # API 실행
-    response = client.post("/api/mgr/backup?tag=manual")
+    response = client.post("/api/mgr/backup?market=kdms&tag=manual")
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["status"] == "success"
     assert "physical_checkpoint_" in res_data["filename"]
-    assert (backup_dir / "manual" / res_data["filename"]).exists()
+    assert (backup_dir / "kdms" / "manual" / res_data["filename"]).exists()
 
 
 def test_get_backup_list_success(mocker, tmp_path):
@@ -125,7 +127,7 @@ def test_real_physical_backup_generation_on_dev(tmp_path):
     
     try:
         # 1. 백업 실행 API 기동 (실물 tar 가동)
-        response = client.post("/api/mgr/backup?tag=integration_test")
+        response = client.post("/api/mgr/backup?market=kdms&tag=integration_test")
         
         # 서버 PC 환경인 경우 403 Forbidden 단언
         env_resp = client.get("/api/mgr/env")

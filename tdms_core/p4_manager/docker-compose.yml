@@ -12,6 +12,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ../../data:/app/data
       - ../../backups:/app/backups
+      - ../../.env:/app/.env
     networks:
       - tdms-net
     restart: unless-stopped

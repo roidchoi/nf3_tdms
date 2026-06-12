@@ -26,8 +26,10 @@ def create_kdms_pool() -> DbConnectionPool:
     # .env(os.environ)에서 직접 가져옴.
     db_user = profile.get("db_user") or os.environ.get(f"{env.upper()}_KDMS_DB_USER", "roid")
     db_password = profile.get("db_password") or os.environ.get(f"{env.upper()}_KDMS_DB_PASSWORD", "")
-    db_host = profile.get("db_host") or detector.get_db_host(env)
+    db_host = profile.get("db_host") or detector.get_db_host("kdms")
     db_port = profile.get("db_port") or os.environ.get(f"{env.upper()}_KDMS_DB_PORT", 5432)
+    if os.path.exists('/.dockerenv'):
+        db_port = 5432
     db_name = profile.get("db_name") or os.environ.get(f"{env.upper()}_KDMS_DB_NAME", "kdms_db")
 
     dsn = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"

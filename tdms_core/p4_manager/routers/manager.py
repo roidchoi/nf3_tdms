@@ -53,7 +53,7 @@ async def get_integrated_schedules(market: str):
         raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
         
     url = (
-        "http://p2_kdms:8000/api/v1/admin/scheduler"
+        "http://p2_kdms:8000/api/v1/admin/tasks/scheduler"
         if market == "kr"
         else "http://p3_usdms:8005/api/admin/schedules"
     )
@@ -103,7 +103,7 @@ async def update_integrated_schedule(market: str, job_id: str, hour: int = Query
         raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
         
     if market == "kr":
-        url = f"http://p2_kdms:8000/api/v1/admin/scheduler?job_id={job_id}&hour={hour}&minute={minute}"
+        url = f"http://p2_kdms:8000/api/v1/admin/tasks/scheduler?job_id={job_id}&hour={hour}&minute={minute}"
     else:
         url = f"http://p3_usdms:8005/api/admin/schedules?job_id={job_id}&hour={hour}&minute={minute}"
         
@@ -129,7 +129,7 @@ async def toggle_integrated_schedule(market: str, job_id: str, action: str = Que
         raise HTTPException(status_code=400, detail="action 파라미터는 'pause' 또는 'resume'이어야 합니다.")
         
     if market == "kr":
-        url = f"http://p2_kdms:8000/api/v1/admin/scheduler/{job_id}/toggle?action={action}"
+        url = f"http://p2_kdms:8000/api/v1/admin/tasks/scheduler/{job_id}/toggle?action={action}"
     else:
         url = f"http://p3_usdms:8005/api/admin/schedules/{job_id}/toggle?action={action}"
         
@@ -504,5 +504,89 @@ def restore_backup(payload: RestoreRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from typing import Literal
+from tdms_core.p4_manager.services.sync_service import SyncService
+
+sync_service = SyncService()
+
+class SyncRequest(BaseModel):
+    market: Literal["kdms", "usdms"] = Field(..., description="대상 시장")
+    direction: Literal["pull", "push"] = Field(..., description="동기화 방향")
+    confirm_text: str = Field(..., description="이중 컨펌 입력값 (PULL FROM SERVER 또는 PUSH TO SERVER)")
+
+class SyncIPRequest(BaseModel):
+    target: Literal["dev", "server"] = Field(..., description="갱신 대상 변수")
+    ip: str = Field(..., description="새로운 IP 주소")
+
+class ConnectionTestRequest(BaseModel):
+    ip: str = Field(..., description="연결성 검증 대상 IP 주소")
+    port: int = Field(8000, description="백엔드 포트 번호")
+
+@router.post("/sync")
+def run_physical_sync(payload: SyncRequest):
+    """
+    개발 PC와 서버 PC 간의 DB 물리 동기화 태스크를 실행합니다.
+    """
+    try:
+        return sync_service.run_sync_task(
+            market=payload.market,
+            direction=payload.direction,
+            confirm_text=payload.confirm_text
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        if "412" in str(e) or "sudo" in str(e):
+            raise HTTPException(status_code=412, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/sync/status")
+def get_sync_status():
+    """
+    현재 진행 중인 백그라운드 물리 동기화 상태 및 로그 목록을 조회합니다.
+    """
+    return sync_service.get_sync_status()
+
+@router.post("/sync/audit")
+def get_sync_audit_report(market: str = Query(..., description="대상 시장 (kdms 또는 usdms)")):
+    """
+    물리 동기화 완료 후 정밀 감사 스크립트 실행 결과를 리포팅합니다.
+    """
+    if market not in ["kdms", "usdms"]:
+        raise HTTPException(status_code=400, detail="market은 'kdms' 또는 'usdms' 여야 합니다.")
+    res = sync_service.get_audit_report(market)
+    if res.get("status") == "error":
+        raise HTTPException(status_code=500, detail=res.get("message"))
+    return res
+
+@router.get("/network/detect-server")
+def detect_server_ip():
+    """
+    네트워크 대역 스캔 및 DNS 리졸브를 통해 서버 PC의 IP를 자동으로 탐색합니다.
+    """
+    return sync_service.detect_server_ip()
+
+@router.post("/network/sync-ip")
+def sync_ip_in_env(payload: SyncIPRequest):
+    """
+    개발 PC 또는 서버 PC의 IP 설정을 .env 파일 및 환경 변수에 갱신합니다.
+    """
+    try:
+        return sync_service.sync_ip_in_env(target=payload.target, new_ip=payload.ip)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/network/test-connection")
+def test_connection(payload: ConnectionTestRequest):
+    """
+    특정 IP/포트에 대해 TCP 연결성 및 수동 유효성 검증 테스트를 수행합니다.
+    """
+    return sync_service.test_connection(ip=payload.ip, port=payload.port)
 
 

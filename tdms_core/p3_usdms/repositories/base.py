@@ -27,13 +27,13 @@ class BaseRepository:
             
             # 현재 감지된 환경에 알맞는 DSN 정보 로딩
             if env_name == "dev":
-                host = BaseRepository._env.get_db_host("dev")
+                host = BaseRepository._env.get_db_host("usdms")
                 port = settings.DEV_USDMS_DB_PORT
                 db_name = settings.DEV_USDMS_DB_NAME
                 user = settings.DEV_USDMS_DB_USER
                 password = settings.DEV_USDMS_DB_PASSWORD
             elif env_name == "server":
-                host = BaseRepository._env.get_db_host("server")
+                host = BaseRepository._env.get_db_host("usdms")
                 port = settings.SERVER_USDMS_DB_PORT
                 db_name = settings.SERVER_USDMS_DB_NAME
                 user = settings.SERVER_USDMS_DB_USER
@@ -44,6 +44,9 @@ class BaseRepository:
                 db_name = settings.DEV_USDMS_DB_NAME
                 user = settings.DEV_USDMS_DB_USER
                 password = settings.DEV_USDMS_DB_PASSWORD
+
+            if os.path.exists('/.dockerenv'):
+                port = 5432
 
             dsn = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
             # 테스트 시에는 실제 연결 시도를 스킵하거나, 모의 테스트를 고려하여 감쌈

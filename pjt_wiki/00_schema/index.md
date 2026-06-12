@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-11
-> **총 등록 파일**: 41개
+> **마지막 업데이트**: 2026-06-12
+> **총 등록 파일**: 43개
 
 
 ---
@@ -162,7 +162,7 @@
 ## p4_manager_wiki (p4_manager 통합 관리 레이어)
 
 > **역할**: 한국/미국 백엔드 통합 모니터링 UI 및 오케스트레이션
-> **상태**: ✅ T-009 안전 복구 제어 및 무결성 진단 연동 완료 (2026-06-11)
+> **상태**: ✅ T-010 물리 동기화 및 감사 리포팅 연동 완료 (2026-06-11)
 
 ### 코어 문서
 
@@ -187,6 +187,8 @@
 | `get_preview_meta.md` | routers/manager.py | `/api/mgr/preview/meta` 데이터 탐색기 지원 테이블 메타조회 API 명세 | T-007 |
 | `get_preview_table.md` | routers/manager.py | `/api/mgr/preview/{market}/{table}` 데이터 100건 동적 조회 및 장애 격리 API 명세 | T-007 |
 | `backup_api.md` | routers/manager.py | `/api/mgr/env`, `/api/mgr/backup`, `/api/mgr/backup/list`, `/api/mgr/restore` 물리 백업/복구 및 환경 프로파일 API 명세 | T-009 |
+| `physical_sync.md` | routers/manager.py / sync_service | `/api/mgr/sync`, `/api/mgr/sync/status`, `/api/mgr/sync/audit` 물리 동기화 및 감사 리포팅 API 명세 | T-010 |
+| `network_api.md` | routers/manager.py / sync_service | `/api/mgr/network/detect-server`, `/api/mgr/network/sync-ip`, `/api/mgr/network/test-connection` IP 자가 탐색 및 네트워크 연결 검증 API 명세 | T-010 |
 
 
 ### errors/ (해결된 에러 기록)
@@ -196,6 +198,8 @@
 | `p4err-001_module_not_found_tdms_core.md` | 도커 백엔드 기동 시 `tdms_core` 임포트 불가 (PYTHONPATH 부재) -> Dockerfile 내 `ENV PYTHONPATH="/app"` 추가 주입 | High |
 | `p4err-002_real_db_volume_tar_permission.md` | 대용량 Docker 볼륨(66GB) 백업 시 I/O 병목 및 권한 미획득 -> 테스트용 격리 디렉토리 주입 우회 구현 | High |
 | `p4err-003_host_cli_backup_execution_trouble.md` | 로컬 CLI 기동 시 data_path 누락 및 싱글톤 인스턴스 미활용, 비동기(await) 혼선에 따른 3종 에러 -> DATA_PATH 명시 및 인스턴스 동기 호출 | Medium |
+| `p4err-004_wsl2_agent_browser_forwarding.md` | WSL2 가상망 내 에이전트 브라우저 실행 차단 -> Windows Chrome 원격 디버깅 및 포트 프록시 터널링(socat) 연동 | High |
+| `p4err-005_scheduler_api_404_not_found.md` | 통합 관리자 KDMS 스케줄러 조회 시 누락된 접두사(/tasks) 매핑 불일치로 인한 404 에러 | Medium |
 
 ---
 
@@ -211,9 +215,13 @@
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 - [P4-ERR-002] 대용량 DB 볼륨 tar 백업 권한 장애 → `p4_manager_wiki/errors/p4err-002_real_db_volume_tar_permission.md`
 - [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
+- [P4-ERR-004] WSL2 에이전트 브라우저 실행 및 포워딩 장애 → `p4_manager_wiki/errors/p4err-004_wsl2_agent_browser_forwarding.md`
+- [P4-ERR-005] 통합 관리자 KDMS 스케줄러 조회 404 장애 → `p4_manager_wiki/errors/p4err-005_scheduler_api_404_not_found.md`
 
 ### 📐 최근 변경된 인터페이스
 
+- `physical_sync`: `/api/mgr/sync` 및 `/api/mgr/sync/status`, `/api/mgr/sync/audit` 물리 동기화 백그라운드 파이프라인 및 감사 연동 명세 → `p4_manager_wiki/interfaces/physical_sync.md`
+- `network_api`: `/api/mgr/network/detect-server` 등 IP 자가 탐색 및 .env 파일 갱신/연결 테스트 API 명세 → `p4_manager_wiki/interfaces/network_api.md`
 - `backup_api`: `/api/mgr/env`, `/api/mgr/backup`, `/api/mgr/backup/list`, `/api/mgr/restore` 물리 백업/복구 및 서버 환경 차단 API 명세 → `p4_manager_wiki/interfaces/backup_api.md`
 
 - `post_run_task`: `/api/mgr/run` 수동 태스크 기동 API 및 KR/US 동적 중계 규격 → `p4_manager_wiki/interfaces/post_run_task.md`
@@ -240,7 +248,7 @@
 - p1_shared: ✅ 완료 (T-001~T-008, 미국 영업일 판별 추가 완료)
 - p2_kdms: 🔄 진행 중
 - p3_usdms: ✅ 완료 (T-008 완료)
-- p4_manager: ✅ 완료 (T-009 완료)
+- p4_manager: ✅ 완료 (T-010 완료)
 
 
 

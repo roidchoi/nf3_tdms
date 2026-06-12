@@ -1,7 +1,7 @@
 # Sub Project 개발/운영 환경 (environment.md)
 
 > **Sub Project**: p4_manager  
-> **마지막 업데이트**: 2026-06-10 (T-008 완료)  
+> **마지막 업데이트**: 2026-06-12 (T-010 완료)  
 > **타입**: Type E (배경/환경 지식)  
 > **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
 
@@ -73,7 +73,7 @@
 | `package.json` | `tdms_core/p4_manager/frontend/package.json` | ✅ | 프론트엔드 의존성 및 실행 스크립트(`build`, `test`) 정의 |
 | `tsconfig.app.json` | `tdms_core/p4_manager/frontend/tsconfig.app.json` | ✅ | TypeScript 에일리어스(`@/*`) 및 컴파일 타겟 지시 규칙 정의 |
 | `vite.config.ts` | `tdms_core/p4_manager/frontend/vite.config.ts` | ✅ | Vitest `jsdom` 환경 및 paths 별칭 resolve 규칙 매핑 |
-| `.env` | `.env` (루트) | ❌ | 공통 환경변수 (`SCHEDULE_KDMS_*`, `SCHEDULE_USDMS_*` 등) 및 DB 물리 경로(`data_path` = `"/app/data"`), 백업 보관 경로(`BACKUP_BASE_DIR` = `"/app/backups"`) 로드 |
+| `.env` | `.env` (루트) | ❌ | 공통 환경변수 (`SCHEDULE_KDMS_*`, `SCHEDULE_USDMS_*` 등) 및 DB 물리 경로(`data_path`), 백업 경로(`BACKUP_BASE_DIR`), 네트워크 자동 동기화용 타깃 변수(`DEV_IP`, `SERVER_IP`, `SERVER_HOSTNAME`) 수록 |
 
 ---
 
@@ -96,3 +96,4 @@
 | **도커 백엔드 기동 시 모듈 임포트 실패 (P4ERR-001)** | `p4_backend` 컨테이너 기동 시 상위 `tdms_core` 패키지를 찾지 못해 `ModuleNotFoundError: No module named 'tdms_core'` 에러가 나면서 무한 재기동 루프에 빠짐 | `backend.Dockerfile` 내부에 환경 변수 `ENV PYTHONPATH="/app"`을 설정하여 파이썬 런타임이 패키지 루트를 항상 찾을 수 있도록 보완합니다. |
 | **TypeScript 6.0 빌드 시 tsconfig.json 내 baseUrl 감쇄 에러 (TS5101)** | `tsconfig.app.json` 내에 구식 `"baseUrl": "."` 설정이 남아 있는 경우 컴파일 시 `error TS5101` 빌드 에러 발생 | 현대적 TypeScript 에일리어스 해석법에 따라 `"baseUrl": "."` 속성을 완전히 제거하고 `"paths"`의 상대적 경로 매핑(`"@/*": ["./src/*"]`) 정보만 기재하여 컴파일러가 config 파일 폴더를 기준으로 resolve하게 설계합니다. |
 | **TypeScript 빌드 시 미사용 변수 에러 (TS6133)** | `tsconfig.app.json` 내에 `"noUnusedLocals": true` 옵션이 켜져 있는 상태에서 테스트 코드(예: `DashboardView.spec.ts`)에서 임포트한 `vi` 등의 라이브러리 객체를 사용하지 않으면 `TS6133` 에러와 함께 빌드가 차단됨 | 소스 코드 상에서 실제 호출되지 않는 미사용 변수 및 라이브러리 임포트 구문을 완전히 제거하여 정적 분석 빌드가 통과되도록 보완합니다. |
+| **WSL2 환경 하 호스트네임 리졸빙 실패 및 IP 불일치** | WSL2 리눅스 환경에서 `SERVER_HOSTNAME`을 이용해 윈도우 호스트 통신을 시도할 경우, 브릿지 네트워크 DNS 구조의 결함으로 인해 IP를 리졸브하지 못하거나 서버 PC의 IP가 DHCP로 변동되어 동기화가 불통됨 | `powershell.exe` 서브프로세스를 기동하여 윈도우 호스트의 DNS 쿼리(`[System.Net.Dns]::GetHostAddresses()`)를 우회 실행해 IP를 획득합니다. 만약 쿼리 실패 시, 로컬 IP 서브넷 대역 C클래스를 `asyncio`로 병렬 TCP 스캔하여 `/api/mgr/env` 응답에서 `env=server`를 던지는 IP를 자동 검출하고 `.env`를 갱신합니다. |
