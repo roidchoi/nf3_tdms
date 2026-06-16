@@ -93,7 +93,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
     :param test_mode: True일 경우 대표 종목군만 샘플링하여 수행
     """
     job_id = "financial_update"
-    start_time = datetime.now()
+    start_time = datetime.now(KST)
 
     # [PRD 4.1.2] 상태 초기화
     job_statuses[job_id] = {
@@ -278,7 +278,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             logger.info(f"[{job_id}] 신규/변경된 재무비율이 없어 DB 업데이트를 스킵합니다.")
 
         # 성공 완료 상태 기록
-        end_time = datetime.now()
+        end_time = datetime.now(KST)
         duration = (end_time - start_time).total_seconds()
         final_msg = f"재무정보 수집 성공적으로 완료 (총 {total}개 처리, {duration/60:.1f}분 소요)"
         
@@ -298,7 +298,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             "is_running": False,
             "last_status": "failure",
             "error": str(e),
-            "end_time": datetime.now().isoformat()
+            "end_time": datetime.now(KST).isoformat()
         })
     finally:
         job_statuses[job_id]["is_running"] = False

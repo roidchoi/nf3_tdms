@@ -3,6 +3,7 @@ import time
 import logging
 from datetime import date, datetime, timedelta
 from typing import List, Dict, Set, Tuple, Optional, Any
+from zoneinfo import ZoneInfo
 from psycopg2.extras import execute_values
 
 from collectors.kiwoom_client import KiwoomClient
@@ -12,6 +13,7 @@ from collectors.pub_data_client import PubDataClient
 from repositories.market_cap_repo import MarketCapRepo
 
 logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
 
 # 일부 누락일 탐지 기준 (360분 = 6시간)
 PARTIAL_DAY_THRESHOLD = 360
@@ -92,7 +94,7 @@ def run_backfill_minute_data(
     :param end_date: 백필 종료 날짜 (기본값: 어제)
     """
     job_id = "backfill_minute_data"
-    start_time = datetime.now()
+    start_time = datetime.now(KST)
     
     # 상태 초기화
     job_statuses[job_id] = {
@@ -172,8 +174,8 @@ def run_backfill_minute_data(
                 "is_running": False,
                 "progress": 100,
                 "last_status": "success (누락 없음)",
-                "end_time": datetime.now().isoformat(),
-                "duration": f"{(datetime.now() - start_time).total_seconds():.1f}초",
+                "end_time": datetime.now(KST).isoformat(),
+                "duration": f"{(datetime.now(KST) - start_time).total_seconds():.1f}초",
                 "last_log": "모든 대상 종목의 분봉 데이터가 최신 상태입니다. (누락 없음)"
             })
             return
@@ -203,7 +205,7 @@ def run_backfill_minute_data(
         _execute_backfill_jobs(api, db, job_list, missing_map, test_mode, job_statuses, job_id)
 
         # 완료 상태
-        end_time = datetime.now()
+        end_time = datetime.now(KST)
         duration = (end_time - start_time).total_seconds()
         
         job_statuses[job_id].update({
@@ -222,7 +224,7 @@ def run_backfill_minute_data(
             "is_running": False,
             "last_status": "failure",
             "error": str(e),
-            "end_time": datetime.now().isoformat()
+            "end_time": datetime.now(KST).isoformat()
         })
     finally:
         job_statuses[job_id]["is_running"] = False
@@ -517,7 +519,7 @@ def run_backfill_market_cap(
     공공데이터 API를 이용해 지정한 기간의 누락된 일별 시가총액 데이터를 수집 및 복구합니다.
     """
     job_id = "backfill_market_cap"
-    start_time = datetime.now()
+    start_time = datetime.now(KST)
 
     # 상태 초기화
     job_statuses[job_id] = {
@@ -542,7 +544,7 @@ def run_backfill_market_cap(
                 "progress": 100,
                 "last_status": "success",
                 "last_log": "누락된 시가총액 영업일이 없습니다. (이미 최신 상태)",
-                "end_time": datetime.now().isoformat()
+                "end_time": datetime.now(KST).isoformat()
             })
             return
 
@@ -576,7 +578,7 @@ def run_backfill_market_cap(
             time.sleep(0.5)
 
         # 완료 상태 업데이트
-        end_time = datetime.now()
+        end_time = datetime.now(KST)
         duration = (end_time - start_time).total_seconds()
         job_statuses[job_id].update({
             "is_running": False,
@@ -594,7 +596,7 @@ def run_backfill_market_cap(
             "is_running": False,
             "last_status": "failure",
             "error": str(e),
-            "end_time": datetime.now().isoformat()
+            "end_time": datetime.now(KST).isoformat()
         })
     finally:
         job_statuses[job_id]["is_running"] = False

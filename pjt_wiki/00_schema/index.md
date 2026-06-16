@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-12
-> **총 등록 파일**: 47개
+> **마지막 업데이트**: 2026-06-16
+> **총 등록 파일**: 50개
 
 
 ---
@@ -108,6 +108,7 @@
 |---|---|---|
 | `err-001_kis_api_403_forbidden.md` | API 과호출로 인한 KIS IP 차단 (403 Forbidden) -> Throttling 딜레이 도입 | High |
 | `err-002_bigint_out_of_range_in_market_cap.md` | 기형적 주식수 데이터 연산으로 인한 시총 bigint 오버플로우 -> 1000억 주 초과 컷오프 | Critical |
+| `err-003_task_kst_timezone_mismatch.md` | 태스크 실행 상태 기록 시 KST 시간대 처리 불일치 -> datetime.now(KST) 및 isoformat() 직렬화 | Medium |
 
 ---
 
@@ -159,6 +160,7 @@
 |---|---|---|
 | `usdms-err-001_wsl2_bind_mount_sync_error.md` | WSL2 마운트 동기화 유실로 인한 빈 DB 기동 현상 | High |
 | `usdms-err-002_valuation_rebuild_timeout.md` | Valuation 자가치유 갭 탐색 쿼리 실행 지연 및 타임아웃 | High |
+| `usdms-err-003_logging_missing_and_running_status_loss.md` | 로깅 기본값 누락 및 백그라운드 실행 상태 유실 -> logging.basicConfig 및 _running_task 동적 상태 오버라이드 | High |
 
 ---
 
@@ -204,6 +206,7 @@
 | `p4err-004_wsl2_agent_browser_forwarding.md` | WSL2 가상망 내 에이전트 브라우저 실행 차단 -> Windows Chrome 원격 디버깅 및 포트 프록시 터널링(socat) 연동 | High |
 | `p4err-005_scheduler_api_404_not_found.md` | 통합 관리자 KDMS 스케줄러 조회 시 누락된 접두사(/tasks) 매핑 불일치로 인한 404 에러 | Medium |
 | `p4err-006_websocket_upstream_failed.md` | 실시간 로그 스트리밍 웹소켓 프록시 연결 장애 (HTTP 404 및 403) | Medium |
+| `p4err-007_httpx_timeout_and_caching_loss.md` | HTTPX 타임아웃 및 캐싱 덮어쓰기 장애 -> timeout 10.0초 상향 및 중복 캐싱 오버라이딩 방지 | High |
 
 ---
 
@@ -215,13 +218,16 @@
 - [P1-ERR-002] pg_restore 논리 복원 실패 → `p1_shared_wiki/errors/p1-err-002_logical_restore_failure.md`
 - [P2-ERR-001] KIS API 403 Forbidden 차단 → `p2_kdms_wiki/errors/err-001_kis_api_403_forbidden.md`
 - [P2-ERR-002] 시총 bigint 오버플로우 롤백 → `p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md`
+- [P2-ERR-003] KST 시간대 처리 불일치 → `p2_kdms_wiki/errors/err-003_task_kst_timezone_mismatch.md`
 - [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
+- [USDMS-ERR-003] 로깅 기본값 누락 및 실행 상태 유실 → `p3_usdms_wiki/errors/usdms-err-003_logging_missing_and_running_status_loss.md`
 - [P4-ERR-002] 대용량 DB 볼륨 tar 백업 권한 장애 → `p4_manager_wiki/errors/p4err-002_real_db_volume_tar_permission.md`
 - [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
 - [P4-ERR-004] WSL2 에이전트 브라우저 실행 및 포워딩 장애 → `p4_manager_wiki/errors/p4err-004_wsl2_agent_browser_forwarding.md`
 - [P4-ERR-005] 통합 관리자 KDMS 스케줄러 조회 404 장애 → `p4_manager_wiki/errors/p4err-005_scheduler_api_404_not_found.md`
 - [P4-ERR-006] 실시간 로그 스트리밍 웹소켓 프록시 404/403 장애 → `p4_manager_wiki/errors/p4err-006_websocket_upstream_failed.md`
+- [P4-ERR-007] HTTPX 타임아웃 및 캐싱 덮어쓰기 장애 → `p4_manager_wiki/errors/p4err-007_httpx_timeout_and_caching_loss.md`
 
 ### 📐 최근 변경된 인터페이스
 
@@ -248,10 +254,10 @@
 - `Data API Endpoints`: REST API 7종 및 Arrow IPC 스트리밍 지원 완료 → `p3_usdms_wiki/interfaces/data_api_endpoints.md`
 - `SyncManager`: **폐기 예정** — 실운영 사용 금지, PhysicalSyncManager 사용
 
-### 🔄 진행중인 작업
+### ✅ 완료된 작업
 
 - p1_shared: ✅ 완료 (T-001~T-008, 미국 영업일 판별 추가 완료)
-- p2_kdms: 🔄 진행 중
+- p2_kdms: ✅ 완료 (KST 시간대 처리 및 KIS 특수 상품 필터링 반영 완료)
 - p3_usdms: ✅ 완료 (T-008 완료)
 - p4_manager: ✅ 완료 (T-010 완료)
 

@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p3_usdms (미국 시장 데이터 백엔드)  
-> **마지막 업데이트**: 2026-06-05 (Task-008 완료)  
+> **마지막 업데이트**: 2026-06-16 (로깅 및 실행 중 상태 유실 장애 해결 반영 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -157,3 +157,4 @@ tdms_core/p3_usdms/
 | Task-007 | 헬스체크 API(Freshness/Gaps/Blacklist), 어드민 스케줄 제어 및 WebSocket 로그 스트리밍, 재무/지표/수정주가 감사 엔진 3종 이식 및 CLI 진단 도구 완료 |
 | Task-008 | DatabaseManager 레거시 완전 제거, 수집 임계 기준 및 스케줄 시간 외부화, 미국 휴장 판단 및 trading_calendar 테이블 자동 동기화 구축 완료 |
 | T-011 | 스케줄 변수명 일원화(SCHEDULE_USDMS_*) 및 주간 유지보수 스케줄 외부화, API 개정에 따른 .env 실시간 갱신 및 reschedule 보존 처리 적용 |
+| T-105 (2026-06-16) | logging.basicConfig 기본값 누락에 따른 로깅 중단 복구, /tasks/status API 내 실행 중 플래그 동적 오버라이드 구현 |

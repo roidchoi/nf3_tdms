@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p2_kdms (한국 시장 데이터 백엔드)
-> **마지막 업데이트**: 2026-05-28 (시가총액 오버플로우 방어 패치 반영 완료)
+> **마지막 업데이트**: 2026-06-16 (KST 시간대 처리 수정 반영 완료)
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -117,8 +117,8 @@ tdms_core/p2_kdms/
 | `collectors/factor_calculator.py` | ✅ | FactorCalculator | Raw/Adj 비율 기반 수정계수 역산 (ZeroDivision 처리) |
 | `collectors/target_selector.py` | ✅ | TargetSelector | 거래대금 기준 분봉 수집 대상 Top-N 선정 |
 | `tasks/daily_task.py` | ✅ | DailyTask | 평일 17:00 KST 크론: OHLCV → 팩터 → 수정주가 → 시총(1000억주 컷오프/9경 초과 bigint 방어 필터) → 분봉 |
-| `tasks/financial_task.py` | ✅ | run_financial_update() | 매일 19:00 KST 크론: PIT 재무데이터 변경 감지 및 수집 |
-| `tasks/backfill_task.py` | ✅ | run_backfill_minute_data() | 분봉 갭 탐지 및 백필 (수동 트리거) |
+| `tasks/financial_task.py` | ✅ | run_financial_update() | 매일 19:00 KST 크론: PIT 재무데이터 변경 감지 및 수집 (KST 시간대 보정 완료) |
+| `tasks/backfill_task.py` | ✅ | run_backfill_minute_data() | 분봉 갭 탐지 및 백필 (수동 트리거, KST 시간대 보정 완료) |
 | `routers/data.py` | ✅ | data router | /api/data/* 데이터 조회 API |
 | `routers/admin.py` | ✅ | admin router | /api/v1/admin/* 배치 수동 트리거 및 상태 조회 |
 | `ops/backfill_pipeline.py` | ✅ | run_backfill() | 코퍼레이트 액션 의심 종목 탐지 + 일봉 팩터 백필 |
@@ -170,3 +170,4 @@ tdms_core/p2_kdms/
 | 2026-05-26 | Graphify 기반 초기 지식화 (위키 codebase_map 전면 작성) |
 | 2026-05-28 | KIS 마스터 데이터 오차 대응을 위한 시가총액 bigint 오버플로우 방어 패치 적용 |
 | T-011 | 스케줄링 환경 변수 외부화 및 API 개정 작업 완료, KIS 마스터 비주식 특수 상품(BC/MF/EW) 제외 필터 적용 |
+| T-105 (2026-06-16) | 재무 업데이트 및 분봉 백필 태스크 기동/완료 상태 기록 시 KST 시간대(+09:00) 처리 및 isoformat() 적용 |

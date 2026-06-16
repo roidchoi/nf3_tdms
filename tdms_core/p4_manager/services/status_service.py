@@ -26,7 +26,7 @@ class StatusService:
         return self._cache
 
     async def fetch_and_cache_status(self):
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             kr_task = self._fetch_kr_status(client)
             us_task = self._fetch_us_status(client)
             

@@ -52,7 +52,7 @@ async def _async_run_weekly():
     set_running_task("weekly_backfill")
     try:
         routine = DailyRoutine()
-        routine.run_weekly_backfill()
+        await asyncio.to_thread(routine.run_weekly_backfill)
     except Exception as e:
         logger.error(f"Background WeeklyBackfill run encountered error: {e}")
     finally:

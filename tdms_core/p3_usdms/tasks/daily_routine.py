@@ -108,7 +108,7 @@ class DailyRoutine:
                 
             # 0. trading_calendar 테이블 자동 갱신 동기화 실행
             try:
-                self.sync_trading_calendar(limit_date=target_date)
+                await asyncio.to_thread(self.sync_trading_calendar, limit_date=target_date)
             except Exception as e:
                 logger.error(f"Failed to sync trading calendar up to {target_date}: {e}", exc_info=True)
      
@@ -191,7 +191,7 @@ class DailyRoutine:
             step_start = datetime.now(KST)
             logger.info(f"[Step 2] Fetching Market Prices and Factors for {len(ciks)} companies (Lookback: {lookback_days} days)...")
             try:
-                self.market_loader.collect_daily_updates(lookback_days=lookback_days, ciks=ciks)
+                await asyncio.to_thread(self.market_loader.collect_daily_updates, lookback_days=lookback_days, ciks=ciks)
                 report["steps"].append({
                     "step": "Market Data Loader",
                     "status": "SUCCESS",
@@ -214,7 +214,7 @@ class DailyRoutine:
             logger.info(f"[Step 3] SEC Filing Financial Parsing for {len(ciks)} companies...")
             try:
                 # financial_parser.run은 동기 함수임
-                self.fin_parser.run(ciks=ciks)
+                await asyncio.to_thread(self.fin_parser.run, ciks=ciks)
                 report["steps"].append({
                     "step": "Financial Parser",
                     "status": "SUCCESS",
@@ -235,23 +235,11 @@ class DailyRoutine:
             # ----------------------------------------------------
             step_start = datetime.now(KST)
             logger.info("[Step 3.5 & 4] Calculating Financial Metrics & Valuations...")
-            calc_success = 0
-            calc_fail = 0
-            for cik in ciks:
-                try:
-                    self.metric_calc.calculate_and_save(cik, rebuild=False)
-                    # ValuationCalculator 내부의 자가치유(Self-healing) 갭 탐지 및 최신일 감지 로직에 위임합니다.
-                    self.val_calc.calculate_and_save(cik, rebuild=False)
-                    calc_success += 1
-                except Exception as e:
-                    logger.error(f"Calculator failed for CIK: {cik}. Error: {e}")
-                    calc_fail += 1
-                    # 계산 오류 누적 시 블랙리스트 차단 등록 유도
-                    self.blacklist_mgr.record_failure(
-                        cik=cik,
-                        reason_code="PARSE_ERROR_CRITICAL",
-                        detail=f"Metric/Valuation calculation failed: {str(e)}"
-                    )
+            try:
+                calc_success, calc_fail = await asyncio.to_thread(self._run_calculations, ciks)
+            except Exception as e:
+                logger.error(f"[Step 3.5 & 4] Calculation loop failed: {e}", exc_info=True)
+                calc_success, calc_fail = 0, len(ciks)
 
             report["steps"].append({
                 "step": "Metric & Valuation Calculation",
@@ -270,7 +258,7 @@ class DailyRoutine:
             step_start = datetime.now(KST)
             logger.info("[Step 5] Performing Ingestion Health Checks & Data Isolation...")
             try:
-                anomalies = self._detect_anomalies_and_quarantine(target_date)
+                anomalies = await asyncio.to_thread(self._detect_anomalies_and_quarantine, target_date)
                 report["steps"].append({
                     "step": "Health Check & Isolation",
                     "status": "SUCCESS",
@@ -304,6 +292,25 @@ class DailyRoutine:
             if file_handler:
                 file_handler.close()
                 root_logger.removeHandler(file_handler)
+
+    def _run_calculations(self, ciks: List[str]) -> tuple[int, int]:
+        """CIK별 지표 및 밸류에이션 동기 연산 루프"""
+        calc_success = 0
+        calc_fail = 0
+        for cik in ciks:
+            try:
+                self.metric_calc.calculate_and_save(cik, rebuild=False)
+                self.val_calc.calculate_and_save(cik, rebuild=False)
+                calc_success += 1
+            except Exception as e:
+                logger.error(f"Calculator failed for CIK: {cik}. Error: {e}")
+                calc_fail += 1
+                self.blacklist_mgr.record_failure(
+                    cik=cik,
+                    reason_code="PARSE_ERROR_CRITICAL",
+                    detail=f"Metric/Valuation calculation failed: {str(e)}"
+                )
+        return calc_success, calc_fail
 
     def run_weekly_backfill(self) -> Dict[str, Any]:
         """
