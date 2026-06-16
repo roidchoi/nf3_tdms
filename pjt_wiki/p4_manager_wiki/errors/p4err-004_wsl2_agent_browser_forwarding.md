@@ -9,13 +9,14 @@
 ## 1. 장애 증상 및 원인 분석
 
 ### 1) 장애 증상
-* AI 에이전트의 브라우저 서브에이전트(`browser_subagent` 등)가 웹 애플리케이션 화면 조회를 위해 브라우저를 기동할 때, 주소창 입력이 되지 않거나 통신 거부(`Connection Refused`)가 나며 빈 화면(또는 타임아웃)만 캡처되는 현상.
+* AI 에이전트의 브라우저 서브에이전트(`browser_subagent` 등)가 웹 애플리케이션 화면 조회를 위해 브라우저를 기동할 때, 주소창 입력이 되지 않거나 통신 거부(`Connection Refused` 또는 `Empty reply from server`)가 나며 빈 화면(또는 타임아웃)만 캡처되는 현상.
 * WSL2 내부에서 직접 헤드리스 크로미움을 띄우려고 할 때 시스템 공유 라이브러리(`.so`) 누락 오류가 발생함.
 
 ### 2) 발생 원인
 * **Playwright 의존성 유실**: WSL2 가상 머신 내부에 Playwright 브라우저 바이너리(Chromium) 및 Linux 전용 렌더링 의존성 패키지가 완벽히 캐싱되어 있지 않아 발생.
-* **샌드박스 네트워크 격리 결함**: WSL2는 별도의 가상 서브넷을 사용하므로, Windows 호스트의 웹 서비스(`http://localhost/`)에 직접 로컬 루프백 접속을 시도할 때 포트 매핑이나 디버거 세션 바인딩을 통과하지 못함.
-* **디버거 포트 바인딩 제한**: Windows 크롬의 원격 디버깅 포트(`9222`)는 기본적으로 Windows 내부의 루프백 주소(`127.0.0.1`)에 강제 바인딩되므로, 다른 가상 머신인 WSL2에서 Windows IP를 경유해 접근하려고 할 때 연결이 거부됨.
+* **디버거 포트 바인딩 제한 및 포트 충돌**:
+  - Windows 크롬의 원격 디버깅 포트(`9222`)는 기본적으로 윈도우 루프백 주소(`127.0.0.1`)에 바인딩됩니다.
+  - 이를 WSL2 외부로 포워딩하기 위해 `netsh portproxy`로 `0.0.0.0:9222` -> `127.0.0.1:9222` 매핑을 맺을 경우, 포트 바인딩 충돌 및 패킷 루핑(Looping)이 생겨 `ERR_EMPTY_RESPONSE` 에러가 나면서 크롬 디버거가 윈도우 로컬에서도 다운됩니다.
 
 ---
 
@@ -43,42 +44,42 @@ Windows 호스트에서 구동 중인 모든 Chrome 프로세스를 강제 종�
 Stop-Process -Name "chrome" -Force -ErrorAction SilentlyContinue
 
 # 디버깅 포트를 열고 별도 개발 프로필 폴더로 기동
-Start-Process "chrome.exe" -ArgumentList "--remote-debugging-port=9222", "--remote-debugging-address=0.0.0.0", "--user-data-dir=C:\chrome-dev-profile"
+Start-Process "chrome.exe" -ArgumentList "--remote-debugging-port=9222", "--user-data-dir=C:\chrome-dev-profile"
 ```
 
 ### [3단계] Windows 포트프록시 및 방화벽 설정 (Windows Host)
-Windows 루프백에 강제 바인딩된 9222 포트를 외부(WSL2 가상망 포함)에서 접속 가능하도록 로컬 리다이렉트합니다.
+Windows 루프백에 강제 바인딩된 9222 포트를 외부(WSL2 가상망 포함)에서 접속 가능하도록 하되, **직접 9222 포트프록시 매핑 시 발생하는 포트 루프백 충돌을 방지하기 위해 외부 인입 포트를 9223으로 우회 설계**합니다.
 * **명령 실행**: **PowerShell 7.x (관리자 권한)**
 ```powershell
 # 1. IP Helper 서비스 활성화 확인 및 기동
-Get-Service -Name "iphlpsvc"
 Start-Service -Name "iphlpsvc" -ErrorAction SilentlyContinue
 
-# 2. 0.0.0.0:9222 수신 대기를 127.0.0.1:9222로 프록시 매핑
-netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=9222 connectaddress=127.0.0.1 connectport=9222
+# 2. 0.0.0.0:9223 수신 대기를 127.0.0.1:9222(크롬)로 프록시 매핑 (충돌 회피)
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=9223 connectaddress=127.0.0.1 connectport=9222
 
-# 3. Windows 방화벽 인바운드 예외 허용 규칙 추가 (방화벽 전체 비활성화 금지)
-New-NetFirewallRule -DisplayName "WSL Chrome Debugger" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9222
+# 3. Windows 방화벽 인바운드 예외 허용 규칙 추가 (9223 포트 부분 허용)
+New-NetFirewallRule -DisplayName "WSL Chrome Debugger Bypass" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9223 -ErrorAction SilentlyContinue
 ```
 
-### [4단계] WSL2 터미널에서 호스트 IP 탐색 및 socat 중계 (WSL2 Linux)
-WSL2는 Windows 호스트의 실제 사설 IP 주소(예: `192.168.35.x`)를 바라보고 가상 터널을 열어야 합니다.
-1. **Windows 호스트 IP 주소 실시간 획득**:
-   ```bash
-   # WSL2 내부에서 Windows 호스트 IP 확인 (일반적으로 2선 라우터 게이트웨이 또는 호스트 어드레스)
-   # 예: 192.168.35.29 (Windows 무선/유선 LAN 사설 IP)
-   ip route show | grep default | awk '{print $3}'
-   ```
-2. **socat을 통한 WSL2 내부 루프백 포트 터널 개설**:
-   WSL2 내부의 `127.0.0.1:9222` 요청을 방금 획득한 Windows IP의 `9222`로 포워딩 중계합니다.
+### [4단계] WSL2 터널 가동 및 socat 중계 (WSL2 Linux)
+WSL2 내부의 `127.0.0.1:9222` 요청을 Windows 호스트 IP의 우회 포트 `9223`으로 포워딩 중계합니다.
+1. **Windows 호스트 IP 주소 실시간 획득 및 socat 백그라운드 구동**:
    ```bash
    # socat 패키지 설치
    sudo apt-get update && sudo apt-get install -y socat
 
-   # 백그라운드로 9222 터널 개설 (기존에 켜진 socat이 있다면 먼저 kill 필요)
+   # 백그라운드로 9222 -> Windows:9223 터널 개설 (기존에 켜진 socat 정리)
    killall socat 2>/dev/null
-   socat TCP-LISTEN:9222,fork,reuseaddr TCP:<WINDOWS_HOST_IP>:9222 &
+   socat TCP-LISTEN:9222,fork,reuseaddr TCP:$(ip route show | grep default | awk '{print $3}'):9223 &
    ```
+   > [!TIP]
+   > **AI 에이전트를 위한 원라이너(One-liner) 자동 구동 명령**:
+   > 다음 명령은 WSL2의 가상 게이트웨이 IP(Windows 호스트)를 자동으로 조회하고 기존 socat을 정리한 뒤 즉시 백그라운드 터널을 실행합니다.
+   > ```bash
+   > killall socat 2>/dev/null; WINDOWS_IP=$(ip route show | grep default | awk '{print $3}'); nohup socat TCP-LISTEN:9222,fork,reuseaddr TCP:${WINDOWS_IP}:9223 >/dev/null 2>&1 &
+   > ```
+
+---
 
 ### [5단계] 연동 결과 최종 검증
 WSL2 터미널에서 Windows Chrome 디버거 API가 리스닝되는지 실측 검증합니다.
@@ -98,9 +99,38 @@ curl http://127.0.0.1:9222/json/version
 
 ---
 
-## 3. 현장 시행착오 및 주의사항 (Tips)
+## 3. 타 세션 AI 에이전트 전용 속성 가이드 (Agent Setup Blueprint)
 
-* ⚠️ **DHCP 환경 하에서의 IP 변동 주의**:
-  PC를 리부트하거나 무선 AP를 이동할 경우 Windows의 사설 IP 주소(예: `192.168.x.x`)가 변경됩니다. 이 경우 4단계의 `socat` 명령어에 지정하는 타깃 IP를 새로운 주소로 갱신하여 다시 기동해야 통신이 유지됩니다.
+새로운 세션의 AI 에이전트가 이 문서를 읽는 즉시 테스트 환경을 확보할 수 있도록 아래 절차를 자동으로 순차 대입하십시오:
+
+1. **WSL2 터널 가동 진단**:
+   - WSL2 터미널에서 `curl -s http://127.0.0.1:9222/json/version` 을 쳐보고 결과가 오지 않는다면 터널이 닫혀 있거나 꼬여 있는 상태입니다.
+   - 즉시 WSL2 터미널에서 아래 원라이너 명령을 무조건적으로 실행하십시오:
+     ```bash
+     killall socat 2>/dev/null; nohup socat TCP-LISTEN:9222,fork,reuseaddr TCP:$(ip route show | grep default | awk '{print $3}'):9223 >/dev/null 2>&1 &
+     ```
+2. **연결 상태 재측정**:
+   - 다시 `curl -s http://127.0.0.1:9222/json/version` 을 기동하여 연결 정합성을 확인합니다.
+   - 만약 이래도 접속이 안 된다면 Windows 호스트에서 디버거 크롬 기동(`Start-Process` 구문) 및 포트프록시 매핑(`netsh`)이 해제되어 있는 상태입니다.
+   - 이 경우 즉시 사용자에게 **"Windows PowerShell을 관리자 권한으로 열어 아래 블록을 복사-붙여넣기 해달라"**고 정중히 요청하십시오:
+     ```powershell
+     # Windows Chrome 원격 디버깅 기동 (기존 크롬 완전 종료 후 백그라운드 구동)
+     gps chrome | stop-process -Force -ErrorAction SilentlyContinue
+     Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--remote-debugging-port=9222", "--user-data-dir=C:\chrome-dev-profile"
+     
+     # 포트프록시 및 방화벽 설정 허용 (9223 우회 포트 사용)
+     Start-Service -Name "iphlpsvc" -ErrorAction SilentlyContinue
+     netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=9223 connectaddress=127.0.0.1 connectport=9222
+     New-NetFirewallRule -DisplayName "WSL Chrome Debugger Bypass" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9223 -ErrorAction SilentlyContinue
+     ```
+
+---
+
+## 4. 현장 시행착오 및 주의사항 (Tips)
+
+* ⚠️ **포트 충돌 및 루핑 회피**:
+  Windows의 포트프록시를 9222 -> 127.0.0.1:9222로 다이렉트 바인딩하면 포트 루프백 간섭이 생겨 크롬 연결 시 `ERR_EMPTY_RESPONSE`나 `Empty reply from server` 오류가 발생합니다. 반드시 윈도우 수신 포트는 **9223**, 내부 전달 포트는 **9222**로 이원화 맵핑해 주어야 영구적이고 안정적으로 구동됩니다.
+* ⚠️ **WSL 게이트웨이 IP 매핑 안정성**:
+  Windows의 물리 사설 IP(예: `192.168.x.x`)는 공유기 교체나 PC 재부팅 시 수시로 바뀌어 터널이 끊어지지만, WSL2 가상 머신 관점에서의 기본 게이트웨이 IP(`ip route show`의 `default` 게이트웨이)는 WSL 가상 스위치가 항상 동일한 범위 내에서 관리하므로, 터널의 대상 주소를 `127.0.0.1`로 우회하거나 게이트웨이 주소로 연동하는 편이 IP 변동 시 훨씬 안정적입니다.
 * ⚠️ **보안 규칙**:
-  일시적인 연결 테스트 목적으로 Windows 방화벽 프로필 전체를 비활성화(`Enabled False`)하는 조치는 극도로 위험하므로 엄격히 제한합니다. 반드시 방화벽 프로필은 정상 복원(`Enabled True`)해 두고, 3단계의 `New-NetFirewallRule` 명령을 사용해 **오직 9222 TCP 포트만 부분 허용**하도록 규칙을 설계해야 합니다.
+  일시적인 연결 테스트 목적으로 Windows 방화벽 프로필 전체를 비활성화(`Enabled False`)하는 조치는 극도로 위험하므로 엄격히 제한합니다. 반드시 방화벽 프로필은 정상 복원(`Enabled True`)해 두고, 3단계의 `New-NetFirewallRule` 명령을 사용해 **오직 9223 TCP 포트만 부분 허용**하도록 규칙을 설계해야 합니다.

@@ -12,6 +12,12 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-12] 의사결정 | KIS 마스터 데이터 파싱 시 수익증권(BC), 뮤추얼펀드(MF), ELW(EW) 등의 비주식성 특수 상품을 수집 대상에서 선제 필터링하여 데이터 청정도를 높이는 의사결정(dec-005_filter_non_equity_instruments.md)을 등록하고 MoC(index.md) 현행화 완료.
+
+## [2026-06-12] 에러등록 | 통합 관리자 대시보드 하단 실시간 로그 스트리밍 영역에서 의존성(websockets) 누락 및 라우팅 prefix 불일치로 발생했던 404/403 연결 장애 분석 및 해결 가이드(p4err-006_websocket_upstream_failed.md) 등록 및 MoC(index.md) 현행화 완료.
+
+## [2026-06-12] Task완료 | T-011 스케줄링 변수 중앙화 및 API 개정 작업 완료에 따라 p1_shared 내 schedule_utils.md 신규 인터페이스 지식화, p2_kdms 및 p3_usdms, p4_manager의 관련 환경 정보(environment.md) 및 MoC(index.md) 현행화 완료.
+
 ## [2026-06-12] 에러등록 | 통합 관리자 대시보드 내 대한민국(KDMS) 스케줄 탭 조회 시 누락된 접두사(/tasks) 매핑 불일치로 발생했던 404 Not Found 에러 극복 가이드(p4err-005_scheduler_api_404_not_found.md) 등록 및 codebase_map.md, environment.md, MoC(index.md) 일제 갱신 완료.
 
 ## [2026-06-12] 에러등록 | WSL2 가상망 내에서 AI 에이전트 브라우저 실행 차단 장애를 극복하기 위해 Windows Chrome 원격 디버깅(--remote-debugging-port=9222) 포트 프록시 매핑(netsh) 및 WSL2 socat 백그라운드 터널 중계 연동 가이드(p4err-004_wsl2_agent_browser_forwarding.md) 신규 지식화 및 MoC(index.md) 현행화 완료.

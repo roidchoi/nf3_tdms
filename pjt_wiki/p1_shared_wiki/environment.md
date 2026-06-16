@@ -59,6 +59,11 @@ conda run -n tdms_p1_env uv pip install -e tdms_core/p1_shared/
 | `DEV_KDMS_DB_NAME` | KDMS DB 이름 | `kdms_db` |
 | `DEV_USDMS_DB_PORT` | USDMS DB 포트 | `5435` |
 | `SSH_KEY_PATH` | SSH 개인키 경로 | `~/.ssh/tdms_sync_rsa` |
+| `SCHEDULE_KDMS_DAILY_UPDATE` | 한국 시장 일일 가격 수집 배치 시각 | `17:10` 또는 `15:40` |
+| `SCHEDULE_KDMS_FINANCIAL_UPDATE` | 한국 시장 분기 재무 수집 배치 시각 | `sat:14:00` |
+| `SCHEDULE_KDMS_BACKFILL_MINUTE` | 한국 시장 분봉 백필 기동 간격 (분) | `10` |
+| `SCHEDULE_USDMS_DAILY_ROUTINE` | 미국 시장 일일 루틴 기동 시각 | `wed,sat:07:30` |
+| `SCHEDULE_USDMS_WEEKLY_MAINTENANCE` | 미국 시장 주간 백필 및 유지보수 시각 | `sat:09:00` |
 
 ---
 

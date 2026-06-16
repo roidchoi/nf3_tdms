@@ -245,6 +245,14 @@ class DailyTask:
             except Exception as me:
                 logger.error(f"Failed in daily minute data collection: {me}")
 
+        # 8. 자가 치유(Self-healing): 누적 실패 5회 이상인 블랙리스트 종목은 stock_info에서 delisted로 갱신하여 누락수 계산 모수에서 제외
+        if blacklisted_stocks:
+            try:
+                logger.info(f"Self-healing: Processing {len(blacklisted_stocks)} blacklisted stocks for auto-delisting...")
+                self.master_repo.update_stocks_status(list(blacklisted_stocks), "delisted")
+            except Exception as she:
+                logger.error(f"Failed to perform self-healing auto-delist for blacklisted stocks: {she}")
+
         return {"collected": collected, "failed": failed, "skipped": skipped}
 
     def _collect_daily_minute_data_range(self, start_date: date, end_date: date) -> None:

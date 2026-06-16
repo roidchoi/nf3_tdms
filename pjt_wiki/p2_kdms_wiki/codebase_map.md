@@ -11,7 +11,7 @@
 ```
 tdms_core/p2_kdms/
 ├── collectors/                  # 외부 API 클라이언트 레이어  ✅
-│   ├── kis_kr_client.py         # KIS REST API KR 래퍼 (OHLCV + 재무 + 마스터)
+│   ├── kis_kr_client.py         # KIS REST API KR 래퍼 (OHLCV + 재무 + 마스터, BC/MF/ELW 비주식성 특수 상품 필터링 내장)
 │   ├── kiwoom_client.py         # Kiwoom REST API 분봉 수집
 │   ├── pub_data_client.py       # pykrx 기반 시가총액 수집
 │   ├── factor_calculator.py     # 수정계수(Price Factor) 역산 계산기
@@ -169,3 +169,4 @@ tdms_core/p2_kdms/
 | T-006~T-008 | 시가총액 수집 파이프라인 + MarketCapRepo + DailyTask 통합 |
 | 2026-05-26 | Graphify 기반 초기 지식화 (위키 codebase_map 전면 작성) |
 | 2026-05-28 | KIS 마스터 데이터 오차 대응을 위한 시가총액 bigint 오버플로우 방어 패치 적용 |
+| T-011 | 스케줄링 환경 변수 외부화 및 API 개정 작업 완료, KIS 마스터 비주식 특수 상품(BC/MF/EW) 제외 필터 적용 |

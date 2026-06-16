@@ -38,10 +38,14 @@ export interface MarketTaskSummary {
   last_status: string;
 }
 
+export interface JobTaskSummary {
+  [task_id: string]: MarketTaskSummary;
+}
+
 export interface MarketStatus {
   status: 'ONLINE' | 'OFFLINE';
   freshness: MarketFreshness | null;
-  tasks: MarketTaskSummary | null;
+  tasks: JobTaskSummary | null;
 }
 
 export interface IntegratedStatus {

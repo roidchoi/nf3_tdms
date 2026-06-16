@@ -63,7 +63,7 @@
 | `DEV_IP` | `192.168.x.x` | 개발PC IP |
 | `SERVER_IP` | `192.168.x.x` | 서버 IP |
 
-**필수 환경변수 (Layer B — DB 접속)**
+**필수 환경변수 (Layer B — DB 접속 & 스케줄)**
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
@@ -71,6 +71,10 @@
 | `SERVER_KDMS_DB_PASSWORD` | — | 서버 DB 비밀번호 |
 | `DEV_KDMS_DB_PORT` | `5432` | 개발 DB 포트 |
 | `SERVER_KDMS_DB_PORT` | `5432` | 서버 DB 포트 |
+| `SCHEDULE_KDMS_DAILY_UPDATE` | `"15:40"` | 대한민국 시장 일일 가격 수집 배치 시각 (`HH:MM`) |
+| `SCHEDULE_KDMS_FINANCIAL_UPDATE` | `"17:10"` | 대한민국 시장 분기 재무 수집 배치 시각 (`HH:MM`) |
+| `SCHEDULE_KDMS_BACKFILL_MINUTE` | `"10"` | 대한민국 시장 분봉 백필 기동 간격 분 (`MM`) |
+
 
 ---
 

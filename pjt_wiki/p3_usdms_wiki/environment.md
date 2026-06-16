@@ -48,7 +48,7 @@
 
 | 파일 | 경로 | git 포함 | 주요 내용 |
 |---|---|---|---|
-| `.env` | `tdms_core/p3_usdms/.env` | ❌ | `TDMS_ENV`, `SEC_USER_AGENT` <br> `DEV_USDMS_DB_HOST`/`PORT`/`NAME`/`USER`/`PASSWORD` <br> `SERVER_USDMS_DB_HOST`/`PORT`/`NAME`/`USER`/`PASSWORD` <br> `TARGET_MIN_MARKET_CAP`/`TARGET_MIN_PRICE`/`TARGET_RETAIN_MARKET_CAP`/`TARGET_RETAIN_PRICE` (수집 임계치) <br> `SCHEDULE_DAILY_ROUTINE` (수집 기동 시각) |
+| `.env` | `tdms_core/p3_usdms/.env` | ❌ | `TDMS_ENV`, `SEC_USER_AGENT` <br> `DEV_USDMS_DB_HOST`/`PORT`/`NAME`/`USER`/`PASSWORD` <br> `SERVER_USDMS_DB_HOST`/`PORT`/`NAME`/`USER`/`PASSWORD` <br> `TARGET_MIN_MARKET_CAP`/`TARGET_MIN_PRICE`/`TARGET_RETAIN_MARKET_CAP`/`TARGET_RETAIN_PRICE` (수집 임계치) <br> `SCHEDULE_USDMS_DAILY_ROUTINE` (미국 시장 일일 루틴 기동 시각, 예: `"wed,sat:07:30"`) <br> `SCHEDULE_USDMS_WEEKLY_MAINTENANCE` (미국 시장 주간 백필 및 유지 관리 기동 시각, 예: `"sat:09:00"`) |
 | `pyproject.toml` | `tdms_core/p3_usdms/pyproject.toml` | ✅ | 패키지 메타데이터 및 빌드 설정 |
 
 ---

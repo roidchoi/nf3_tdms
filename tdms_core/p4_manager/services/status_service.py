@@ -58,17 +58,17 @@ class StatusService:
                 "is_daily_fresh": p2_freshness.get("is_daily_fresh", False)
             }
             
-            daily_update = p2_tasks.get("daily_update", {})
-            is_running = any(job.get("is_running", False) for job in p2_tasks.values())
-            raw_status = daily_update.get("last_status", "none")
-            last_status = raw_status.lower() if raw_status else "none"
-            last_run_time = daily_update.get("last_run_time")
-            
-            tasks_data = {
-                "is_running": is_running,
-                "last_run_time": last_run_time,
-                "last_status": last_status
-            }
+            tasks_data = {}
+            for task_id, info in p2_tasks.items():
+                raw_status = info.get("last_status", "none")
+                last_status = raw_status.lower() if raw_status else "none"
+                last_run_time = info.get("end_time") or info.get("start_time") or info.get("last_run_time")
+                
+                tasks_data[task_id] = {
+                    "is_running": info.get("is_running", False),
+                    "last_run_time": last_run_time,
+                    "last_status": last_status
+                }
             
             return {
                 "status": "ONLINE",
@@ -107,26 +107,27 @@ class StatusService:
                 "is_daily_fresh": p3_freshness.get("is_daily_fresh", False)
             }
             
-            is_running = any(job.get("is_running", False) for job in p3_tasks)
-            last_run_time = None
-            last_status = "none"
-            
-            if p3_tasks:
-                latest_job = p3_tasks[0]
-                last_run_time = latest_job.get("end_time") or latest_job.get("start_time")
-                raw_status = latest_job.get("status", "none")
-                if raw_status == "SUCCESS":
-                    last_status = "success"
-                elif raw_status == "FAILED":
-                    last_status = "failed"
-                else:
-                    last_status = raw_status.lower() if raw_status else "none"
-            
-            tasks_data = {
-                "is_running": is_running,
-                "last_run_time": last_run_time,
-                "last_status": last_status
-            }
+            tasks_data = {}
+            for info in p3_tasks:
+                job_id = info.get("job_id") or info.get("routine")
+                if not job_id and info.get("file_name"):
+                    fname = info["file_name"]
+                    if fname.startswith("daily_routine"):
+                        job_id = "daily_routine"
+                    elif fname.startswith("weekly_backfill"):
+                        job_id = "weekly_backfill"
+                        
+                if not job_id:
+                    continue
+                raw_status = info.get("status", "none")
+                last_status = raw_status.lower() if raw_status else "none"
+                last_run_time = info.get("end_time") or info.get("start_time")
+                
+                tasks_data[job_id] = {
+                    "is_running": info.get("is_running", False),
+                    "last_run_time": last_run_time,
+                    "last_status": last_status
+                }
             
             return {
                 "status": "ONLINE",

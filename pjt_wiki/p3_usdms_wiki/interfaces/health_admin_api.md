@@ -86,6 +86,11 @@ APScheduler에 등록된 크론 작업의 식별 ID, 다음 실행 예정 시각
 
 ### ③ `PUT /schedules`
 크론 작업(`job_id`)의 매일 실행 시간(`hour`, `minute`)을 동적으로 변경(reschedule)합니다.
+* **물리 동기화 및 요일 보존**:
+  - 변경 즉시 `p1_shared`의 `update_env_value` 유틸리티를 호출하여 `.env` 파일의 관련 환경 변수(`SCHEDULE_USDMS_DAILY_ROUTINE` 또는 `SCHEDULE_USDMS_WEEKLY_MAINTENANCE`) 값을 물리적으로 덮어쓰고, `os.environ` 및 앱 설정의 캐시를 동기화합니다.
+  - 시간만 전달되더라도 기존 설정에 요일 접두사(예: `"wed,sat:"`)가 있는 경우, 이를 파싱 단계에서 식별하여 새로운 시/분 정보와 정상 병합 보존 처리합니다.
+  - 임시 파일 move 방식이 아닌 direct write 스트림 방식을 사용하여 Docker 볼륨의 Inode 소실을 방지합니다.
+
 
 ### ④ `WebSocket /ws/logs`
 지정한 파일명 또는 가장 최신의 수집 로그 파일(`.log`)을 대상으로 `tail -f` 방식의 실시간 라인 전송 비동기 커넥션을 유지합니다.

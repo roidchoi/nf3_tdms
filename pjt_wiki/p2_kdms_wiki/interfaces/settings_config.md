@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     db_pool_max:       int = 20
     log_level:         str = "INFO"
 
+    # T-011 스케줄링 (중앙화 마이그레이션 변수)
+    schedule_kdms_daily_update:     str = "15:40"
+    schedule_kdms_financial_update: str = "17:10"
+    schedule_kdms_backfill_minute:  str = "10"
+
 settings = Settings(_env_file=".env")
 ```
 
@@ -66,3 +71,7 @@ settings = Settings(_env_file=".env")
 | `SERVER_KDMS_DB_PASSWORD` | B | 서버 DB 비밀번호 |
 | `DB_POOL_MIN` / `DB_POOL_MAX` | B | 커넥션 풀 크기 |
 | `LOG_LEVEL` | B | 로그 레벨 |
+| `SCHEDULE_KDMS_DAILY_UPDATE` | B | 대한민국 시장 일일 가격 수집 배치 시각 (기본: `"15:40"`) |
+| `SCHEDULE_KDMS_FINANCIAL_UPDATE` | B | 대한민국 시장 분기 재무 수집 배치 시각 (기본: `"17:10"`) |
+| `SCHEDULE_KDMS_BACKFILL_MINUTE` | B | 대한민국 시장 분봉 백필 수기 기동 간격 분 (기본: `"10"`) |
+

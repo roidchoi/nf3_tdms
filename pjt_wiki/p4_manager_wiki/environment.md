@@ -73,7 +73,7 @@
 | `package.json` | `tdms_core/p4_manager/frontend/package.json` | ✅ | 프론트엔드 의존성 및 실행 스크립트(`build`, `test`) 정의 |
 | `tsconfig.app.json` | `tdms_core/p4_manager/frontend/tsconfig.app.json` | ✅ | TypeScript 에일리어스(`@/*`) 및 컴파일 타겟 지시 규칙 정의 |
 | `vite.config.ts` | `tdms_core/p4_manager/frontend/vite.config.ts` | ✅ | Vitest `jsdom` 환경 및 paths 별칭 resolve 규칙 매핑 |
-| `.env` | `.env` (루트) | ❌ | 공통 환경변수 (`SCHEDULE_KDMS_*`, `SCHEDULE_USDMS_*` 등) 및 DB 물리 경로(`data_path`), 백업 경로(`BACKUP_BASE_DIR`), 네트워크 자동 동기화용 타깃 변수(`DEV_IP`, `SERVER_IP`, `SERVER_HOSTNAME`) 수록 |
+| `.env` | `.env` (루트) | ❌ | 공통 환경변수 (`SCHEDULE_KDMS_DAILY_UPDATE`, `SCHEDULE_KDMS_FINANCIAL_UPDATE`, `SCHEDULE_KDMS_BACKFILL_MINUTE`, `SCHEDULE_USDMS_DAILY_ROUTINE`, `SCHEDULE_USDMS_WEEKLY_MAINTENANCE` 등) 및 DB 물리 경로(`data_path`), 백업 경로(`BACKUP_BASE_DIR`), 네트워크 자동 동기화용 타깃 변수(`DEV_IP`, `SERVER_IP`, `SERVER_HOSTNAME`) 수록 |
 
 ---
 

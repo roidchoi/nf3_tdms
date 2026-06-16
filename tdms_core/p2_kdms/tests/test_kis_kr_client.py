@@ -175,3 +175,72 @@ def test_fetch_stock_master_downloads_and_parses_mst(mocker):
     assert sn_stock["listed_shares"] == 10000000
     assert sn_stock["is_active"] is True
 
+
+def test_fetch_stock_master_filters_funds(mocker):
+    """
+    [목적] 그룹코드가 BC(수익증권), MF(뮤추얼펀드), EW(ELW)인 경우 수집 대상에서 제외하는지 검증.
+    """
+    import io
+    import zipfile
+    
+    field_specs_kospi = [2, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 5, 5, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 3, 1, 3, 12, 12, 8, 15, 21, 2, 7, 1, 1, 1, 1, 1, 9, 9, 9, 5, 9, 8, 9, 9, 3, 1, 1, 1]
+    
+    def make_part1(code, std_code, name, group):
+        code_bytes = code.encode("cp949").ljust(9)[:9]
+        std_bytes = std_code.encode("cp949").ljust(12)[:12]
+        name_bytes = name.encode("cp949").ljust(40)[:40]
+        group_bytes = group.encode("cp949").ljust(2)[:2]
+        return code_bytes + std_bytes + name_bytes + group_bytes
+
+    def make_part2():
+        kospi_fields = ["  "] * len(field_specs_kospi)
+        kospi_fields[49] = "20260101"
+        kospi_fields[50] = "1000000        "
+        part2_str = "".join(f.ljust(w)[:w] for w, f in zip(field_specs_kospi, kospi_fields))
+        return part2_str.encode("cp949")
+
+    # 1. 일반 주식 (그룹코드 ST)
+    part1_st = make_part1("A000010", "KR7000010004", "일반주식", "ST")
+    line_st = part1_st + make_part2() + b"\n"
+    
+    # 2. 펀드/수익증권 (그룹코드 BC)
+    part1_bc = make_part1("A100020", "KR5100020008", "수익증권펀드", "BC")
+    line_bc = part1_bc + make_part2() + b"\n"
+    
+    # 3. 뮤추얼펀드 (그룹코드 MF)
+    part1_mf = make_part1("A200030", "KR5200030007", "뮤추얼펀드", "MF")
+    line_mf = part1_mf + make_part2() + b"\n"
+    
+    kospi_line_bytes = line_st + line_bc + line_mf
+    
+    def make_zip(filename, data_bytes):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(filename, data_bytes)
+        return buf.getvalue()
+        
+    kospi_zip_bytes = make_zip("kospi_code.mst", kospi_line_bytes)
+    
+    mock_response = mocker.MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    mock_response.read.return_value = kospi_zip_bytes
+    mock_response.status = 200
+    
+    mock_urlopen = mocker.patch("urllib.request.urlopen")
+    mock_urlopen.return_value = mock_response
+    
+    mock_response_empty = mocker.MagicMock()
+    mock_response_empty.__enter__.return_value = mock_response_empty
+    mock_response_empty.read.return_value = make_zip("kosdaq_code.mst", b"")
+    mock_response_empty.status = 200
+    mock_urlopen.side_effect = [mock_response, mock_response_empty]
+    
+    client = KisKrClient(api_core=mocker.MagicMock())
+    stocks = client.fetch_stock_master()
+    
+    # BC, MF 그룹코드를 가진 펀드 종목들은 필터링되어, ST 그룹코드를 가진 '일반주식' 1건만 수집되어야 함
+    assert len(stocks) == 1
+    assert stocks[0]["stk_cd"] == "000010"
+    assert stocks[0]["stk_nm"] == "일반주식"
+
+

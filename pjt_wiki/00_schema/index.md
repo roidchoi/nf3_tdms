@@ -2,7 +2,7 @@
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
 > **마지막 업데이트**: 2026-06-12
-> **총 등록 파일**: 43개
+> **총 등록 파일**: 47개
 
 
 ---
@@ -46,9 +46,11 @@
 | `backup_manager.md` | BackupManager | **58** | pg_dump 백업, pre-data→data→post-data 강건 복원 |
 | `startup_validator.md` | StartupValidator | **48** | Docker 재기동 후 5종 검증, FastAPI lifespan 패턴 |
 | `physical_sync_manager.md` | PhysicalSyncManager | **20** | tar+SSH 물리 동기화, 5단계 파이프라인 |
+| `schedule_utils.md` | — | — | 공통 스케줄링 문자열 파싱, .env 변수 덮어쓰기 및 요일 접두사 보존 병합 유틸리티 |
 | `date_utils.md` | — | — | 한국 거래일 및 미국 주식시장 영업일 판별 공통 유틸리티 |
 | `kis_api_core.md` | KisApiCore | — | KIS REST API 연동, OAuth2 토큰 자동 관리, 지수 백오프 재시도 및 스로틀 지연 적용 |
 | `kiwoom_api_core.md` | KiwoomApiCore | — | Kiwoom REST API 연동, OAuth2 토큰 자동 관리, 초당 5회 제한 스로틀 0.25초 지연 적용 |
+
 
 ### decisions/ (핵심 기술 의사결정)
 
@@ -69,7 +71,7 @@
 ## p2_kdms_wiki (p2_kdms 한국 시장 백엔드)
 
 > **역할**: 한국 시장 주가/재무/시총/분봉 데이터 수집 및 조회 API 백엔드
-> **상태**: 🔄 구현 완료 — 지식화 완료 (2026-05-26, Graphify 기반)
+> **상태**: ✅ 완료 (2026-06-12, T-011 스케줄링 및 KIS 특수 상품 필터링 반영 완료)
 
 ### 코어 문서
 
@@ -98,6 +100,7 @@
 | `dec-002_price_adjustment_dual_strategy.md` | 수정주가: On-the-fly + 물리 테이블 이중 제공 | T-003 |
 | `dec-003_support_alphanumeric_stock_codes.md` | 종목코드: 한국거래소(KRX) 알파벳 혼용 종목코드 지원을 위한 수집기 필터 완화 | — |
 | `dec-004_kis_api_throttling_strategy.md` | 속도 정책: 안전 마진 기반 KIS API 스로틀링(Throttling) 및 방어적 시가총액 bigint 연산 | Task-010 |
+| `dec-005_filter_non_equity_instruments.md` | 특수 상품: 비주식성 특수 상품(BC, MF, EW) 수집 제외 필터링 적용 | T-011 |
 
 ### errors/ (해결된 에러 기록)
 
@@ -111,7 +114,7 @@
 ## p3_usdms_wiki (p3_usdms 미국 시장 백엔드)
 
 > **역할**: 미국 시장 티커/주가/재무/가치지표 데이터 수집 및 조회 API 백엔드
-> **상태**: ✅ T-008 완료 (DatabaseManager 레거시 제거, 수집 기준/스케줄 설정 외부화, 미국 휴장 판단 및 trading_calendar 동기화 완료)
+> **상태**: ✅ T-011 완료 (스케줄 변수명 일원화 및 주간 유지보수 외부화, API 개정에 따른 보존 처리 적용 완료)
 
 ### 코어 문서
 
@@ -162,7 +165,7 @@
 ## p4_manager_wiki (p4_manager 통합 관리 레이어)
 
 > **역할**: 한국/미국 백엔드 통합 모니터링 UI 및 오케스트레이션
-> **상태**: ✅ T-010 물리 동기화 및 감사 리포팅 연동 완료 (2026-06-11)
+> **상태**: ✅ T-011 스케줄링 변수 중앙화 및 API 개정 연동 완료 (2026-06-12)
 
 ### 코어 문서
 
@@ -200,6 +203,7 @@
 | `p4err-003_host_cli_backup_execution_trouble.md` | 로컬 CLI 기동 시 data_path 누락 및 싱글톤 인스턴스 미활용, 비동기(await) 혼선에 따른 3종 에러 -> DATA_PATH 명시 및 인스턴스 동기 호출 | Medium |
 | `p4err-004_wsl2_agent_browser_forwarding.md` | WSL2 가상망 내 에이전트 브라우저 실행 차단 -> Windows Chrome 원격 디버깅 및 포트 프록시 터널링(socat) 연동 | High |
 | `p4err-005_scheduler_api_404_not_found.md` | 통합 관리자 KDMS 스케줄러 조회 시 누락된 접두사(/tasks) 매핑 불일치로 인한 404 에러 | Medium |
+| `p4err-006_websocket_upstream_failed.md` | 실시간 로그 스트리밍 웹소켓 프록시 연결 장애 (HTTP 404 및 403) | Medium |
 
 ---
 
@@ -217,6 +221,7 @@
 - [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
 - [P4-ERR-004] WSL2 에이전트 브라우저 실행 및 포워딩 장애 → `p4_manager_wiki/errors/p4err-004_wsl2_agent_browser_forwarding.md`
 - [P4-ERR-005] 통합 관리자 KDMS 스케줄러 조회 404 장애 → `p4_manager_wiki/errors/p4err-005_scheduler_api_404_not_found.md`
+- [P4-ERR-006] 실시간 로그 스트리밍 웹소켓 프록시 404/403 장애 → `p4_manager_wiki/errors/p4err-006_websocket_upstream_failed.md`
 
 ### 📐 최근 변경된 인터페이스
 

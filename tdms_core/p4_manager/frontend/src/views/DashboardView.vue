@@ -193,7 +193,7 @@ onUnmounted(() => {
             taskId="daily_update"
             title="일일 업데이트"
             icon="📅"
-            :status="statusStore.status.kr.tasks"
+            :status="statusStore.status.kr.tasks?.daily_update"
           />
 
           <!-- 한국: 재무 제표 -->
@@ -202,7 +202,7 @@ onUnmounted(() => {
             taskId="financial_update"
             title="재무 업데이트"
             icon="💵"
-            :status="statusStore.status.kr.tasks"
+            :status="statusStore.status.kr.tasks?.financial_update"
           />
 
           <!-- 미국: 일일 Routine -->
@@ -211,7 +211,7 @@ onUnmounted(() => {
             taskId="daily_routine"
             title="Daily Routine"
             icon="🇺🇸"
-            :status="statusStore.status.us.tasks"
+            :status="statusStore.status.us.tasks?.daily_routine"
           />
 
           <!-- 미국: 주간 Backfill -->
@@ -220,7 +220,7 @@ onUnmounted(() => {
             taskId="weekly_backfill"
             title="Weekly Backfill"
             icon="⏳"
-            :status="statusStore.status.us.tasks"
+            :status="statusStore.status.us.tasks?.weekly_backfill"
           />
         </div>
       </main>

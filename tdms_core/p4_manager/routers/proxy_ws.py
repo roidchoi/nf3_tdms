@@ -2,7 +2,7 @@
 import asyncio
 import logging
 from typing import Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status, Query
 import websockets
 from websockets.exceptions import ConnectionClosed
 
@@ -14,7 +14,7 @@ router = APIRouter()
 async def websocket_proxy_endpoint(
     websocket: WebSocket,
     market: str,
-    log_file: Optional[str] = None
+    log_file: Optional[str] = Query(None)
 ):
     """
     [목적] 클라이언트의 WebSocket 연결을 받아, market 인자에 따라
@@ -32,7 +32,7 @@ async def websocket_proxy_endpoint(
     if market == "kr":
         target_url = "ws://p2_kdms:8000/ws/logs"
     else:
-        target_url = "ws://p3_usdms:8005/ws/logs"
+        target_url = "ws://p3_usdms:8005/api/admin/ws/logs"
         if log_file:
             target_url += f"?log_file={log_file}"
 

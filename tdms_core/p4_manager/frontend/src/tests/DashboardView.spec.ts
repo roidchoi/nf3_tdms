@@ -22,12 +22,15 @@ describe('DashboardView.vue', () => {
           daily_coverage_ratio: 0.995,
           is_daily_fresh: true
         },
-        tasks: { is_running: false, last_run_time: '2026-06-08T17:05:00', last_status: 'success' }
+        tasks: {
+          daily_update: { is_running: false, last_run_time: '2026-06-08T17:05:00', last_status: 'success' },
+          financial_update: { is_running: false, last_run_time: '2026-06-08T17:05:00', last_status: 'success' }
+        }
       },
       us: {
         status: 'OFFLINE',
         freshness: null,
-        tasks: null
+        tasks: {}
       }
     }
 

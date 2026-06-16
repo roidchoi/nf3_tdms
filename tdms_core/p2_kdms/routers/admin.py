@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -118,7 +119,8 @@ async def run_task(
     task_func = task_map[task_id]
 
     try:
-        # 비동기적으로 스케줄러에 단발성 작업 추가
+        # 비동기적으로 스케줄러에 단발성 작업 추가 (KST timezone-aware 미래 시점으로 즉시 실행 보장)
+        current_time = datetime.now(ZoneInfo("Asia/Seoul")) + timedelta(seconds=5)
         if task_id == "backfill_market_cap":
             scheduler.add_job(
                 func=lambda: task_func(
@@ -128,7 +130,8 @@ async def run_task(
                     end_date=parsed_end
                 ),
                 trigger="date",
-                run_date=datetime.now(),
+                run_date=current_time,
+                misfire_grace_time=36000,
                 id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
                 name=task_id
             )
@@ -136,7 +139,8 @@ async def run_task(
             scheduler.add_job(
                 func=lambda: task_func(job_statuses, test_mode=test_mode),
                 trigger="date",
-                run_date=datetime.now(),
+                run_date=current_time,
+                misfire_grace_time=36000,
                 id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
                 name=task_id
             )
@@ -212,17 +216,49 @@ async def reschedule_job(
     minute: int
 ):
     """
-    특정 작업(job_id)의 매일 실행 시간(hour, minute)을 동적으로 변경(reschedule)합니다.
+    특정 작업(job_id)의 매일 실행 시간(hour, minute)을 동적으로 변경(reschedule)하며,
+    .env 파일의 스케줄 설정도 영구 보존 업데이트합니다.
     """
     if scheduler is None:
         raise HTTPException(status_code=500, detail="스케줄러 시스템이 정상적으로 기동되지 않았습니다.")
         
+    job = scheduler.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"작업 '{job_id}'을 찾을 수 없습니다.")
+
+    # job_id에 대응하는 .env 변수명 설정
+    var_map = {
+        "daily_update": "SCHEDULE_KDMS_DAILY_UPDATE",
+        "financial_update": "SCHEDULE_KDMS_FINANCIAL_UPDATE",
+        "backfill_minute_data": "SCHEDULE_KDMS_BACKFILL_MINUTE"
+    }
+    
+    var_name = var_map.get(job_id)
+    
     try:
-        scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
-        logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {hour:02d}:{minute:02d}")
+        new_time_str = f"{hour:02d}:{minute:02d}"
+        
+        # 1. .env 파일 및 os.environ 업데이트 (요일 보존 처리 내장)
+        if var_name:
+            from p1_shared.utils.schedule_utils import update_env_value, parse_schedule_string
+            import os
+            update_env_value(var_name, new_time_str)
+            
+            # 2. 업데이트된 값에서 요일 정보 등을 다시 읽어 스케줄러 갱신
+            updated_val = os.environ.get(var_name, new_time_str)
+            h, m, day_of_week = parse_schedule_string(updated_val)
+            
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {updated_val}")
+        else:
+            # 매핑 변수가 없는 특수 job의 경우 기존 방식 적용
+            scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
+            logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {new_time_str}")
+            
         return {"status": "SUCCESS", "job_id": job_id, "hour": hour, "minute": minute}
     except Exception as e:
         logger.error(f"스케줄러 일정 변경 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"스케줄 일정 변경에 실패했습니다: {str(e)}")
+
 
 

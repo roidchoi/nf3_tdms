@@ -85,5 +85,22 @@ class MasterRepo:
             rows = cursor.fetchall()
             return {row[0]: row[1] for row in rows}
 
+    def update_stocks_status(self, stk_cds: List[str], status: str) -> None:
+        """
+        지정된 종목들의 status 상태를 갱신합니다. delisted 인 경우 delist_dt 도 당일로 갱신합니다.
+        """
+        if not stk_cds:
+            return
+            
+        query = """
+            UPDATE stock_info
+            SET status = %s,
+                delist_dt = CASE WHEN %s = 'delisted' AND delist_dt IS NULL THEN CURRENT_DATE ELSE delist_dt END,
+                update_dt = CURRENT_TIMESTAMP
+            WHERE stk_cd = ANY(%s)
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (status, status, stk_cds))
+
 
 

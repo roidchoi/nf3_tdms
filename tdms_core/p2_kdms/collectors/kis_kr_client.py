@@ -183,6 +183,9 @@ class KisKrClient:
                                         line_str = line_bytes.decode('cp949', errors='ignore')
                                         parts = line_str.split('|')
                                         if len(parts) >= 10:
+                                            pipe_group = parts[3].strip() if len(parts) > 3 else ""
+                                            if pipe_group in ("BC", "MF", "EW"):
+                                                continue
                                             stk_cd = parts[0].strip()[-6:]
                                             stk_nm = parts[2].strip() if len(parts) > 2 else ""
                                             
@@ -196,10 +199,16 @@ class KisKrClient:
                                             continue
                                     else:
                                         # 고정 폭 바이트 슬라이싱 처리
-                                        # Part1: 단축코드 9바이트, 표준코드 12바이트, 한글명 40바이트
+                                        # Part1: 단축코드 9바이트, 표준코드 12바이트, 한글명 40바이트, 그룹코드 2바이트
                                         stk_cd_bytes = line_bytes[0:9]
                                         stk_nm_bytes = line_bytes[21:61]
+                                        group_code_bytes = line_bytes[61:63]
                                         
+                                        group_code = group_code_bytes.decode('cp949', errors='ignore').strip()
+                                        # 비주식성 특수 상품(수익증권 BC, 뮤추얼펀드 MF, ELW EW 등) 필터링
+                                        if group_code in ("BC", "MF", "EW"):
+                                            continue
+                                            
                                         if market == "KOSPI":
                                             part2_bytes = line_bytes[-total_kospi_width:]
                                         else:

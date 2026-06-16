@@ -225,9 +225,9 @@ def get_gaps(
             gap_reason_stocks_count = 0
             
             for code in target_codes:
-                # 381개 분봉 기준 미달 시 누락 의심
+                # 실질적 수집 누락(체결 내역이 있음에도 분봉이 0개 적재된 경우)만 감지
                 actual_cnt = collected_counts.get(code, 0)
-                if actual_cnt < 381:
+                if actual_cnt == 0:
                     vol = daily_volumes.get(code, 0)
                     has_gap_reason = code in gap_reasons
                     

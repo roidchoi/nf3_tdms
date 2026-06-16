@@ -4,12 +4,14 @@ import json
 import logging
 import asyncio
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Request, Query
 
 from p3_usdms.tasks.daily_routine import DailyRoutine
 
 logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
 
 # APIRouter의 prefix를 /api/admin으로 조정 (기존 /api/admin/tasks 에서 변경)
 router = APIRouter(prefix="/api/admin", tags=["Admin Operations"])
@@ -151,20 +153,56 @@ def update_schedule(
     request: Request
 ) -> Dict[str, Any]:
     """
-    특정 스케줄 작업(예: daily_collection_job)의 실행 시각을 동적으로 변경합니다.
+    특정 스케줄 작업(예: daily_collection_job)의 실행 시각을 동적으로 변경하며,
+    .env 파일의 스케줄 설정도 영구 보존 업데이트합니다.
     """
     scheduler = getattr(request.app.state, "scheduler", None)
     if not scheduler:
         raise HTTPException(status_code=500, detail="Scheduler is not running or not registered.")
         
+    job = scheduler.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found.")
+        
+    var_map = {
+        "daily_collection_job": "SCHEDULE_USDMS_DAILY_ROUTINE",
+        "weekly_maintenance_job": "SCHEDULE_USDMS_WEEKLY_MAINTENANCE"
+    }
+    
+    var_name = var_map.get(job_id)
+    
     try:
-        scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
-        return {
-            "status": "SUCCESS",
-            "message": f"Successfully updated job {job_id} schedule to {hour:02d}:{minute:02d}."
-        }
+        new_time_str = f"{hour:02d}:{minute:02d}"
+        
+        if var_name:
+            from p1_shared.utils.schedule_utils import update_env_value, parse_schedule_string
+            import os
+            
+            # 1. .env 파일 및 os.environ 업데이트 (요일 보존 처리 내장)
+            update_env_value(var_name, new_time_str)
+            
+            # 2. 업데이트된 값에서 요일 정보 등을 다시 읽어 스케줄러 갱신
+            updated_val = os.environ.get(var_name, new_time_str)
+            h, m, day_of_week = parse_schedule_string(updated_val)
+            
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            logger.info(f"Successfully updated job {job_id} schedule to {updated_val} (and persisted to .env).")
+            return {
+                "status": "SUCCESS",
+                "message": f"Successfully updated job {job_id} schedule to {updated_val}."
+            }
+        else:
+            # 매핑 변수가 없는 특수 job의 경우 기존 방식 적용
+            scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
+            logger.info(f"Successfully updated job {job_id} schedule to {new_time_str}.")
+            return {
+                "status": "SUCCESS",
+                "message": f"Successfully updated job {job_id} schedule to {new_time_str}."
+            }
     except Exception as e:
+        logger.error(f"Failed to reschedule job {job_id}: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Failed to reschedule job {job_id}: {str(e)}")
+
 
 
 @router.post("/schedules/{job_id}/toggle", summary="스케줄러 작업 일시정지 또는 재개")
@@ -207,7 +245,7 @@ def toggle_job(
 
 
 @router.websocket("/ws/logs")
-async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = None):
+async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = Query(None)):
     """
     WebSocket 연결을 승인하고, 최신 daily_routine 로그 파일(.log)을
     실시간으로 한 줄씩 스트리밍 전송합니다. (tail -f 방식 구현)
@@ -231,9 +269,12 @@ async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = None):
                 target_log_path = os.path.join(logs_dir, log_files[0])
                 
     if not target_log_path or not os.path.exists(target_log_path):
-        await websocket.send_text("No active log file found.")
-        await websocket.close()
-        return
+        # 방어적 조치: 파일이 없다면 logs/daily_routine.log 경로를 기본 경로로 삼고 빈 파일을 만듭니다.
+        os.makedirs(logs_dir, exist_ok=True)
+        target_log_path = os.path.join(logs_dir, "daily_routine.log")
+        if not os.path.exists(target_log_path):
+            with open(target_log_path, "w", encoding="utf-8") as f:
+                f.write(f"[{datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')}] Log streaming initialized.\n")
         
     try:
         # 파일 핸들을 열고 tail -f 방식으로 비동기 실시간 스트리밍

@@ -20,7 +20,7 @@ def test_get_integrated_schedules_kr_success(mock_respx):
     [Tier 2 - 격리 통합]
     [목적] 한국 백엔드의 스케줄 원본 데이터를 성공적으로 조회 및 정규화 변환하는지 검증.
     """
-    mock_respx.get("http://p2_kdms:8000/api/v1/admin/scheduler").respond(
+    mock_respx.get("http://p2_kdms:8000/api/v1/admin/tasks/scheduler").respond(
         json={
             "is_running": True,
             "jobs_count": 1,
@@ -89,7 +89,7 @@ def test_update_integrated_schedule_kr_success(mock_respx):
     [Tier 2 - 격리 통합]
     [목적] 한국 백엔드의 특정 작업 시간을 성공적으로 수정 중계하는지 검증.
     """
-    mock_respx.put("http://p2_kdms:8000/api/v1/admin/scheduler?job_id=daily_update&hour=18&minute=30").respond(
+    mock_respx.put("http://p2_kdms:8000/api/v1/admin/tasks/scheduler?job_id=daily_update&hour=18&minute=30").respond(
         json={"status": "SUCCESS", "job_id": "daily_update", "hour": 18, "minute": 30},
         status_code=200
     )

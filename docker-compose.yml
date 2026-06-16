@@ -32,7 +32,7 @@ services:
             echo "✅ [KDMS DB 검증 통과] 물리 데이터 마운트 정합성 확보 완료."
           fi
         ) &
-        exec docker-entrypoint.sh postgres
+        exec docker-entrypoint.sh postgres -c max_locks_per_transaction=256
 
   # 2. USDMS 데이터베이스 (TimescaleDB - PG16)
   usdms_db:
@@ -67,7 +67,7 @@ services:
             echo "✅ [USDMS DB 검증 통과] 물리 데이터 마운트 정합성 확보 완료."
           fi
         ) &
-        exec docker-entrypoint.sh postgres
+        exec docker-entrypoint.sh postgres -c max_locks_per_transaction=256
 
   # 3. KDMS 한국 주식 백엔드 API
   p2_kdms:

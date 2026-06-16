@@ -66,14 +66,14 @@ async def test_status_aggregation_success_normalizes_data():
     assert data["kr"]["status"] == "ONLINE"
     assert data["kr"]["freshness"]["status"] == "GREEN"
     assert data["kr"]["freshness"]["daily_coverage_ratio"] == 0.996
-    assert data["kr"]["tasks"]["is_running"] is False
-    assert data["kr"]["tasks"]["last_status"] == "success"
+    assert data["kr"]["tasks"]["daily_update"]["is_running"] is False
+    assert data["kr"]["tasks"]["daily_update"]["last_status"] == "success"
 
     # US 검증
     assert data["us"]["status"] == "ONLINE"
     assert data["us"]["freshness"]["status"] == "YELLOW"
     assert data["us"]["freshness"]["daily_coverage_ratio"] == 0.966
-    assert data["us"]["tasks"]["is_running"] is False
+    assert data["us"]["tasks"]["daily_routine"]["is_running"] is False
 
 @pytest.mark.asyncio
 @respx.mock

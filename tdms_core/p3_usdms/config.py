@@ -29,14 +29,16 @@ class Settings(BaseSettings):
     TARGET_RETAIN_MARKET_CAP: float = 35000000.0   # $3.5천만 (유지/탈퇴)
     TARGET_RETAIN_PRICE: float = 0.80              # $0.80 (유지/탈퇴)
 
-    # 일일 루틴 스케줄 추가
-    SCHEDULE_DAILY_ROUTINE: str = "07:30"          # 일일 수집 실행 일정 (HH:MM 형식, 디폴트 07:30 KST)
+    # 일일 루틴 및 주간 관리 스케줄 (중앙화 적용)
+    SCHEDULE_USDMS_DAILY_ROUTINE: str = "wed,sat:07:30"
+    SCHEDULE_USDMS_WEEKLY_MAINTENANCE: str = "sat:09:00"
 
     def __init__(self, **values):
         super().__init__(**values)
         # 필수 필드 유효성 검증
         if not self.SEC_USER_AGENT:
             raise ValueError("SEC_USER_AGENT 환경변수가 누락되었습니다")
+
 
 # 싱글톤 설정 게터
 _settings = None

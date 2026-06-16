@@ -46,7 +46,7 @@ class DailyRoutine:
         
         Args:
             test_limit (int, optional): 테스트 스위트 구동 시 제한할 CIK 수
-            target_date (date, optional): 수집 대상일 (생략 시 KST 기준 수집 당일의 전날 날짜 적용)
+            target_date (date, optional): 수집 대상일 (생략 시 Asia/Seoul 시간대 기준 수집 당일의 전날 날짜를 수집 대상일로 계산해 적용)
         Returns:
             Dict[str, Any]: 각 단계의 성공/실패 여부, 소요 시간 및 수집 세부 사항이 포함된 리포트 딕셔너리
         """
@@ -76,8 +76,10 @@ class DailyRoutine:
 
 ---
 
-## 3. 실행 이력 파일 저장 정책
-* 실행 완료 시, 최종 리포트를 JSON 구조로 변환하여 `tdms_core/p3_usdms/logs/` 폴더 내에 저장합니다.
-* 파일명 규격:
+## 3. 실행 이력 파일 저장 및 동적 로그 바인딩 정책
+* **동적 로그 핸들러 바인딩**: 실시간 웹소켓 로그 스트리밍을 원활히 지원하기 위해, `daily_routine` 실행 시 `logs/daily_routine.log` 파일을 대상으로 하는 `logging.FileHandler`를 root_logger에 기동 시 동적으로 바인딩(중복 생성 방지 설계 포함)하여 로그를 기록합니다.
+* **실행 이력 저장**: 실행 완료 시, 최종 리포트를 JSON 구조로 변환하여 `tdms_core/p3_usdms/logs/` 폴더 내에 저장합니다.
+* **파일명 규격**:
   - 일일 루틴: `daily_routine_YYYYMMDD_HHMMSS.json`
   - 주간 루틴: `weekly_backfill_YYYYMMDD_HHMMSS.json`
+
