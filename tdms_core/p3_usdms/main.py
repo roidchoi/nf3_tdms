@@ -9,6 +9,7 @@ from p3_usdms.routers.data import router as data_router
 from p3_usdms.routers.admin import router as admin_router
 from p3_usdms.routers.health import router as health_router
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # USDMS 필수 테이블 정의 (실제 us_ 스키마 테이블 매칭)

@@ -26,7 +26,7 @@ class StatusService:
         return self._cache
 
     async def fetch_and_cache_status(self):
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             kr_task = self._fetch_kr_status(client)
             us_task = self._fetch_us_status(client)
             
@@ -119,6 +119,8 @@ class StatusService:
                         
                 if not job_id:
                     continue
+                if job_id in tasks_data:
+                    continue
                 raw_status = info.get("status", "none")
                 last_status = raw_status.lower() if raw_status else "none"
                 last_run_time = info.get("end_time") or info.get("start_time")
@@ -136,7 +138,7 @@ class StatusService:
             }
             
         except Exception as e:
-            logger.error(f"Error fetching US status: {e}")
+            logger.error(f"Error fetching US status: {e}", exc_info=True)
             return {
                 "status": "OFFLINE",
                 "freshness": None,

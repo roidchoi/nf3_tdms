@@ -1,6 +1,6 @@
 # get_integrated_status (통합 상태 집계 API)
 
-> 마지막 변경: Task-002
+> 마지막 변경: Task-002 (2026-06-16 보완 반영)
 > 소스 위치: `tdms_core/p4_manager/routers/manager.py:5` 및 `tdms_core/p4_manager/services/status_service.py:7`
 
 ### 1. 개요 및 목적
@@ -77,6 +77,7 @@
 ```
 
 ### 3. 주의사항 및 의존성
-- **타임아웃 설정**: 백그라운드 수집 시 `httpx.AsyncClient(timeout=2.0)`을 통해 개별 호출 시간 한도를 2초로 제한하고 있습니다. 2초가 초과되거나 통신 에러가 나면 해당 백엔드를 `OFFLINE` 처리합니다.
+- **타임아웃 설정**: 백그라운드 수집 시 `httpx.AsyncClient(timeout=10.0)`을 통해 개별 호출 시간 한도를 10초로 제한하고 있습니다. 10초가 초과되거나 통신 에러가 나면 해당 백엔드를 `OFFLINE` 처리합니다. (2026-06-16 기존 2초에서 상향 보완)
+- **최신 태스크 상태 보존**: USDMS(미국 시장) 백엔드가 파일 목록을 기반으로 최근 실행 이력을 전달할 때, 실시간 실행 상태(`is_running: true`)가 주입된 최신 리포트를 우선 반환합니다. P4 Manager는 이 리스트를 파싱할 때 동일 태스크(job_id)에 대해 이미 최신 상태가 캐시에 등록되었다면 뒤에 등장하는 과거 완료 이력에 의해 상태가 `is_running: false`로 덮어씌워지지 않도록 중복 방어 처리를 수행합니다. (2026-06-16 보완 반영)
 - **백그라운드 캐시 의존**: 런타임에 직접 백엔드를 찌르지 않고 30초 주기(`TASK_POLL_INTERVAL`)로 갱신되는 로컬 메모리 변수(`_cache`)를 반환하므로, API 조회 호출 부하가 1ms 이내로 낮습니다.
 - 참고 에러: [[p4_manager_wiki/errors/p4err-001_module_not_found_tdms_core]]

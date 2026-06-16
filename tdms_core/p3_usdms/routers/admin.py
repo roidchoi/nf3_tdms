@@ -16,38 +16,47 @@ KST = ZoneInfo("Asia/Seoul")
 # APIRouter의 prefix를 /api/admin으로 조정 (기존 /api/admin/tasks 에서 변경)
 router = APIRouter(prefix="/api/admin", tags=["Admin Operations"])
 
-# 전역 실행 잠금(Lock) 플래그
-_is_running_flag = False
+# 전역 실행 잠금(Lock) 플래그 및 현재 실행 중인 태스크
+_running_task: Optional[str] = None
+
+def get_running_task() -> Optional[str]:
+    global _running_task
+    return _running_task
+
+def set_running_task(task_name: Optional[str]) -> None:
+    global _running_task
+    _running_task = task_name
 
 def is_routine_running() -> bool:
     """테스트 mocking 및 상태 판별을 위한 헬퍼 함수"""
-    global _is_running_flag
-    return _is_running_flag
+    global _running_task
+    return _running_task is not None
 
 def set_routine_running(status: bool) -> None:
-    global _is_running_flag
-    _is_running_flag = status
+    """하위 호환성 및 테스트 Mocking을 위한 헬퍼 함수"""
+    global _running_task
+    _running_task = "daily_routine" if status else None
 
 async def _async_run_routine():
     """백그라운드에서 실행할 일일 루틴 래퍼"""
-    set_routine_running(True)
+    set_running_task("daily_routine")
     try:
         routine = DailyRoutine()
         await routine.run()
     except Exception as e:
         logger.error(f"Background DailyRoutine run encountered error: {e}")
     finally:
-        set_routine_running(False)
+        set_running_task(None)
 
 async def _async_run_weekly():
-    set_routine_running(True)
+    set_running_task("weekly_backfill")
     try:
         routine = DailyRoutine()
         routine.run_weekly_backfill()
     except Exception as e:
         logger.error(f"Background WeeklyBackfill run encountered error: {e}")
     finally:
-        set_routine_running(False)
+        set_running_task(None)
 
 # =================================================================
 # 1. 태스크 수동 실행 API
@@ -87,16 +96,15 @@ async def run_weekly_backfill(background_tasks: BackgroundTasks):
 def get_tasks_status() -> List[Dict[str, Any]]:
     """
     logs/ 디렉토리에 적재된 daily_routine_*.json 및 weekly_backfill_*.json 파일 목록을
-    역순으로 조회하여 최근 10건의 실행 이력 리포트 리스트를 반환합니다.
+    역순으로 조회하여 최근 10건의 실행 이력 리포트 리스트를 반환하되,
+    현재 메모리 상에서 실행 중인 태스크 상태를 오버라이딩하여 반영합니다.
     """
     logs_dir = "logs"
-    if not os.path.exists(logs_dir):
-        return []
-        
     log_files = []
-    for f in os.listdir(logs_dir):
-        if f.endswith(".json") and (f.startswith("daily_routine_") or f.startswith("weekly_backfill_")):
-            log_files.append(f)
+    if os.path.exists(logs_dir):
+        for f in os.listdir(logs_dir):
+            if f.endswith(".json") and (f.startswith("daily_routine_") or f.startswith("weekly_backfill_")):
+                log_files.append(f)
             
     # 파일명 역순 정렬 (타임스탬프 기반 최신순)
     log_files.sort(reverse=True)
@@ -107,10 +115,47 @@ def get_tasks_status() -> List[Dict[str, Any]]:
         try:
             with open(file_path, "r", encoding="utf-8") as file:
                 data = json.load(file)
+                data["is_running"] = False
                 reports.append(data)
         except Exception as e:
             logger.warning(f"Failed to read/parse report file {f}: {e}")
-            reports.append({"file_name": f, "status": "ERROR", "error": str(e)})
+            reports.append({
+                "routine": "daily_routine" if "daily_routine" in f else "weekly_backfill",
+                "file_name": f,
+                "status": "ERROR",
+                "error": str(e),
+                "is_running": False
+            })
+            
+    # 현재 실행 중인 태스크(Lock 플래그) 반영
+    running = get_running_task()
+    if running:
+        # 1단계: 기존 목록에서 실행 중인 태스크와 매칭되는 최신 리포트 탐색
+        matched = False
+        for report in reports:
+            routine_name = report.get("routine")
+            if not routine_name and report.get("file_name"):
+                fname = report["file_name"]
+                if fname.startswith("daily_routine"):
+                    routine_name = "daily_routine"
+                elif fname.startswith("weekly_backfill"):
+                    routine_name = "weekly_backfill"
+            
+            if routine_name == running:
+                report["is_running"] = True
+                report["status"] = "RUNNING"
+                matched = True
+                break
+                
+        # 2단계: 기존 리포트가 없는 경우 신규 객체 주입
+        if not matched:
+            new_report = {
+                "routine": running,
+                "is_running": True,
+                "status": "RUNNING",
+                "start_time": datetime.now(KST).isoformat()
+            }
+            reports.insert(0, new_report)
             
     return reports
 
