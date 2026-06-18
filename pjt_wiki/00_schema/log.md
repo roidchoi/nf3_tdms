@@ -12,6 +12,8 @@
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
 
+## [2026-06-18] Task완료+의사결정+에러등록 | KIS 마스터 제공 오류로 상장주식수 0 유입 시 DB 최근 10영업일의 정상 주식수로 대체하는 Fallback 방어 로직(dec-006, err-004) 반영 완료. 아울러 2020~2025년 과거 캘린더 영업일 1,583일 및 시가총액 데이터 428만 건 백필 적재 완수로 데이터 안정성 확보, p2_kdms의 누락되었던 운영 스크립트 8종 및 테스트 파일 6종 반영으로 codebase_map.md 현행화 및 MoC(index.md) 갱신 완료.
+
 ## [2026-06-16] 에러등록 | 한국 KDMS 재무 업데이트 및 분봉 백필 태스크 기동 시 naive datetime 사용으로 인한 KST 시간대 처리 불일치 장애 해결 가이드(err-003_task_kst_timezone_mismatch.md) 등록 및 MoC(index.md) 현행화 완료.
 
 ## [2026-06-16] 에러등록 | 미국 USDMS 주식 백엔드 기동 시 logging.basicConfig 설정 누락에 따른 로깅 누락 및 백그라운드 실행 상태 유실 장애 해결 가이드(usdms-err-003_logging_missing_and_running_status_loss.md) 등록 및 MoC(index.md) 현행화 완료.

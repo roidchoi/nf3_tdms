@@ -345,9 +345,15 @@ const handleLimitChange = async () => {
 
 .filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 150px 1.5fr 1.2fr 300px 110px;
   gap: 16px;
   align-items: flex-end;
+}
+
+@media (max-width: 1024px) {
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .filter-item {
@@ -422,7 +428,8 @@ select:focus, input[type="text"]:focus, input[type="date"]:focus {
   background: var(--color-indigo);
   border: none;
   color: #fff;
-  padding: 8px 20px;
+  width: 100%;
+  padding: 8px 12px;
   border-radius: 6px;
   font-size: 0.88rem;
   font-weight: 600;
@@ -525,7 +532,7 @@ select:focus, input[type="text"]:focus, input[type="date"]:focus {
 
 /* 테이블 뷰 포트 */
 .table-wrapper {
-  overflow-x: auto;
+  overflow: auto;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   max-height: 600px;
@@ -545,7 +552,7 @@ select:focus, input[type="text"]:focus, input[type="date"]:focus {
 }
 
 .data-table th {
-  background: rgba(15, 23, 42, 0.4);
+  background: #0f172a; /* 스크롤 시 뒤 데이터가 비쳐 겹쳐 보이지 않도록 불투명 어두운 배경 적용 */
   color: #94a3b8;
   font-weight: 600;
   position: sticky;

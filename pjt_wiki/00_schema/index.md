@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-16
-> **총 등록 파일**: 50개
+> **마지막 업데이트**: 2026-06-18
+> **총 등록 파일**: 52개
 
 
 ---
@@ -101,6 +101,7 @@
 | `dec-003_support_alphanumeric_stock_codes.md` | 종목코드: 한국거래소(KRX) 알파벳 혼용 종목코드 지원을 위한 수집기 필터 완화 | — |
 | `dec-004_kis_api_throttling_strategy.md` | 속도 정책: 안전 마진 기반 KIS API 스로틀링(Throttling) 및 방어적 시가총액 bigint 연산 | Task-010 |
 | `dec-005_filter_non_equity_instruments.md` | 특수 상품: 비주식성 특수 상품(BC, MF, EW) 수집 제외 필터링 적용 | T-011 |
+| `dec-006_fallback_listed_shares_mechanism.md` | 상장주식수 누락: API 0 유입 시 DB 최근 데이터 Fallback 대체 | — |
 
 ### errors/ (해결된 에러 기록)
 
@@ -109,6 +110,7 @@
 | `err-001_kis_api_403_forbidden.md` | API 과호출로 인한 KIS IP 차단 (403 Forbidden) -> Throttling 딜레이 도입 | High |
 | `err-002_bigint_out_of_range_in_market_cap.md` | 기형적 주식수 데이터 연산으로 인한 시총 bigint 오버플로우 -> 1000억 주 초과 컷오프 | Critical |
 | `err-003_task_kst_timezone_mismatch.md` | 태스크 실행 상태 기록 시 KST 시간대 처리 불일치 -> datetime.now(KST) 및 isoformat() 직렬화 | Medium |
+| `err-004_listed_shares_zero_accumulation.md` | KIS 마스터 수집 장애로 인한 상장주식수/시가총액 0 누적 적재 -> 최근 10일 DB 데이터 Fallback 대체 | Critical |
 
 ---
 

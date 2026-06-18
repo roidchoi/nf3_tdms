@@ -89,8 +89,9 @@ class TargetSelector:
                 INNER JOIN stock_info s ON d.stk_cd = s.stk_cd
                 WHERE d.dt BETWEEN %s AND %s
                   AND s.market_type = %s
+                  AND s.cap > 0
                 GROUP BY d.stk_cd
-                ORDER BY avg_amount DESC
+                ORDER BY avg_amount DESC NULLS LAST
                 LIMIT %s;
             """
             try:

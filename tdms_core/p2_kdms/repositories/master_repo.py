@@ -20,14 +20,15 @@ class MasterRepo:
             return 0
 
         query = """
-            INSERT INTO stock_info (stk_cd, stk_nm, market_type, status, delist_dt, list_dt, m_vol, update_dt)
-            VALUES (%s, %s, %s, %s, NULL, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO stock_info (stk_cd, stk_nm, market_type, status, delist_dt, list_dt, m_vol, cap, update_dt)
+            VALUES (%s, %s, %s, %s, NULL, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (stk_cd) DO UPDATE SET
                 stk_nm = EXCLUDED.stk_nm,
                 market_type = EXCLUDED.market_type,
                 status = EXCLUDED.status,
                 list_dt = EXCLUDED.list_dt,
                 m_vol = EXCLUDED.m_vol,
+                cap = EXCLUDED.cap,
                 update_dt = CURRENT_TIMESTAMP
         """
         
@@ -38,7 +39,8 @@ class MasterRepo:
                 r.get("market"),
                 'listed' if r.get("is_active", True) else 'delisted',
                 r.get("listed_dt"),
-                r.get("listed_shares")
+                r.get("listed_shares"),
+                r.get("cap")
             )
             for r in records
         ]

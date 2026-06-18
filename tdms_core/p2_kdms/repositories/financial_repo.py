@@ -53,7 +53,6 @@ class FinancialRepo:
     def insert_statements(self, statements: List[Dict[str, Any]]) -> int:
         """
         financial_statements 테이블에 PIT 버전 데이터를 일괄 INSERT합니다.
-        (ON CONFLICT를 사용하지 않고 매번 신규 retrieved_at 로우로 적재)
         """
         if not statements:
             return 0
@@ -81,7 +80,6 @@ class FinancialRepo:
     def insert_ratios(self, ratios: List[Dict[str, Any]]) -> int:
         """
         financial_ratios 테이블에 PIT 버전 데이터를 일괄 INSERT합니다.
-        (ON CONFLICT를 사용하지 않고 매번 신규 retrieved_at 로우로 적재)
         """
         if not ratios:
             return 0

@@ -32,27 +32,40 @@ tdms_core/p2_kdms/
 │   ├── financial_task.py        # 분기 PIT 재무제표 수집 및 비교 태스크
 │   └── backfill_task.py         # 분봉 백필 파이프라인 (DatabaseManager 내장)
 ├── ops/                         # 운영 스크립트  ✅
+│   ├── backfill_daily_cap.py    # 공공데이터포털 API 연동 과거 5개년 시가총액 백필 스크립트
+│   ├── backfill_daily_ohlcv_amt.py # 일봉 거래대금(amt) 백필 스크립트
+│   ├── backfill_minute_ohlcv.py # 과거 분봉 데이터 백필 스크립트
 │   ├── backfill_pipeline.py     # 코퍼레이트 액션 의심 종목 탐지 + 백필 실행
 │   ├── check_db.py              # DB 테이블/행수 헬스체크
 │   ├── cleanup_database.py      # 불필요 데이터 정리
+│   ├── fix_ohlcv_amt_from_kis.py # KIS API 대조 일봉 거래대금(amt) 정정 스크립트
 │   ├── pre_migration_backup.py  # 마이그레이션 전 백업 실행 (BackupManager 연동)
-│   └── run_monthly_backfill.py  # 월 단위 분봉 백필 범위 슬라이싱 실행기
+│   ├── rebuild_factors_from_kis.py # KIS API 기반 수정계수 일괄 재구축 스크립트
+│   ├── rebuild_minute_targets.py # 거래대금 기준 분봉 수집 타겟 종목 재구축 스크립트
+│   ├── run_financial_manual.py  # 수동 재무 업데이트 기동 스크립트
+│   ├── run_monthly_backfill.py  # 월 단위 분봉 백필 범위 슬라이싱 실행기
+│   └── verify_nulls.py          # DB 테이블 내 Null 값 검증 스크립트
 ├── tests/                       # 테스트  ✅
 │   ├── conftest.py              # mock_lifespan — FastAPI lifespan 오프라인 모킹
-│   ├── test_daily_task.py
 │   ├── test_backfill_task.py
-│   ├── test_financial_task.py
-│   ├── test_market_cap_scheduler.py
-│   ├── test_kis_kr_client.py
-│   ├── test_factor_calculator.py
-│   ├── test_factor_repo.py
-│   ├── test_financial_repo.py
-│   ├── test_financial_endpoints.py
-│   ├── test_factor_endpoints.py
 │   ├── test_base_repository.py
+│   ├── test_blacklist.py
+│   ├── test_daily_task.py
+│   ├── test_data_api_t007.py
+│   ├── test_factor_calculator.py
+│   ├── test_factor_endpoints.py
+│   ├── test_factor_repo.py
+│   ├── test_financial_endpoints.py
+│   ├── test_financial_repo.py
+│   ├── test_financial_task.py
+│   ├── test_health_t008.py
+│   ├── test_kis_kr_client.py
+│   ├── test_logs_ws_t008.py
+│   ├── test_market_cap_scheduler.py
+│   ├── test_master_repo.py
 │   ├── test_ohlcv_repo.py
 │   ├── test_ohlcv_repo_adjusted.py
-│   └── test_master_repo.py
+│   └── test_range_backfill_t010.py
 ├── main.py                      # FastAPI 앱, lifespan, APScheduler 등록
 ├── config.py                    # Settings (pydantic-settings, Layer A/B 분리)
 ├── pyproject.toml               # 패키지 메타데이터 (editable install)

@@ -144,7 +144,9 @@ def run_backfill(start_date: date = None, end_date: date = None):
                     "high": r["high"],
                     "low": r["low"],
                     "close": r["cls_prc"],
-                    "volume": r["vol"]
+                    "volume": r["vol"],
+                    "amt": r.get("amt"),
+                    "turn_rt": float((r["vol"] / r["listed_shares"]) * 100.0) if r.get("listed_shares", 0) > 0 else 0.0
                 }
                 for r in records if r["open"] > 0
             ]
