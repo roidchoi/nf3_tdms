@@ -163,6 +163,7 @@
 | `usdms-err-001_wsl2_bind_mount_sync_error.md` | WSL2 마운트 동기화 유실로 인한 빈 DB 기동 현상 | High |
 | `usdms-err-002_valuation_rebuild_timeout.md` | Valuation 자가치유 갭 탐색 쿼리 실행 지연 및 타임아웃 | High |
 | `usdms-err-003_logging_missing_and_running_status_loss.md` | 로깅 기본값 누락 및 백그라운드 실행 상태 유실 -> logging.basicConfig 및 _running_task 동적 상태 오버라이드 | High |
+| `usdms-err-004_financial_tag_and_date_filtering_null_metrics.md` | 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 (해결 및 백필 완료) | High |
 
 ---
 
@@ -224,6 +225,7 @@
 - [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 - [USDMS-ERR-003] 로깅 기본값 누락 및 실행 상태 유실 → `p3_usdms_wiki/errors/usdms-err-003_logging_missing_and_running_status_loss.md`
+- [USDMS-ERR-004] 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 → `p3_usdms_wiki/errors/usdms-err-004_financial_tag_and_date_filtering_null_metrics.md`
 - [P4-ERR-002] 대용량 DB 볼륨 tar 백업 권한 장애 → `p4_manager_wiki/errors/p4err-002_real_db_volume_tar_permission.md`
 - [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
 - [P4-ERR-004] WSL2 에이전트 브라우저 실행 및 포워딩 장애 → `p4_manager_wiki/errors/p4err-004_wsl2_agent_browser_forwarding.md`

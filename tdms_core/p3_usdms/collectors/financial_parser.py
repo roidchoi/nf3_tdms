@@ -155,7 +155,8 @@ class FinancialParser:
                 continue
                 
             max_end_date = group['period_end'].max()
-            group = group[group['period_end'] == max_end_date]
+            # max_end_date 기준 30일 이내의 데이터만 포함 (미세한 날짜 어긋남에 의한 BS/IS/CF 유실 방지)
+            group = group[(max_end_date - group['period_end']).dt.days <= 30]
             
             if group.empty:
                 continue

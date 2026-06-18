@@ -374,4 +374,13 @@ class XBRLMapper:
         all_tags = set()
         for tags in cls.MAPPING.values():
             all_tags.update(tags)
+            
+        # Add hardcoded fallback tags used in map_fact for op_income
+        fallback_tags = [
+            'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+            'IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
+            'IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
+            'IncomeLossBeforeIncomeTaxes',
+        ]
+        all_tags.update(fallback_tags)
         return all_tags
