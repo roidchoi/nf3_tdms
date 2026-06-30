@@ -8,10 +8,11 @@ import ScheduleView from '@/views/ScheduleView.vue'
 import HealthView from '@/views/HealthView.vue'
 import ExplorerView from '@/views/ExplorerView.vue'
 import BackupView from '@/views/BackupView.vue'
+import SyncView from '@/views/SyncView.vue'
 
 const statusStore = useStatusStore()
 const backupStore = useBackupStore()
-const activeTab = ref<'dashboard' | 'schedules' | 'health' | 'explorer' | 'backup'>('dashboard')
+const activeTab = ref<'dashboard' | 'schedules' | 'health' | 'explorer' | 'backup' | 'sync'>('dashboard')
 
 // 2초 주기 상태 폴링
 let pollInterval: ReturnType<typeof setInterval> | null = null
@@ -102,6 +103,13 @@ onUnmounted(() => {
             @click="activeTab = 'backup'"
           >
             💾 백업 및 복구
+          </button>
+          <button 
+            class="nav-tab-btn" 
+            :class="{ active: activeTab === 'sync' }" 
+            @click="activeTab = 'sync'"
+          >
+            🔄 데이터 동기화
           </button>
         </nav>
       </div>
@@ -253,6 +261,11 @@ onUnmounted(() => {
     <!-- 5. 백업 및 복구 탭 콘텐츠 -->
     <div v-else-if="activeTab === 'backup'" class="tab-content-wrapper">
       <BackupView />
+    </div>
+
+    <!-- 6. 데이터 동기화 탭 콘텐츠 -->
+    <div v-else-if="activeTab === 'sync'" class="tab-content-wrapper">
+      <SyncView />
     </div>
   </div>
 </template>

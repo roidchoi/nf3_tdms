@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p4_manager (통합 관리 레이어)  
-> **마지막 업데이트**: 2026-06-16 (HTTPX 타임아웃 및 캐싱 수정 반영 완료)  
+> **마지막 업데이트**: 2026-06-30 (물리 DB 동기화 UI 및 스토어 연동 반영 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -25,13 +25,15 @@ tdms_core/p4_manager/
 │   │   │   ├── scheduleStore.ts # 한국/미국 스케줄러 관리 및 API 제어 스토어 [✅완성]
 │   │   │   ├── healthStore.ts  # 신선도/갭/마일스톤/블랙리스트 통합 헬스 스토어 [✅완성]
 │   │   │   ├── explorerStore.ts # 동적 테이블 미리보기 조회 관리 스토어 [✅완성]
-│   │   │   └── backupStore.ts   # 로컬 물리 백업 이력 및 실행 상태 관리 스토어 [✅완성]
+│   │   │   ├── backupStore.ts   # 로컬 물리 백업 이력 및 실행 상태 관리 스토어 [✅완성]
+│   │   │   └── syncStore.ts     # DB 물리 동기화 및 네트워크 제어 관리 스토어 [✅완성]
 │   │   ├── views/
 │   │   │   ├── DashboardView.vue   # 통합 모니터링 메인 뷰 (탭 컨트롤 및 접속 환경 배지 포함) [✅완성]
 │   │   │   ├── ScheduleView.vue    # 한국/미국 스케줄러 관리 탭 뷰 [✅완성]
 │   │   │   ├── HealthView.vue      # 데이터 헬스 모니터링 통합 탭 뷰 (신선도/갭/특화패널) [✅완성]
 │   │   │   ├── ExplorerView.vue    # 데이터 익스플로러 동적 미리보기 탭 뷰 [✅완성]
-│   │   │   └── BackupView.vue      # 로컬 DB 백업 실행 및 이력 조회 탭 뷰 (서버 제한 포함) [✅완성]
+│   │   │   ├── BackupView.vue      # 로컬 DB 백업 실행 및 이력 조회 탭 뷰 (서버 제한 포함) [✅완성]
+│   │   │   └── SyncView.vue        # DB 물리 동기화 및 네트워크 탐색 제어 탭 뷰 [✅완성]
 │   │   ├── tests/
 │   │   │   ├── TaskStatusCard.spec.ts   # 컴포넌트 렌더링 및 이중 컨펌 동작 테스트 [✅완성]
 │   │   │   ├── DashboardView.spec.ts    # 대시보드 뷰 스토어 연동 테스트 [✅완성]
@@ -41,7 +43,8 @@ tdms_core/p4_manager/
 │   │   │   ├── healthStore.spec.ts      # health 스토어 fetch 및 차단해제 API 연동 테스트 [✅완성]
 │   │   │   ├── explorerStore.spec.ts    # explorer 스토어 fetch 및 상태 보관 테스트 [✅완성]
 │   │   │   ├── ExplorerView.spec.ts     # ExplorerView 렌더링, 스켈레톤 및 오프라인 배너 테스트 [✅완성]
-│   │   │   └── BackupView.spec.ts       # BackupView 서버 환경 비활성화 및 개발자 UI 렌더링 검증 테스트 [✅완성]
+│   │   │   ├── BackupView.spec.ts       # BackupView 서버 환경 비활성화 및 개발자 UI 렌더링 검증 테스트 [✅완성]
+│   │   │   └── SyncView.spec.ts         # SyncView 피어/네트워크 스캔 및 이중 컨펌 작동 검증 테스트 [✅완성]
 │   │   ├── App.vue         # 메인 프레임 [✅완성]
 │   │   ├── shims-vue.d.ts  # TypeScript Vue shim [✅완성]
 │   │   ├── main.ts         # Pinia 바인딩 및 앱 런타임 엔트리포인트 [✅완성]
@@ -141,8 +144,9 @@ tdms_core/p4_manager/
 | tests/test_sync_service.py | powershell.exe 우회 DNS 서버 IP 탐색 및 소켓 연결 테스트 검증 | ✅통과 |
 | tests/test_sync_service.py | asyncio C클래스 포트 스캔 및 서버 감지 실패 예외 처리 검증 | ✅통과 |
 | tests/test_sync_service.py | 정규식 기반 .env 내 DEV_IP/SERVER_IP 갱신 및 메모리 변수 적용 검증 | ✅통과 |
-| tests/test_sync_service.py | API 동기화(/sync), 탐색(/detect-server), 갱신(/sync-ip), 검증(/test-connection) 엔드포인트 검증 | ✅통과 |
 | frontend/src/tests/BackupView.spec.ts | BackupView UI 렌더링, 접속 환경 인식 및 서버 통제 작동 검증 | ✅통과 |
+| frontend/src/tests/SyncView.spec.ts | SyncView 피어/네트워크 설정, 자동 탐색, 연결 검증, 이중 컨펌 동작 검증 | ✅통과 |
+| tests/test_sync_service.py | 백엔드 동기화 오케스트레이션 및 IP 탐색/검증 API 연동 검증 | ✅통과 |
 
 ---
 
