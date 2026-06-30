@@ -67,14 +67,20 @@ conda run -n tdms_p1_env uv pip install -e tdms_core/p1_shared/
 
 ---
 
-## 5. Docker 컨테이너 구성
+## 5. Docker 컨테이너 구성 (Static IPs & Subnet)
 
-| 컨테이너명 | DB | 포트 | 이미지 |
-|---|---|---|---|
-| `kdms_timescaledb` | kdms_db | 5432 | TimescaleDB 2.14.2 + PG16 |
-| `usdms_db` | usdms_db | 5435 | TimescaleDB (별도 환경) |
+도커 가상 스위치의 DNS 리졸버 오류를 원천 차단하기 위해, 사용자 정의 브리지 네트워크 `tdms-net`에 정적 서브넷 대역(`172.20.0.0/16`)을 설정하고 컨테이너마다 IP를 고정하여 통신 신뢰성을 극대화했습니다.
 
-> ⚠️ TimescaleDB 버전 불일치 주의: 개발PC 2.14.2, 과거 서버PC에서 2.15.0 불일치 발생 → **이미지 Digest 고정으로 해결** (`[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`)
+| 서비스명 | 컨테이너명 | 가상 IP | 포트 (호스트) | 이미지 / 빌드 소스 |
+|---|---|---|---|---|
+| `kdms_db` | `kdms_timescaledb` | `172.20.0.3` | `5432:5432` | timescale/timescaledb-ha:pg16 |
+| `usdms_db` | `usdms_timescaledb` | `172.20.0.4` | `5433:5432` | timescale/timescaledb-ha:pg16 (digest 고정) |
+| `p2_kdms` | `p2_kdms` | `172.20.0.5` | `-(8000)` | tdms_core/p2_kdms/backend.Dockerfile |
+| `p3_usdms` | `p3_usdms` | `172.20.0.6` | `-(8005)` | tdms_core/p3_usdms/backend.Dockerfile |
+| `p4_backend` | `p4_backend` | `172.20.0.7` | `-(8010)` | tdms_core/p4_manager/backend.Dockerfile |
+| `p4_frontend` | `p4_frontend` | `172.20.0.8` | `80:80` | tdms_core/p4_manager/frontend.Dockerfile |
+
+> ⚠️ **주의**: `.env` 물리 마운트(P4DEC-007 핫플러깅 구현)를 보호하기 위해 파일 마운트 `- ./.env:/app/.env` 규격을 그대로 보존합니다.
 
 ---
 
@@ -86,3 +92,4 @@ conda run -n tdms_p1_env uv pip install -e tdms_core/p1_shared/
 | Docker 볼륨 권한(UID mismatch) | 물리 복제 후 UID 불일치 | `PhysicalSyncManager.fix_permissions()` 자동 교정 (1000:1000) |
 | USDMS 폴더 탐색기 접근 불가 | Docker가 UID 70으로 폴더 잠금 | `sudo setfacl -R -m u:$USER:rx ./data/usdms_db` |
 | SSH sudo 비밀번호 프롬프트 | 자동화 실행 차단 | `sudoers.d/tdms_sync` 1회 설정 (`[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`) |
+| 도커 가상망 DNS/마운트 꼬임 | PC 재부팅 시 가상 DNS 해석 실패 및 볼륨 링크 로딩 지연 | restart 정책 `always`로 상향, 서비스별 `healthcheck` 대기, `env_detector.py` 내 DNS 해석 예외 시 고정 IP 폴백 메커니즘 연동 |

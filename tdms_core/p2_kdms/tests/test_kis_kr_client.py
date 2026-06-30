@@ -14,11 +14,11 @@ def test_fetch_daily_ohlcv_returns_target_date_row_only(mocker):
             {"stck_bsop_date": "20260514", "stck_oprc": "70000",
              "stck_hgpr": "71000", "stck_lwpr": "69000",
              "stck_clpr": "70500", "acml_vol": "1000000",
-             "acml_tr_pb_amt": "70500000000", "vol_tnrt": "1.25"},
+             "acml_tr_pbmn": "70500000000"},
             {"stck_bsop_date": "20260513", "stck_oprc": "69000",
              "stck_hgpr": "70000", "stck_lwpr": "68000",
              "stck_clpr": "69500", "acml_vol": "900000",
-             "acml_tr_pb_amt": "62550000000", "vol_tnrt": "1.12"},
+             "acml_tr_pbmn": "62550000000"},
         ]
     }
     client = KisKrClient(api_core=mock_core)
@@ -30,7 +30,7 @@ def test_fetch_daily_ohlcv_returns_target_date_row_only(mocker):
     assert result["close"] == 70500
     assert result["volume"] == 1000000
     assert result["amt"] == 70500000000
-    assert result["turn_rt"] == 1.25
+    assert result["turn_rt"] == 0.0
 
     # KIS API에 원본 주가(adj_price='1')가 전달되었는지 검증
     # fetch_daily_ohlcv 내부에서 api_core.get을 호출할 때 adj_price='1'이 포함되어야 함

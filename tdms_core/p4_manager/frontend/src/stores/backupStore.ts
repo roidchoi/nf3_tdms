@@ -47,7 +47,7 @@ export const useBackupStore = defineStore('backup', {
       this.error = null
       try {
         const response = await http.post(`/backup?market=${market}&tag=${tag}`, {}, {
-          timeout: 60000 // 백업은 파일 압축이 있으므로 타임아웃을 60초로 넉넉하게 설정
+          timeout: 300000 // 백업은 파일 압축이 있으므로 타임아웃을 5분(300초)으로 넉넉하게 설정
         })
         await this.fetchBackups()
         return response.data
@@ -74,7 +74,7 @@ export const useBackupStore = defineStore('backup', {
           filename,
           confirm_text: confirmText
         }, {
-          timeout: 60000
+          timeout: 300000 // 복구 및 정합성 검증도 타임아웃을 5분(300초)으로 상향
         })
         return response.data
       } catch (error) {

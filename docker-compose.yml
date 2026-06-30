@@ -3,7 +3,7 @@ services:
   kdms_db:
     image: timescale/timescaledb-ha:pg16
     container_name: kdms_timescaledb
-    restart: on-failure:5
+    restart: always
     environment:
       POSTGRES_USER: ${DEV_KDMS_DB_USER:-roid}
       POSTGRES_PASSWORD: ${DEV_KDMS_DB_PASSWORD:-password}
@@ -15,7 +15,14 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - tdms-net
+      tdms-net:
+        ipv4_address: 172.20.0.3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-roid} -d $${POSTGRES_DB:-kdms_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -38,7 +45,7 @@ services:
   usdms_db:
     image: timescale/timescaledb@sha256:9e9f50161784dc57d3f547b89ded4af73553f9acb4677345ed05f45af7c7f664
     container_name: usdms_timescaledb
-    restart: on-failure:5
+    restart: always
     environment:
       POSTGRES_USER: ${DEV_USDMS_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DEV_USDMS_DB_PASSWORD:-password}
@@ -50,7 +57,14 @@ services:
     ports:
       - "5433:5432"
     networks:
-      - tdms-net
+      tdms-net:
+        ipv4_address: 172.20.0.4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-usdms_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -75,16 +89,18 @@ services:
       context: ./
       dockerfile: tdms_core/p2_kdms/backend.Dockerfile
     container_name: p2_kdms
-    restart: unless-stopped
+    restart: always
     depends_on:
-      - kdms_db
+      kdms_db:
+        condition: service_healthy
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
     volumes:
       - ./backups:/app/backups
       - ./.env:/app/.env
     networks:
-      - tdms-net
+      tdms-net:
+        ipv4_address: 172.20.0.5
 
   # 4. USDMS 미국 주식 백엔드 API
   p3_usdms:
@@ -92,16 +108,18 @@ services:
       context: ./
       dockerfile: tdms_core/p3_usdms/backend.Dockerfile
     container_name: p3_usdms
-    restart: unless-stopped
+    restart: always
     depends_on:
-      - usdms_db
+      usdms_db:
+        condition: service_healthy
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
     volumes:
       - ./backups:/app/backups
       - ./.env:/app/.env
     networks:
-      - tdms-net
+      tdms-net:
+        ipv4_address: 172.20.0.6
 
   # 5. P4 통합 관리자 백엔드 API
   p4_backend:
@@ -109,10 +127,12 @@ services:
       context: ./
       dockerfile: tdms_core/p4_manager/backend.Dockerfile
     container_name: p4_backend
-    restart: unless-stopped
+    restart: always
     depends_on:
-      - p2_kdms
-      - p3_usdms
+      p2_kdms:
+        condition: service_started
+      p3_usdms:
+        condition: service_started
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
     volumes:
@@ -121,7 +141,8 @@ services:
       - ./backups:/app/backups
       - ./.env:/app/.env
     networks:
-      - tdms-net
+      tdms-net:
+        ipv4_address: 172.20.0.7
 
   # 6. P4 통합 관리자 Nginx 프론트엔드 (80 포트 노출)
   p4_frontend:
@@ -132,11 +153,16 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - p4_backend
+      p4_backend:
+        condition: service_started
     networks:
-      - tdms-net
-    restart: unless-stopped
+      tdms-net:
+        ipv4_address: 172.20.0.8
+    restart: always
 
 networks:
   tdms-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

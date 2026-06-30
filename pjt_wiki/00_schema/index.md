@@ -1,7 +1,7 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-18
+> **마지막 업데이트**: 2026-06-24
 > **총 등록 파일**: 52개
 
 
@@ -34,14 +34,14 @@
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
 | `codebase_map.md` | 21개 소스 파일 구조, 모듈 상태, 테스트 현황 | T-008 |
-| `environment.md` | tdms_p1_env Conda, 패키지 버전, .env 변수, Docker 구성 | T-008 |
+| `environment.md` | tdms_p1_env Conda, 패키지 버전, .env 변수, Docker 고정 IP 구성 | 2026-06-24 |
 | `operations/runbook.md` | DB 동기화/감사/백업/검증/테스트 실행 명령 모음 | T-008 |
 
 ### interfaces/ (God Node 우선 — 연결도 순)
 
 | 파일 | 핵심 클래스 | edges | 내용 요약 |
 |---|---|---|---|
-| `env_detector.md` | EnvDetector | **97** | 개발PC/서버PC 자동 감지, .env 프로파일 로드 |
+| `env_detector.md` | EnvDetector | **97** | 개발PC/서버PC 자동 감지, .env 프로파일 로드, 도커 DNS 장애 시 고정 IP 자동 폴백 |
 | `db_connection_pool.md` | DbConnectionPool | **80** | psycopg2 커넥션 풀, get_cursor() context manager |
 | `backup_manager.md` | BackupManager | **58** | pg_dump 백업, pre-data→data→post-data 강건 복원 |
 | `startup_validator.md` | StartupValidator | **48** | Docker 재기동 후 5종 검증, FastAPI lifespan 패턴 |

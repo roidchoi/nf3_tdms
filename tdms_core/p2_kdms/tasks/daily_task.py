@@ -125,26 +125,31 @@ class DailyTask:
                     ohlcv_list = self.kis_client.fetch_daily_ohlcv_range(stk_cd, start_date, end_date)
 
                 if ohlcv_list:
+                    # 상장주식수 조회 (turn_rt 및 시가총액 계산용)
+                    shares = stock.get("listed_shares", 0) or 0
+                    if shares <= 0 and self.market_cap_repo is not None:
+                        try:
+                            # 최근 10일 이내의 시가총액 레코드 조회
+                            last_mc = self.market_cap_repo.get_daily_market_cap(stk_cd, start_date - timedelta(days=10), start_date)
+                            if last_mc:
+                                shares = last_mc[-1].get("listed_shares", 0) or 0
+                                logger.info(f"[{stk_cd}] KIS Master listed_shares is 0. Fallback to DB previous shares: {shares:,}")
+                        except Exception as fallback_err:
+                            logger.error(f"[{stk_cd}] Failed to fallback previous shares: {fallback_err}")
+
+                    # 1,000억 주 초과 비정상 주식수(마스터 오류 유입) 방어
+                    if shares > 100_000_000_000 or shares < 0:
+                        shares = 0
+
+                    # 회전율(turn_rt) 직접 연산하여 주입
+                    for ohlcv in ohlcv_list:
+                        ohlcv["turn_rt"] = float((ohlcv["volume"] / shares) * 100.0) if shares > 0 else 0.0
+
                     # DB에 원본 시세 UPSERT
                     self.ohlcv_repo.upsert_daily_ohlcv(ohlcv_list)
                     
                     # 시가총액 레코드 빌드
                     if self.market_cap_repo is not None:
-                        shares = stock.get("listed_shares", 0) or 0
-                        # KIS API 오류 등으로 상장주식수가 0으로 유입된 경우 기존 DB 내 직전 영업일의 상장주식수로 복구 시도
-                        if shares <= 0:
-                            try:
-                                # 최근 10일 이내의 시가총액 레코드 조회
-                                last_mc = self.market_cap_repo.get_daily_market_cap(stk_cd, start_date - timedelta(days=10), start_date)
-                                if last_mc:
-                                    shares = last_mc[-1].get("listed_shares", 0) or 0
-                                    logger.info(f"[{stk_cd}] KIS Master listed_shares is 0. Fallback to DB previous shares: {shares:,}")
-                            except Exception as fallback_err:
-                                logger.error(f"[{stk_cd}] Failed to fallback previous shares: {fallback_err}")
-
-                        # 1,000억 주 초과 비정상 주식수(마스터 오류 유입) 방어
-                        if shares > 100_000_000_000 or shares < 0:
-                            shares = 0
                         for ohlcv in ohlcv_list:
                             mkt_cap = ohlcv["close"] * shares
                             # PostgreSQL bigint (9.22경) 오버플로우 방어

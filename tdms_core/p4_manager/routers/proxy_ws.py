@@ -5,10 +5,12 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status, Query
 import websockets
 from websockets.exceptions import ConnectionClosed
+from p1_shared.utils.env_detector import EnvDetector
 
 logger = logging.getLogger("p4_manager.proxy_ws")
 
 router = APIRouter()
+detector = EnvDetector()
 
 @router.websocket("/ws/logs/{market}")
 async def websocket_proxy_endpoint(
@@ -28,11 +30,13 @@ async def websocket_proxy_endpoint(
 
     await websocket.accept()
 
-    # 타겟 백엔드 WebSocket 주소 수립
+    # 타겟 백엔드 WebSocket 주소 수립 (DNS 장애 대비 get_service_host 사용)
     if market == "kr":
-        target_url = "ws://p2_kdms:8000/ws/logs"
+        host = detector.get_service_host("p2_kdms")
+        target_url = f"ws://{host}:8000/ws/logs"
     else:
-        target_url = "ws://p3_usdms:8005/api/admin/ws/logs"
+        host = detector.get_service_host("p3_usdms")
+        target_url = f"ws://{host}:8005/api/admin/ws/logs"
         if log_file:
             target_url += f"?log_file={log_file}"
 

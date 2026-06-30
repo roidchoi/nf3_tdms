@@ -3,7 +3,8 @@ import os
 import subprocess
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -68,7 +69,7 @@ class BackupService:
         target_dir = base_dir / market / tag
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"physical_checkpoint_{market}_{timestamp}.tar.gz"
         backup_file_path = target_dir / filename
 
@@ -129,15 +130,18 @@ class BackupService:
             if filename.startswith(prefix) and filename.endswith(".tar.gz"):
                 try:
                     ts_part = filename.replace(prefix, "").replace(".tar.gz", "")
-                    # YYYYMMDD_HHMMSS 파싱
+                    # YYYYMMDD_HHMMSS 파싱 (파일명의 timestamp는 UTC 기준)
                     dt = datetime.strptime(ts_part, "%Y%m%d_%H%M%S")
+                    # UTC 지정 후 KST로 변환
+                    dt = dt.replace(tzinfo=timezone.utc).astimezone(ZoneInfo("Asia/Seoul"))
                     created_at_str = dt.isoformat()
                 except ValueError:
                     pass
 
             if not created_at_str:
-                # 하위 호환성 또는 파싱 실패 시 mtime 사용
-                created_at_str = datetime.fromtimestamp(filepath.stat().st_mtime).isoformat()
+                # 하위 호환성 또는 파싱 실패 시 mtime 사용 (KST 타임존 변환 적용)
+                dt = datetime.fromtimestamp(filepath.stat().st_mtime, tz=ZoneInfo("Asia/Seoul"))
+                created_at_str = dt.isoformat()
 
             size_bytes = filepath.stat().st_size
             verified = size_bytes > 0

@@ -57,8 +57,8 @@ class KisKrClient:
                     "low": int(row["stck_lwpr"]),
                     "close": int(row["stck_clpr"]),
                     "volume": int(row["acml_vol"]),
-                    "amt": int(row.get("acml_tr_pb_amt", 0) or 0),
-                    "turn_rt": float(row.get("vol_tnrt", 0.0) or 0.0)
+                    "amt": int(row.get("acml_tr_pbmn", 0) or 0),
+                    "turn_rt": 0.0
                 }
         return None
 
@@ -98,8 +98,8 @@ class KisKrClient:
                         "low": int(row["stck_lwpr"]),
                         "close": int(row["stck_clpr"]),
                         "volume": int(row["acml_vol"]),
-                        "amt": int(row.get("acml_tr_pb_amt", 0) or 0),
-                        "turn_rt": float(row.get("vol_tnrt", 0.0) or 0.0)
+                        "amt": int(row.get("acml_tr_pbmn", 0) or 0),
+                        "turn_rt": 0.0
                     })
         return records
 

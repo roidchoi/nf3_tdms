@@ -53,9 +53,9 @@ async def get_integrated_schedules(market: str):
         raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
         
     url = (
-        "http://p2_kdms:8000/api/v1/admin/tasks/scheduler"
+        f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/scheduler"
         if market == "kr"
-        else "http://p3_usdms:8005/api/admin/schedules"
+        else f"{settings.P3_USDMS_URL}/api/admin/schedules"
     )
     
     async with httpx.AsyncClient() as client:
@@ -103,9 +103,9 @@ async def update_integrated_schedule(market: str, job_id: str, hour: int = Query
         raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
         
     if market == "kr":
-        url = f"http://p2_kdms:8000/api/v1/admin/tasks/scheduler?job_id={job_id}&hour={hour}&minute={minute}"
+        url = f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/scheduler?job_id={job_id}&hour={hour}&minute={minute}"
     else:
-        url = f"http://p3_usdms:8005/api/admin/schedules?job_id={job_id}&hour={hour}&minute={minute}"
+        url = f"{settings.P3_USDMS_URL}/api/admin/schedules?job_id={job_id}&hour={hour}&minute={minute}"
         
     async with httpx.AsyncClient() as client:
         try:
@@ -129,9 +129,9 @@ async def toggle_integrated_schedule(market: str, job_id: str, action: str = Que
         raise HTTPException(status_code=400, detail="action 파라미터는 'pause' 또는 'resume'이어야 합니다.")
         
     if market == "kr":
-        url = f"http://p2_kdms:8000/api/v1/admin/tasks/scheduler/{job_id}/toggle?action={action}"
+        url = f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/scheduler/{job_id}/toggle?action={action}"
     else:
-        url = f"http://p3_usdms:8005/api/admin/schedules/{job_id}/toggle?action={action}"
+        url = f"{settings.P3_USDMS_URL}/api/admin/schedules/{job_id}/toggle?action={action}"
         
     async with httpx.AsyncClient() as client:
         try:
@@ -156,9 +156,9 @@ async def get_integrated_freshness(market: str):
         raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
         
     url = (
-        "http://p2_kdms:8000/api/health/freshness"
+        f"{settings.P2_KDMS_URL}/api/health/freshness"
         if market == "kr"
-        else "http://p3_usdms:8005/api/health/freshness"
+        else f"{settings.P3_USDMS_URL}/api/health/freshness"
     )
     
     async with httpx.AsyncClient() as client:
@@ -184,9 +184,9 @@ async def get_integrated_gaps(
         raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
         
     url = (
-        "http://p2_kdms:8000/api/health/gaps"
+        f"{settings.P2_KDMS_URL}/api/health/gaps"
         if market == "kr"
-        else "http://p3_usdms:8005/api/health/gaps"
+        else f"{settings.P3_USDMS_URL}/api/health/gaps"
     )
     
     params = {}
@@ -256,7 +256,7 @@ async def get_kr_milestones():
     """
     [KR 전용] 한국 마케팅 마일스톤 이력 조회 중계
     """
-    url = "http://p2_kdms:8000/api/health/milestones"
+    url = f"{settings.P2_KDMS_URL}/api/health/milestones"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url, timeout=5.0)
@@ -272,7 +272,7 @@ async def post_kr_milestone(payload: dict):
     """
     [KR 전용] 한국 마케팅 마일스톤 생성/수정 중계
     """
-    url = "http://p2_kdms:8000/api/health/milestones"
+    url = f"{settings.P2_KDMS_URL}/api/health/milestones"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(url, json=payload, timeout=5.0)
@@ -288,7 +288,7 @@ async def get_us_blacklist():
     """
     [US 전용] 미국 차단 종목(블랙리스트) 목록 조회 중계
     """
-    url = "http://p3_usdms:8005/api/health/blacklist"
+    url = f"{settings.P3_USDMS_URL}/api/health/blacklist"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url, timeout=5.0)
@@ -304,7 +304,7 @@ async def release_us_blacklist(cik: str):
     """
     [US 전용] 미국 특정 CIK 차단 해제 중계
     """
-    url = f"http://p3_usdms:8005/api/health/blacklist/{cik}/release"
+    url = f"{settings.P3_USDMS_URL}/api/health/blacklist/{cik}/release"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(url, timeout=5.0)
