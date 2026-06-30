@@ -211,10 +211,11 @@ class SyncService:
                 if res.returncode == 0:
                     resolved_ips = [line.strip() for line in res.stdout.splitlines() if line.strip()]
                     for ip in resolved_ips:
-                        # 통신 테스트를 거쳐 유효성 검증
-                        test_res = self.test_connection(ip, port=8000)
-                        if test_res["connected"]:
-                            return {"server_ip": ip, "method": "dns"}
+                        # 통신 테스트를 거쳐 유효성 검증 (Docker 80포트 우선, 로컬 8000포트 대안)
+                        for port in [80, 8000]:
+                            test_res = self.test_connection(ip, port=port)
+                            if test_res["connected"]:
+                                return {"server_ip": ip, "method": "dns"}
             except Exception:
                 pass  # 리졸브 및 통신 검사 실패 시 스캔으로 폴백
 
@@ -259,23 +260,24 @@ class SyncService:
         return None
 
     async def _check_single_ip_is_server(self, ip: str) -> str:
-        """특정 IP의 8000 포트 연결 및 /api/mgr/env 검증 수행"""
-        try:
-            # 1. TCP 커넥션 테스트 (타임아웃 200ms)
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, 8000),
-                timeout=0.2
-            )
-            writer.close()
-            await writer.wait_closed()
-            
-            # 2. HTTP GET /api/mgr/env 호출
-            async with httpx.AsyncClient(timeout=0.5) as client:
-                resp = await client.get(f"http://{ip}:8000/api/mgr/env")
-                if resp.status_code == 200 and resp.json().get("env") == "server":
-                    return ip
-        except Exception:
-            pass
+        """특정 IP의 80/8000 포트 연결 및 /api/mgr/env 검증 수행"""
+        for port in [80, 8000]:
+            try:
+                # 1. TCP 커넥션 테스트 (타임아웃 200ms)
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection(ip, port),
+                    timeout=0.2
+                )
+                writer.close()
+                await writer.wait_closed()
+                
+                # 2. HTTP GET /api/mgr/env 호출
+                async with httpx.AsyncClient(timeout=0.5) as client:
+                    resp = await client.get(f"http://{ip}:{port}/api/mgr/env")
+                    if resp.status_code == 200 and resp.json().get("env") == "server":
+                        return ip
+            except Exception:
+                pass
         return None
 
     def sync_ip_in_env(self, target: Literal["dev", "server"], new_ip: str) -> Dict[str, Any]:
