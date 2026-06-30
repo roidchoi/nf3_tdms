@@ -13,10 +13,12 @@ def test_fetch_daily_ohlcv_returns_target_date_row_only(mocker):
         "output2": [
             {"stck_bsop_date": "20260514", "stck_oprc": "70000",
              "stck_hgpr": "71000", "stck_lwpr": "69000",
-             "stck_clpr": "70500", "acml_vol": "1000000"},
+             "stck_clpr": "70500", "acml_vol": "1000000",
+             "acml_tr_pbmn": "70500000000"},
             {"stck_bsop_date": "20260513", "stck_oprc": "69000",
              "stck_hgpr": "70000", "stck_lwpr": "68000",
-             "stck_clpr": "69500", "acml_vol": "900000"},
+             "stck_clpr": "69500", "acml_vol": "900000",
+             "acml_tr_pbmn": "62550000000"},
         ]
     }
     client = KisKrClient(api_core=mock_core)
@@ -27,6 +29,8 @@ def test_fetch_daily_ohlcv_returns_target_date_row_only(mocker):
     assert result["stk_cd"] == "005930"
     assert result["close"] == 70500
     assert result["volume"] == 1000000
+    assert result["amt"] == 70500000000
+    assert result["turn_rt"] == 0.0
 
     # KIS API에 원본 주가(adj_price='1')가 전달되었는지 검증
     # fetch_daily_ohlcv 내부에서 api_core.get을 호출할 때 adj_price='1'이 포함되어야 함
@@ -69,55 +73,40 @@ def test_fetch_daily_ohlcv_raises_kis_api_error_on_api_failure(mocker):
 
 def test_fetch_stock_master_downloads_and_parses_mst(mocker):
     """
-    [목적] KIS 마스터 ZIP 파일을 다운로드하여 단축코드, 종목명, 상장일자, 상장주식을 올바르게 파싱 및 정규화하는지 검증.
+    [목적] KIS 마스터 ZIP 파일을 다운로드하여 단축코드, 종목명, 상장일자, 상장주식, 자본금을 올바르게 파싱 및 정규화하는지 검증.
     """
     import io
     import zipfile
     
-    # 1. KOSPI MST 모의 내용 생성 (Part1과 Part2 병합된 1줄)
-    # Part 1: 단축코드(9바이트), 표준코드(12바이트), 한글명(남은부분)
-    # Part 2: 228바이트 고정 폭 필드들
-    # 단축코드 'A005930   ', 표준코드 'KR7005930003', 한글명 '삼성전자            '
-    # Part 2에서 상장일자: 50번째 컬럼 (widths: ... 12, 12, 8(상장일자: '19750611'), 15(상장주수: ' 5969782550     '), ...)
-    # widths 전체 합은 228이어야 합니다.
-    # widths = [2, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 5, 5, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 3, 1, 3, 12, 12, 8, 15, 21, 2, 7, 1, 1, 1, 1, 1, 9, 9, 9, 5, 9, 8, 9, 3, 1, 1, 1]
-    # sum(widths) = 228
+    # 1. KOSPI MST 모의 내용 생성 (Part1: 63B, Part2: 225B -> 총 288B)
+    # '삼성전자'는 8바이트이므로 공백 32개 패딩하여 40바이트 채움
+    kospi_part1_str = "A005930  " + "KR7005930003" + "삼성전자" + " " * 32 + "ST"
     
-    # KOSPI Part2 Mocking
-    kospi_part2_fields = ["  "] * len(field_specs_kospi := [2, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 5, 5, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 3, 1, 3, 12, 12, 8, 15, 21, 2, 7, 1, 1, 1, 1, 1, 9, 9, 9, 5, 9, 8, 9, 9, 3, 1, 1, 1])
-    kospi_part2_fields[49] = "19750611" # 상장일자 (8바이트)
-    kospi_part2_fields[50] = "5969782550     " # 상장주수 (15바이트)
-    
-    kospi_part2_str = ""
-    for width, field in zip(field_specs_kospi, kospi_part2_fields):
-        kospi_part2_str += field.ljust(width)[:width]
-    
-    kospi_part1_str = "A005930  " + "KR7005930003" + "삼성전자            "
+    part2_chars = [" "] * 225
+    part2_chars[103:111] = list("19750611")  # 절대 오프셋 166 (166-63=103)
+    part2_chars[111:126] = list("        5969782")  # 절대 오프셋 174 (174-63=111)
+    part2_chars[126:147] = list("         778046685000")  # 절대 오프셋 189 (189-63=126)
+    kospi_part2_str = "".join(part2_chars)
     kospi_line = kospi_part1_str + kospi_part2_str + "\n"
     
-    # 2. KOSDAQ MST 모의 내용 생성 (Part1과 Part2 병합된 1줄, Part2는 222바이트)
-    # widths = [2, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 5, 5, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 3, 1, 3, 12, 12, 8, 15, 21, 2, 7, 1, 1, 1, 1, 9, 9, 9, 5, 9, 8, 9, 3, 1, 1, 1]
-    # sum(widths) = 222
-    # 상장일자: 44번째 컬럼 (widths: ... 12, 12, 8(상장일자: '19991111'), 15(상장주수: '          50000'), ...)
+    # 2. KOSDAQ MST 모의 내용 생성 (Part1: 63B, Part2: 219B -> 총 282B)
+    # '네이버'는 6바이트이므로 공백 34개 패딩하여 40바이트 채움
+    kosdaq_part1_str = "A035420  " + "KR7035420009" + "네이버" + " " * 34 + "ST"
     
-    kosdaq_part2_fields = ["  "] * len(field_specs_kosdaq := [2, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 5, 5, 1, 1, 1, 2, 1, 1, 1, 2, 2, 2, 3, 1, 3, 12, 12, 8, 15, 21, 2, 7, 1, 1, 1, 1, 9, 9, 9, 5, 9, 8, 9, 9, 3, 1, 1, 1])
-    kosdaq_part2_fields[44] = "19991111" # 상장일자 (8바이트)
-    kosdaq_part2_fields[45] = "          50000" # 상장주수(천주) (15바이트)
-    
-    kosdaq_part2_str = ""
-    for width, field in zip(field_specs_kosdaq, kosdaq_part2_fields):
-        kosdaq_part2_str += field.ljust(width)[:width]
-        
-    kosdaq_part1_str = "A035420  " + "KR7035420009" + "네이버              "
+    part2_chars_daq = [" "] * 219
+    part2_chars_daq[98:106] = list("19991111")  # 절대 오프셋 161 (161-63=98)
+    part2_chars_daq[106:121] = list("          50000")  # 절대 오프셋 169 (169-63=106)
+    part2_chars_daq[121:142] = list("          50070150000")  # 절대 오프셋 184 (184-63=121)
+    kosdaq_part2_str = "".join(part2_chars_daq)
     
     # 알파벳 혼용 종목코드 (0008Z0) mock 데이터 추가
-    kosdaq_part2_fields_2 = ["  "] * len(field_specs_kosdaq)
-    kosdaq_part2_fields_2[44] = "20250819"
-    kosdaq_part2_fields_2[45] = "          10000"
-    kosdaq_part2_str_2 = ""
-    for width, field in zip(field_specs_kosdaq, kosdaq_part2_fields_2):
-        kosdaq_part2_str_2 += field.ljust(width)[:width]
-    kosdaq_part1_str_2 = "A0008Z0  " + "KR70008Z0002" + "에스엔시스          "
+    # '에스엔시스'는 10바이트이므로 공백 30개 패딩하여 40바이트 채움
+    kosdaq_part1_str_2 = "A0008Z0  " + "KR70008Z0002" + "에스엔시스" + " " * 30 + "ST"
+    part2_chars_daq_2 = [" "] * 219
+    part2_chars_daq_2[98:106] = list("20250819")
+    part2_chars_daq_2[106:121] = list("          10000")
+    part2_chars_daq_2[121:142] = list("          10000000000")
+    kosdaq_part2_str_2 = "".join(part2_chars_daq_2)
     
     kosdaq_line = kosdaq_part1_str + kosdaq_part2_str + "\n" + kosdaq_part1_str_2 + kosdaq_part2_str_2 + "\n"
     
@@ -156,7 +145,8 @@ def test_fetch_stock_master_downloads_and_parses_mst(mocker):
     assert kospi_stock["stk_cd"] == "005930"
     assert kospi_stock["stk_nm"] == "삼성전자"
     assert kospi_stock["listed_dt"] == date(1975, 6, 11)
-    assert kospi_stock["listed_shares"] == 5969782550
+    assert kospi_stock["listed_shares"] == 5969782000  # 1000배 보정 적용
+    assert kospi_stock["cap"] == 778046685000  # 자본금 검증
     assert kospi_stock["is_active"] is True
     
     # KOSDAQ 검증 (네이버)
@@ -165,6 +155,7 @@ def test_fetch_stock_master_downloads_and_parses_mst(mocker):
     assert naver_stock["market"] == "KOSDAQ"
     assert naver_stock["listed_dt"] == date(1999, 11, 11)
     assert naver_stock["listed_shares"] == 50000000
+    assert naver_stock["cap"] == 50070150000  # 자본금 검증
     assert naver_stock["is_active"] is True
     
     # KOSDAQ 검증 (알파벳 혼용 종목 - 에스엔시스)
@@ -173,5 +164,73 @@ def test_fetch_stock_master_downloads_and_parses_mst(mocker):
     assert sn_stock["market"] == "KOSDAQ"
     assert sn_stock["listed_dt"] == date(2025, 8, 19)
     assert sn_stock["listed_shares"] == 10000000
+    assert sn_stock["cap"] == 10000000000  # 자본금 검증
     assert sn_stock["is_active"] is True
+
+
+def test_fetch_stock_master_filters_funds(mocker):
+    """
+    [목적] 그룹코드가 BC(수익증권), MF(뮤추얼펀드), EW(ELW)인 경우 수집 대상에서 제외하는지 검증.
+    """
+    import io
+    import zipfile
+    
+    def make_part1(code, std_code, name, group):
+        code_bytes = code.encode("cp949").ljust(9)[:9]
+        std_bytes = std_code.encode("cp949").ljust(12)[:12]
+        name_bytes = name.encode("cp949").ljust(40)[:40]
+        group_bytes = group.encode("cp949").ljust(2)[:2]
+        return code_bytes + std_bytes + name_bytes + group_bytes
+
+    def make_part2_kospi():
+        part2_chars = [" "] * 225
+        part2_chars[103:111] = list("20260101")
+        part2_chars[111:126] = list("        1000000")
+        part2_chars[126:147] = list("         100000000000")
+        return "".join(part2_chars).encode("cp949")
+
+    # 1. 일반 주식 (그룹코드 ST)
+    part1_st = make_part1("A000010", "KR7000010004", "일반주식", "ST")
+    line_st = part1_st + make_part2_kospi() + b"\n"
+    
+    # 2. 펀드/수익증권 (그룹코드 BC)
+    part1_bc = make_part1("A100020", "KR5100020008", "수익증권펀드", "BC")
+    line_bc = part1_bc + make_part2_kospi() + b"\n"
+    
+    # 3. 뮤추얼펀드 (그룹코드 MF)
+    part1_mf = make_part1("A200030", "KR5200030007", "뮤추얼펀드", "MF")
+    line_mf = part1_mf + make_part2_kospi() + b"\n"
+    
+    kospi_line_bytes = line_st + line_bc + line_mf
+    
+    def make_zip(filename, data_bytes):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(filename, data_bytes)
+        return buf.getvalue()
+        
+    kospi_zip_bytes = make_zip("kospi_code.mst", kospi_line_bytes)
+    
+    mock_response = mocker.MagicMock()
+    mock_response.__enter__.return_value = mock_response
+    mock_response.read.return_value = kospi_zip_bytes
+    mock_response.status = 200
+    
+    mock_urlopen = mocker.patch("urllib.request.urlopen")
+    mock_urlopen.return_value = mock_response
+    
+    mock_response_empty = mocker.MagicMock()
+    mock_response_empty.__enter__.return_value = mock_response_empty
+    mock_response_empty.read.return_value = make_zip("kosdaq_code.mst", b"")
+    mock_response_empty.status = 200
+    mock_urlopen.side_effect = [mock_response, mock_response_empty]
+    
+    client = KisKrClient(api_core=mocker.MagicMock())
+    stocks = client.fetch_stock_master()
+    
+    # BC, MF 그룹코드를 가진 펀드 종목들은 필터링되어, ST 그룹코드를 가진 '일반주식' 1건만 수집되어야 함
+    assert len(stocks) == 1
+    assert stocks[0]["stk_cd"] == "000010"
+    assert stocks[0]["stk_nm"] == "일반주식"
+
 

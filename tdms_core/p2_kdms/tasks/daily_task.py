@@ -125,15 +125,31 @@ class DailyTask:
                     ohlcv_list = self.kis_client.fetch_daily_ohlcv_range(stk_cd, start_date, end_date)
 
                 if ohlcv_list:
+                    # 상장주식수 조회 (turn_rt 및 시가총액 계산용)
+                    shares = stock.get("listed_shares", 0) or 0
+                    if shares <= 0 and self.market_cap_repo is not None:
+                        try:
+                            # 최근 10일 이내의 시가총액 레코드 조회
+                            last_mc = self.market_cap_repo.get_daily_market_cap(stk_cd, start_date - timedelta(days=10), start_date)
+                            if last_mc:
+                                shares = last_mc[-1].get("listed_shares", 0) or 0
+                                logger.info(f"[{stk_cd}] KIS Master listed_shares is 0. Fallback to DB previous shares: {shares:,}")
+                        except Exception as fallback_err:
+                            logger.error(f"[{stk_cd}] Failed to fallback previous shares: {fallback_err}")
+
+                    # 1,000억 주 초과 비정상 주식수(마스터 오류 유입) 방어
+                    if shares > 100_000_000_000 or shares < 0:
+                        shares = 0
+
+                    # 회전율(turn_rt) 직접 연산하여 주입
+                    for ohlcv in ohlcv_list:
+                        ohlcv["turn_rt"] = float((ohlcv["volume"] / shares) * 100.0) if shares > 0 else 0.0
+
                     # DB에 원본 시세 UPSERT
                     self.ohlcv_repo.upsert_daily_ohlcv(ohlcv_list)
                     
                     # 시가총액 레코드 빌드
                     if self.market_cap_repo is not None:
-                        shares = stock.get("listed_shares", 0) or 0
-                        # 1,000억 주 초과 비정상 주식수(마스터 오류 유입) 방어
-                        if shares > 100_000_000_000 or shares < 0:
-                            shares = 0
                         for ohlcv in ohlcv_list:
                             mkt_cap = ohlcv["close"] * shares
                             # PostgreSQL bigint (9.22경) 오버플로우 방어
@@ -244,6 +260,14 @@ class DailyTask:
                 self._collect_daily_minute_data_range(start_date, end_date)
             except Exception as me:
                 logger.error(f"Failed in daily minute data collection: {me}")
+
+        # 8. 자가 치유(Self-healing): 누적 실패 5회 이상인 블랙리스트 종목은 stock_info에서 delisted로 갱신하여 누락수 계산 모수에서 제외
+        if blacklisted_stocks:
+            try:
+                logger.info(f"Self-healing: Processing {len(blacklisted_stocks)} blacklisted stocks for auto-delisting...")
+                self.master_repo.update_stocks_status(list(blacklisted_stocks), "delisted")
+            except Exception as she:
+                logger.error(f"Failed to perform self-healing auto-delist for blacklisted stocks: {she}")
 
         return {"collected": collected, "failed": failed, "skipped": skipped}
 

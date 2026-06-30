@@ -50,6 +50,22 @@ def test_xbrl_mapper_normalizes_capex_to_positive():
     assert val == 300.0
 
 
+def test_xbrl_mapper_includes_hardcoded_fallback_tags():
+    """
+    [Tier 1 — 단위]
+    [목적] Operating Income 등 하드코딩된 폴백 태그들이 get_all_tracked_tags에 포함되어 필터링 누락을 방지하는지 검증
+    """
+    tracked_tags = XBRLMapper.get_all_tracked_tags()
+    fallback_tags = [
+        'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+        'IncomeLossFromContinuingOperationsBeforeIncomeTaxes',
+        'IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
+        'IncomeLossBeforeIncomeTaxes',
+    ]
+    for tag in fallback_tags:
+        assert tag in tracked_tags
+
+
 def test_financial_parser_with_empty_raw_facts_returns_empty():
     """
     [Tier 1 — 단위]

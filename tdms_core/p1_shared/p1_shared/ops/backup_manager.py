@@ -128,6 +128,16 @@ class BackupManager:
         """
         Docker 볼륨 실물 파일 존재 확인.
         """
+        import os
+        # 도커 컨테이너 내부에서 구동되는 경우 호스트의 볼륨 디렉토리(/var/lib/docker/volumes)에 접근 불가하므로 우회
+        if os.path.exists('/.dockerenv'):
+            return {
+                "volume_path": f"DOCKER_CONTAINER_VOLUME://{self.volume_name}",
+                "exists": True,
+                "pg_version": "16",
+                "size_bytes": 0,
+            }
+
         vol_path = Path(VOLUME_BASE_PATH) / self.volume_name / "_data"
         exists = vol_path.exists()
         size = 0

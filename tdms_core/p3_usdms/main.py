@@ -9,6 +9,7 @@ from p3_usdms.routers.data import router as data_router
 from p3_usdms.routers.admin import router as admin_router
 from p3_usdms.routers.health import router as health_router
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # USDMS 필수 테이블 정의 (실제 us_ 스키마 테이블 매칭)
@@ -78,28 +79,62 @@ async def lifespan(app: FastAPI):
     # 3. APScheduler 기동 및 태스크 등록
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     
-    # KST 매일 SCHEDULE_DAILY_ROUTINE (화~토) 일일 수집 실행 (T-008)
-    settings = get_settings()
-    try:
-        hour_str, minute_str = settings.SCHEDULE_DAILY_ROUTINE.split(":")
-        parsed_hour = int(hour_str)
-        parsed_minute = int(minute_str)
-    except Exception as e:
-        logger.warning(f"SCHEDULE_DAILY_ROUTINE '{settings.SCHEDULE_DAILY_ROUTINE}' parsing failed, falling back to 07:30 KST. Error: {e}")
-        parsed_hour = 7
-        parsed_minute = 30
-
-    scheduler.add_job(
-        scheduled_daily, 
-        "cron", 
-        day_of_week="tue-sat", 
-        hour=parsed_hour, 
-        minute=parsed_minute, 
-        id="daily_collection_job"
-    )
+    # 3. APScheduler 기동 및 태스크 등록
+    scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     
-    # KST 매주 토요일 09:00 주간 백필 및 유지관리 실행
-    scheduler.add_job(scheduled_weekly, "cron", day_of_week="sat", hour=9, minute=0, id="weekly_maintenance_job")
+    settings = get_settings()
+    from p1_shared.utils.schedule_utils import parse_schedule_string
+    
+    # 3.1. 일일 수집 실행 일정 등록
+    try:
+        daily_h, daily_m, daily_days = parse_schedule_string(
+            settings.SCHEDULE_USDMS_DAILY_ROUTINE,
+            default_days="tue-sat"
+        )
+        scheduler.add_job(
+            scheduled_daily, 
+            "cron", 
+            day_of_week=daily_days, 
+            hour=daily_h, 
+            minute=daily_m, 
+            id="daily_collection_job"
+        )
+    except Exception as e:
+        logger.warning(f"SCHEDULE_USDMS_DAILY_ROUTINE parsing failed, falling back to tue-sat 07:30. Error: {e}")
+        scheduler.add_job(
+            scheduled_daily, 
+            "cron", 
+            day_of_week="tue-sat", 
+            hour=7, 
+            minute=30, 
+            id="daily_collection_job"
+        )
+        
+    # 3.2. 주간 백필 및 유지관리 실행 일정 등록
+    try:
+        weekly_h, weekly_m, weekly_days = parse_schedule_string(
+            settings.SCHEDULE_USDMS_WEEKLY_MAINTENANCE,
+            default_days="sat"
+        )
+        scheduler.add_job(
+            scheduled_weekly,
+            "cron",
+            day_of_week=weekly_days,
+            hour=weekly_h,
+            minute=weekly_m,
+            id="weekly_maintenance_job"
+        )
+    except Exception as e:
+        logger.warning(f"SCHEDULE_USDMS_WEEKLY_MAINTENANCE parsing failed, falling back to sat 09:00. Error: {e}")
+        scheduler.add_job(
+            scheduled_weekly,
+            "cron",
+            day_of_week="sat",
+            hour=9,
+            minute=0,
+            id="weekly_maintenance_job"
+        )
+
     
     scheduler.start()
     app.state.scheduler = scheduler

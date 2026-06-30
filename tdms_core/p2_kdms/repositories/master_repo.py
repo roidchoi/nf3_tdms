@@ -20,14 +20,15 @@ class MasterRepo:
             return 0
 
         query = """
-            INSERT INTO stock_info (stk_cd, stk_nm, market_type, status, delist_dt, list_dt, m_vol, update_dt)
-            VALUES (%s, %s, %s, %s, NULL, %s, %s, CURRENT_TIMESTAMP)
+            INSERT INTO stock_info (stk_cd, stk_nm, market_type, status, delist_dt, list_dt, m_vol, cap, update_dt)
+            VALUES (%s, %s, %s, %s, NULL, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (stk_cd) DO UPDATE SET
                 stk_nm = EXCLUDED.stk_nm,
                 market_type = EXCLUDED.market_type,
                 status = EXCLUDED.status,
                 list_dt = EXCLUDED.list_dt,
                 m_vol = EXCLUDED.m_vol,
+                cap = EXCLUDED.cap,
                 update_dt = CURRENT_TIMESTAMP
         """
         
@@ -38,7 +39,8 @@ class MasterRepo:
                 r.get("market"),
                 'listed' if r.get("is_active", True) else 'delisted',
                 r.get("listed_dt"),
-                r.get("listed_shares")
+                r.get("listed_shares"),
+                r.get("cap")
             )
             for r in records
         ]
@@ -84,6 +86,23 @@ class MasterRepo:
             cursor.execute(query)
             rows = cursor.fetchall()
             return {row[0]: row[1] for row in rows}
+
+    def update_stocks_status(self, stk_cds: List[str], status: str) -> None:
+        """
+        지정된 종목들의 status 상태를 갱신합니다. delisted 인 경우 delist_dt 도 당일로 갱신합니다.
+        """
+        if not stk_cds:
+            return
+            
+        query = """
+            UPDATE stock_info
+            SET status = %s,
+                delist_dt = CASE WHEN %s = 'delisted' AND delist_dt IS NULL THEN CURRENT_DATE ELSE delist_dt END,
+                update_dt = CURRENT_TIMESTAMP
+            WHERE stk_cd = ANY(%s)
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (status, status, stk_cds))
 
 
 

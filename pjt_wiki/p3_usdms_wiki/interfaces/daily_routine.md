@@ -1,7 +1,7 @@
 # DailyRoutine (daily_routine.md)
 
 > **Sub Project**: p3_usdms  
-> **마지막 업데이트**: 2026-06-05  
+> **마지막 업데이트**: 2026-06-16  
 > **물리 경로**: `tdms_core/p3_usdms/tasks/daily_routine.py`  
 > **상태**: ✅ 완료
 
@@ -46,7 +46,7 @@ class DailyRoutine:
         
         Args:
             test_limit (int, optional): 테스트 스위트 구동 시 제한할 CIK 수
-            target_date (date, optional): 수집 대상일 (생략 시 KST 기준 수집 당일의 전날 날짜 적용)
+            target_date (date, optional): 수집 대상일 (생략 시 Asia/Seoul 시간대 기준 수집 당일의 전날 날짜를 수집 대상일로 계산해 적용)
         Returns:
             Dict[str, Any]: 각 단계의 성공/실패 여부, 소요 시간 및 수집 세부 사항이 포함된 리포트 딕셔너리
         """
@@ -76,8 +76,14 @@ class DailyRoutine:
 
 ---
 
-## 3. 실행 이력 파일 저장 정책
-* 실행 완료 시, 최종 리포트를 JSON 구조로 변환하여 `tdms_core/p3_usdms/logs/` 폴더 내에 저장합니다.
-* 파일명 규격:
+## 3. 실행 이력 파일 저장 및 동적 로그 바인딩 정책
+* **동적 로그 핸들러 바인딩**: 실시간 웹소켓 로그 스트리밍을 원활히 지원하기 위해, `daily_routine` 실행 시 `logs/daily_routine.log` 파일을 대상으로 하는 `logging.FileHandler`를 root_logger에 기동 시 동적으로 바인딩(중복 생성 방지 설계 포함)하여 로그를 기록합니다.
+  - **주의**: 파이썬 기본 로깅 레벨 제한으로 인해 `INFO` 로그가 누락되지 않도록 `p3_usdms/main.py` 기동 시점에 `logging.basicConfig(level=logging.INFO)` 설정을 명시해 주어야 합니다. (2026-06-16 보완 반영)
+* **실행 이력 저장**: 실행 완료 시, 최종 리포트를 JSON 구조로 변환하여 `tdms_core/p3_usdms/logs/` 폴더 내에 저장합니다.
+* **파일명 규격**:
   - 일일 루틴: `daily_routine_YYYYMMDD_HHMMSS.json`
   - 주간 루틴: `weekly_backfill_YYYYMMDD_HHMMSS.json`
+* **실시간 기동 상태(is_running) 동기화**:
+  - `/api/admin/tasks/status` API는 디렉토리 내 JSON 파일 목록(최근 10건)을 리턴하되, 메모리 상에서 실제 백그라운드 태스크가 한창 동작 중일 때는 `_running_task` 플래그를 체크하여 해당 태스크의 최신 상태 객체의 `"is_running"`을 `True`로, `"status"`를 `"RUNNING"`으로 동적 오버라이드하거나 추가하여 반환합니다.
+  - P4 Manager의 `status_service.py`는 이 목록을 순회할 때, 동일한 `job_id`에 대해 최신(역순 정렬 상 앞쪽) 상태 정보만 캐싱하고 과거 이력에 의해 덮어씌워지지 않도록 중복 수집 방지 필터를 적용합니다. (2026-06-16 보완 반영)
+

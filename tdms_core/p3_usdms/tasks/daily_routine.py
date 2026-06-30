@@ -4,6 +4,7 @@ import logging
 import asyncio
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, List
+from zoneinfo import ZoneInfo
 
 from p3_usdms.repositories.master_repo import MasterRepo
 from p3_usdms.repositories.blacklist_repo import BlacklistRepo
@@ -16,6 +17,7 @@ from p3_usdms.engines.valuation_calculator import ValuationCalculator
 from p1_shared.utils.date_utils import is_us_trading_day
 
 logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
 
 class DailyRoutine:
     def __init__(self):
@@ -79,204 +81,236 @@ class DailyRoutine:
         Step 1~5 일일 자동화 파이프라인 전체를 오케스트레이션합니다.
         각 스텝은 예외 차단을 통해 부분 성공(Partial Success)을 보장합니다.
         """
-        if target_date is None:
-            # KST 수집 당일 기준 전날을 수집 대상일로 삼음 (미국 기준 전날 영업일 마감)
-            target_date = date.today() - timedelta(days=1)
-            
-        # 0. trading_calendar 테이블 자동 갱신 동기화 실행
-        try:
-            self.sync_trading_calendar(limit_date=target_date)
-        except Exception as e:
-            logger.error(f"Failed to sync trading calendar up to {target_date}: {e}", exc_info=True)
+        # 0. 동적 FileHandler 바인딩 (실시간 웹소켓 로그 스트리밍용)
+        logs_dir = "logs"
+        os.makedirs(logs_dir, exist_ok=True)
+        log_file_path = os.path.join(logs_dir, "daily_routine.log")
+        
+        file_handler = None
+        root_logger = logging.getLogger()
+        
+        # 기존 동일한 파일에 연결된 FileHandler가 있는지 검사하여 재사용 또는 생성
+        for handler in root_logger.handlers:
+            if isinstance(handler, logging.FileHandler) and handler.baseFilename == os.path.abspath(log_file_path):
+                file_handler = handler
+                break
+                
+        if not file_handler:
+            file_handler = logging.FileHandler(log_file_path, mode="a", encoding="utf-8")
+            formatter = logging.Formatter("[%(asctime)s] %(levelname)s [%(name)s:%(lineno)d] %(message)s")
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
 
-        # 1. target_date가 미국 영업일이 아니면 수집 루틴 전체 생략 후 즉시 스킵 리포트 리턴
-        if not is_us_trading_day(target_date):
-            logger.info(f"Target date {target_date} is not a US trading day. Skipping daily routine.")
+        try:
+            if target_date is None:
+                # KST 수집 당일 기준 전날을 수집 대상일로 삼음 (미국 기준 전날 영업일 마감)
+                target_date = datetime.now(KST).date() - timedelta(days=1)
+                
+            # 0. trading_calendar 테이블 자동 갱신 동기화 실행
+            try:
+                await asyncio.to_thread(self.sync_trading_calendar, limit_date=target_date)
+            except Exception as e:
+                logger.error(f"Failed to sync trading calendar up to {target_date}: {e}", exc_info=True)
+     
+            # 1. target_date가 미국 영업일이 아니면 수집 루틴 전체 생략 후 즉시 스킵 리포트 리턴
+            if not is_us_trading_day(target_date):
+                logger.info(f"Target date {target_date} is not a US trading day. Skipping daily routine.")
+                report = {
+                    "routine": "daily_routine",
+                    "start_time": datetime.now(KST).isoformat(),
+                    "end_time": datetime.now(KST).isoformat(),
+                    "status": "SKIPPED",
+                    "msg": f"US Holiday or weekend on {target_date}. skipping execution.",
+                    "steps": []
+                }
+                self._save_report(report)
+                return report
+     
+            start_time = datetime.now(KST)
             report = {
                 "routine": "daily_routine",
-                "start_time": datetime.now().isoformat(),
-                "end_time": datetime.now().isoformat(),
-                "status": "SKIPPED",
-                "msg": f"US Holiday or weekend on {target_date}. skipping execution.",
+                "start_time": start_time.isoformat(),
+                "status": "RUNNING",
                 "steps": []
             }
+
+            # ----------------------------------------------------
+            # Step 1: MasterSync (SEC Tickers)
+            # ----------------------------------------------------
+            step_start = datetime.now(KST)
+            logger.info("[Step 1] Executing SEC Master Sync...")
+            try:
+                # sync_daily는 비동기 함수임
+                res = await self.master.sync_daily(limit=test_limit)
+                report["steps"].append({
+                    "step": "Master Sync",
+                    "status": "SUCCESS",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "details": res
+                })
+            except Exception as e:
+                logger.error(f"[Step 1] SEC Master Sync failed: {e}", exc_info=True)
+                report["steps"].append({
+                    "step": "Master Sync",
+                    "status": "FAILED",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "error": str(e)
+                })
+
+            # 수집 대상 CIK 추출 (블랙리스트 제외)
+            targets = self.master_repo.get_collect_targets()
+            ciks = [t['cik'] for t in targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
+            if test_limit:
+                ciks = ciks[:test_limit]
+
+            # DB 내 최신 가격 적재일 기준 동적 lookback_days 계산
+            db_max_date = None
+            try:
+                with self.db.get_cursor() as cur:
+                    cur.execute("SELECT MAX(dt) as d FROM us_daily_price")
+                    row = cur.fetchone()
+                    db_max_date = row['d'] if row and row['d'] else None
+            except Exception as e:
+                logger.warning(f"Failed to query max price date: {e}")
+
+            if db_max_date:
+                if isinstance(db_max_date, datetime):
+                    db_max_date = db_max_date.date()
+                days_diff = (target_date - db_max_date).days
+                lookback_days = max(10, days_diff + 2)
+                logger.info(f"Dynamic lookback calculated: {lookback_days} days (db_max_date: {db_max_date})")
+            else:
+                lookback_days = 30
+                logger.info(f"No max price date found. Using default lookback: {lookback_days} days")
+
+            lookback_start_date = (target_date - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
+
+            # ----------------------------------------------------
+            # Step 2: Market Data Update (OHLCV & Factors)
+            # ----------------------------------------------------
+            step_start = datetime.now(KST)
+            logger.info(f"[Step 2] Fetching Market Prices and Factors for {len(ciks)} companies (Lookback: {lookback_days} days)...")
+            try:
+                await asyncio.to_thread(self.market_loader.collect_daily_updates, lookback_days=lookback_days, ciks=ciks)
+                report["steps"].append({
+                    "step": "Market Data Loader",
+                    "status": "SUCCESS",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "details": {"processed_count": len(ciks), "lookback_days": lookback_days}
+                })
+            except Exception as e:
+                logger.error(f"[Step 2] Market Data Loader failed: {e}", exc_info=True)
+                report["steps"].append({
+                    "step": "Market Data Loader",
+                    "status": "FAILED",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "error": str(e)
+                })
+
+            # ----------------------------------------------------
+            # Step 3: SEC Filing Index & Financial Parser
+            # ----------------------------------------------------
+            step_start = datetime.now(KST)
+            logger.info(f"[Step 3] SEC Filing Financial Parsing for {len(ciks)} companies...")
+            try:
+                # financial_parser.run은 동기 함수임
+                await asyncio.to_thread(self.fin_parser.run, ciks=ciks)
+                report["steps"].append({
+                    "step": "Financial Parser",
+                    "status": "SUCCESS",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "details": {"processed_count": len(ciks)}
+                })
+            except Exception as e:
+                logger.error(f"[Step 3] Financial Parser failed: {e}", exc_info=True)
+                report["steps"].append({
+                    "step": "Financial Parser",
+                    "status": "FAILED",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "error": str(e)
+                })
+
+            # ----------------------------------------------------
+            # Step 3.5 & 4: Metric & Valuation Calculators
+            # ----------------------------------------------------
+            step_start = datetime.now(KST)
+            logger.info("[Step 3.5 & 4] Calculating Financial Metrics & Valuations...")
+            try:
+                calc_success, calc_fail = await asyncio.to_thread(self._run_calculations, ciks)
+            except Exception as e:
+                logger.error(f"[Step 3.5 & 4] Calculation loop failed: {e}", exc_info=True)
+                calc_success, calc_fail = 0, len(ciks)
+
+            report["steps"].append({
+                "step": "Metric & Valuation Calculation",
+                "status": "SUCCESS" if calc_fail == 0 else "PARTIAL_SUCCESS",
+                "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                "details": {
+                    "total_target": len(ciks),
+                    "success_count": calc_success,
+                    "fail_count": calc_fail
+                }
+            })
+
+            # ----------------------------------------------------
+            # Step 5: Health Check & Isolation (Anomalies)
+            # ----------------------------------------------------
+            step_start = datetime.now(KST)
+            logger.info("[Step 5] Performing Ingestion Health Checks & Data Isolation...")
+            try:
+                anomalies = await asyncio.to_thread(self._detect_anomalies_and_quarantine, target_date)
+                report["steps"].append({
+                    "step": "Health Check & Isolation",
+                    "status": "SUCCESS",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "details": {
+                        "anomalies_found": len(anomalies),
+                        "quarantined_targets": list(set(a["ticker"] for a in anomalies))
+                    }
+                })
+            except Exception as e:
+                logger.error(f"[Step 5] Health Check & Isolation failed: {e}", exc_info=True)
+                report["steps"].append({
+                    "step": "Health Check & Isolation",
+                    "status": "FAILED",
+                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
+                    "error": str(e)
+                })
+
+            # 최종 리포트 마감 및 영속화
+            end_time = datetime.now(KST)
+            report["end_time"] = end_time.isoformat()
+            report["total_duration_seconds"] = (end_time - start_time).total_seconds()
+            
+            has_failed_step = any(s["status"] == "FAILED" for s in report["steps"])
+            report["status"] = "FAILED" if has_failed_step else "SUCCESS"
+            
             self._save_report(report)
+            logger.info(f"Daily routine completed with status: {report['status']}")
             return report
+        finally:
+            if file_handler:
+                file_handler.close()
+                root_logger.removeHandler(file_handler)
 
-        start_time = datetime.now()
-        report = {
-            "routine": "daily_routine",
-            "start_time": start_time.isoformat(),
-            "status": "RUNNING",
-            "steps": []
-        }
-
-        # ----------------------------------------------------
-        # Step 1: MasterSync (SEC Tickers)
-        # ----------------------------------------------------
-        step_start = datetime.now()
-        logger.info("[Step 1] Executing SEC Master Sync...")
-        try:
-            # sync_daily는 비동기 함수임
-            res = await self.master.sync_daily(limit=test_limit)
-            report["steps"].append({
-                "step": "Master Sync",
-                "status": "SUCCESS",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "details": res
-            })
-        except Exception as e:
-            logger.error(f"[Step 1] SEC Master Sync failed: {e}", exc_info=True)
-            report["steps"].append({
-                "step": "Master Sync",
-                "status": "FAILED",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "error": str(e)
-            })
-
-        # 수집 대상 CIK 추출 (블랙리스트 제외)
-        targets = self.master_repo.get_collect_targets()
-        ciks = [t['cik'] for t in targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
-        if test_limit:
-            ciks = ciks[:test_limit]
-
-        # DB 내 최신 가격 적재일 기준 동적 lookback_days 계산
-        db_max_date = None
-        try:
-            with self.db.get_cursor() as cur:
-                cur.execute("SELECT MAX(dt) as d FROM us_daily_price")
-                row = cur.fetchone()
-                db_max_date = row['d'] if row and row['d'] else None
-        except Exception as e:
-            logger.warning(f"Failed to query max price date: {e}")
-
-        if db_max_date:
-            if isinstance(db_max_date, datetime):
-                db_max_date = db_max_date.date()
-            days_diff = (target_date - db_max_date).days
-            lookback_days = max(10, days_diff + 2)
-            logger.info(f"Dynamic lookback calculated: {lookback_days} days (db_max_date: {db_max_date})")
-        else:
-            lookback_days = 30
-            logger.info(f"No max price date found. Using default lookback: {lookback_days} days")
-
-        lookback_start_date = (target_date - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
-
-        # ----------------------------------------------------
-        # Step 2: Market Data Update (OHLCV & Factors)
-        # ----------------------------------------------------
-        step_start = datetime.now()
-        logger.info(f"[Step 2] Fetching Market Prices and Factors for {len(ciks)} companies (Lookback: {lookback_days} days)...")
-        try:
-            self.market_loader.collect_daily_updates(lookback_days=lookback_days, ciks=ciks)
-            report["steps"].append({
-                "step": "Market Data Loader",
-                "status": "SUCCESS",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "details": {"processed_count": len(ciks), "lookback_days": lookback_days}
-            })
-        except Exception as e:
-            logger.error(f"[Step 2] Market Data Loader failed: {e}", exc_info=True)
-            report["steps"].append({
-                "step": "Market Data Loader",
-                "status": "FAILED",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "error": str(e)
-            })
-
-        # ----------------------------------------------------
-        # Step 3: SEC Filing Index & Financial Parser
-        # ----------------------------------------------------
-        step_start = datetime.now()
-        logger.info(f"[Step 3] SEC Filing Financial Parsing for {len(ciks)} companies...")
-        try:
-            # financial_parser.run은 동기 함수임
-            self.fin_parser.run(ciks=ciks)
-            report["steps"].append({
-                "step": "Financial Parser",
-                "status": "SUCCESS",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "details": {"processed_count": len(ciks)}
-            })
-        except Exception as e:
-            logger.error(f"[Step 3] Financial Parser failed: {e}", exc_info=True)
-            report["steps"].append({
-                "step": "Financial Parser",
-                "status": "FAILED",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "error": str(e)
-            })
-
-        # ----------------------------------------------------
-        # Step 3.5 & 4: Metric & Valuation Calculators
-        # ----------------------------------------------------
-        step_start = datetime.now()
-        logger.info("[Step 3.5 & 4] Calculating Financial Metrics & Valuations...")
+    def _run_calculations(self, ciks: List[str]) -> tuple[int, int]:
+        """CIK별 지표 및 밸류에이션 동기 연산 루프"""
         calc_success = 0
         calc_fail = 0
         for cik in ciks:
             try:
                 self.metric_calc.calculate_and_save(cik, rebuild=False)
-                # ValuationCalculator 내부의 자가치유(Self-healing) 갭 탐지 및 최신일 감지 로직에 위임합니다.
                 self.val_calc.calculate_and_save(cik, rebuild=False)
                 calc_success += 1
             except Exception as e:
                 logger.error(f"Calculator failed for CIK: {cik}. Error: {e}")
                 calc_fail += 1
-                # 계산 오류 누적 시 블랙리스트 차단 등록 유도
                 self.blacklist_mgr.record_failure(
                     cik=cik,
                     reason_code="PARSE_ERROR_CRITICAL",
                     detail=f"Metric/Valuation calculation failed: {str(e)}"
                 )
-
-        report["steps"].append({
-            "step": "Metric & Valuation Calculation",
-            "status": "SUCCESS" if calc_fail == 0 else "PARTIAL_SUCCESS",
-            "duration_seconds": (datetime.now() - step_start).total_seconds(),
-            "details": {
-                "total_target": len(ciks),
-                "success_count": calc_success,
-                "fail_count": calc_fail
-            }
-        })
-
-        # ----------------------------------------------------
-        # Step 5: Health Check & Isolation (Anomalies)
-        # ----------------------------------------------------
-        step_start = datetime.now()
-        logger.info("[Step 5] Performing Ingestion Health Checks & Data Isolation...")
-        try:
-            anomalies = self._detect_anomalies_and_quarantine(target_date)
-            report["steps"].append({
-                "step": "Health Check & Isolation",
-                "status": "SUCCESS",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "details": {
-                    "anomalies_found": len(anomalies),
-                    "quarantined_targets": list(set(a["ticker"] for a in anomalies))
-                }
-            })
-        except Exception as e:
-            logger.error(f"[Step 5] Health Check & Isolation failed: {e}", exc_info=True)
-            report["steps"].append({
-                "step": "Health Check & Isolation",
-                "status": "FAILED",
-                "duration_seconds": (datetime.now() - step_start).total_seconds(),
-                "error": str(e)
-            })
-
-        # 최종 리포트 마감 및 영속화
-        end_time = datetime.now()
-        report["end_time"] = end_time.isoformat()
-        report["total_duration_seconds"] = (end_time - start_time).total_seconds()
-        
-        has_failed_step = any(s["status"] == "FAILED" for s in report["steps"])
-        report["status"] = "FAILED" if has_failed_step else "SUCCESS"
-        
-        self._save_report(report)
-        logger.info(f"Daily routine completed with status: {report['status']}")
-        return report
+        return calc_success, calc_fail
 
     def run_weekly_backfill(self) -> Dict[str, Any]:
         """

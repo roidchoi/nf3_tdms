@@ -119,17 +119,50 @@ class EnvDetector:
         else:
             return os.environ.get("DEV_IP", "")
 
-    def get_db_host(self, target_env: Literal["dev", "server"]) -> str:
+    def get_service_host(self, service_name: str) -> str:
         """
-        특정 환경의 DB에 접속하기 위한 최적의 호스트 주소를 반환한다.
-        자기 자신에게 접속하는 경우(WSL -> Host) 127.0.0.1을 반환하여 네트워크 문제를 회피한다.
+        도커 환경일 경우 지정된 서비스명을 반환하되, DNS 해석 실패 시 고정 IP로 폴백합니다.
+        도커 외 환경(로컬 개발/테스트 등)일 경우, 입력된 서비스명 자체를 그대로 반환합니다.
         """
+        if os.path.exists('/.dockerenv'):
+            ip_map = {
+                "kdms_db": "172.20.0.3",
+                "usdms_db": "172.20.0.4",
+                "p2_kdms": "172.20.0.5",
+                "p3_usdms": "172.20.0.6",
+                "p4_backend": "172.20.0.7",
+                "p4_frontend": "172.20.0.8"
+            }
+            try:
+                socket.gethostbyname(service_name)
+                return service_name
+            except socket.gaierror:
+                return ip_map.get(service_name, service_name)
+        
+        return service_name
+
+    def get_db_host(self, target: str) -> str:
+        """
+        특정 시장 또는 환경의 DB에 접속하기 위한 최적의 호스트 주소를 반환한다.
+        - 도커 환경: kdms -> kdms_db, usdms -> usdms_db 서비스명을 직접 반환 (실패 시 고정 IP 폴백)
+        - 로컬 WSL2 환경: kdms/usdms에 대해 127.0.0.1 루프백 주소를 반환
+        """
+        # 1. 도커 컨테이너 환경 판별
+        if os.path.exists('/.dockerenv'):
+            if target in ("kdms", "dev"):
+                return self.get_service_host("kdms_db")
+            elif target in ("usdms", "server"):
+                return self.get_service_host("usdms_db")
+
+        # 2. 로컬 WSL2/물리 환경
+        if target in ("kdms", "usdms"):
+            return "127.0.0.1"
+
         current_env = self.detect()
-        if current_env == target_env:
-            # 같은 PC 내의 DB에 접속할 때는 localhost 사용 (WSL 네트워크 제약 회피)
+        if current_env == target:
             return "127.0.0.1"
         
-        return os.environ.get(f"{target_env.upper()}_IP", "")
+        return os.environ.get(f"{target.upper()}_IP", "")
 
     def verify_dev_ip_sync(self, logger=None) -> None:
         """

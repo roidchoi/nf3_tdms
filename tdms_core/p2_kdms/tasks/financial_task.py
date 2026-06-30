@@ -93,7 +93,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
     :param test_mode: True일 경우 대표 종목군만 샘플링하여 수행
     """
     job_id = "financial_update"
-    start_time = datetime.now()
+    start_time = datetime.now(KST)
 
     # [PRD 4.1.2] 상태 초기화
     job_statuses[job_id] = {
@@ -278,7 +278,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             logger.info(f"[{job_id}] 신규/변경된 재무비율이 없어 DB 업데이트를 스킵합니다.")
 
         # 성공 완료 상태 기록
-        end_time = datetime.now()
+        end_time = datetime.now(KST)
         duration = (end_time - start_time).total_seconds()
         final_msg = f"재무정보 수집 성공적으로 완료 (총 {total}개 처리, {duration/60:.1f}분 소요)"
         
@@ -298,7 +298,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             "is_running": False,
             "last_status": "failure",
             "error": str(e),
-            "end_time": datetime.now().isoformat()
+            "end_time": datetime.now(KST).isoformat()
         })
     finally:
         job_statuses[job_id]["is_running"] = False
@@ -307,7 +307,8 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
 def _compare_financial_data(api_data: dict, db_data: dict, columns: List[str], logger: logging.Logger) -> bool:
     """
     API 응답 데이터와 DB 내 최신 데이터 간 필드별 변경 감지 정규화 비교 함수.
-    0, 0.0, None은 동치로 취급하며 숫자 타입은 float형으로 정규화하여 정밀 비교를 수행합니다.
+    API 수집값 자체가 None, 0, 0.0인 경우 DB 값을 훼손하지 않기 위해 변경으로 보지 않습니다.
+    오직 유효한 실제 값의 변경(신규/수치 변경)만 변경으로 감지합니다.
     """
     if db_data is None:
         return True  # DB에 없으므로 신규 생성 대상
@@ -316,9 +317,10 @@ def _compare_financial_data(api_data: dict, db_data: dict, columns: List[str], l
         api_value = api_data.get(col)
         db_value = db_data.get(col)
         
-        # 0, 0.0, None은 모두 논리적 '없음' 상태로 동등하게 간주
+        # API에서 유효하게 수집된 값이 없는 경우, 기존 DB 데이터를 그대로 유지
         if api_value in (None, 0, 0.0):
-            api_value = None
+            continue
+            
         if db_value in (None, 0, 0.0):
             db_value = None
             

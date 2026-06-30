@@ -1,7 +1,7 @@
 # 인터페이스: 헬스 및 어드민 API (health_admin_api.md)
 
 > **Sub Project**: p3_usdms  
-> **마지막 업데이트**: 2026-06-04 (Task-007)  
+> **마지막 업데이트**: 2026-06-09 (Task-006)  
 > **물리 경로**: 
 > - `tdms_core/p3_usdms/routers/health.py`
 > - `tdms_core/p3_usdms/routers/admin.py`
@@ -59,6 +59,21 @@ USDMS 시스템의 데이터 최신성(Freshness), 수집 누락(Gaps), 수집 �
 ### ③ `GET /blacklist`
 현재 차단된 상태(`is_blocked=True`)인 수집 블랙리스트 상세 내역 목록을 반환합니다.
 
+### ④ `POST /blacklist/{cik}/release`
+특정 CIK(`10자리` 보장)의 블랙리스트 수집 차단을 강제로 해제합니다.
+* **동작 메커니즘**:
+  - `is_blocked` 필드를 `False`로 변경하고, `release_date`에 현재 시각 기록 및 메모(`detail`)에 관리자 릴리즈 내역을 덧붙입니다.
+  - 다음 수집 스케줄 실행 시 해당 종목의 수집이 재시도됩니다. (실패 횟수는 0으로 초기화됨)
+* **요청 예시**:
+  `POST /api/health/blacklist/0000320193/release`
+* **반환 예시**:
+  ```json
+  {
+    "status": "success",
+    "released_cik": "0000320193"
+  }
+  ```
+
 ---
 
 ## 3. 어드민 API 엔드포인트 (`/api/admin`)
@@ -71,6 +86,11 @@ APScheduler에 등록된 크론 작업의 식별 ID, 다음 실행 예정 시각
 
 ### ③ `PUT /schedules`
 크론 작업(`job_id`)의 매일 실행 시간(`hour`, `minute`)을 동적으로 변경(reschedule)합니다.
+* **물리 동기화 및 요일 보존**:
+  - 변경 즉시 `p1_shared`의 `update_env_value` 유틸리티를 호출하여 `.env` 파일의 관련 환경 변수(`SCHEDULE_USDMS_DAILY_ROUTINE` 또는 `SCHEDULE_USDMS_WEEKLY_MAINTENANCE`) 값을 물리적으로 덮어쓰고, `os.environ` 및 앱 설정의 캐시를 동기화합니다.
+  - 시간만 전달되더라도 기존 설정에 요일 접두사(예: `"wed,sat:"`)가 있는 경우, 이를 파싱 단계에서 식별하여 새로운 시/분 정보와 정상 병합 보존 처리합니다.
+  - 임시 파일 move 방식이 아닌 direct write 스트림 방식을 사용하여 Docker 볼륨의 Inode 소실을 방지합니다.
+
 
 ### ④ `WebSocket /ws/logs`
 지정한 파일명 또는 가장 최신의 수집 로그 파일(`.log`)을 대상으로 `tail -f` 방식의 실시간 라인 전송 비동기 커넥션을 유지합니다.

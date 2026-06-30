@@ -21,10 +21,25 @@ def test_upsert_stock_info_returns_row_count(mocker):
     repo = MasterRepo(pool=mock_pool)
     records = [
         {"stk_cd": "005930", "stk_nm": "삼성전자",
-         "market": "KOSPI", "is_active": True, "listed_dt": date(1975, 6, 11), "listed_shares": 5969782550},
+         "market": "KOSPI", "is_active": True, "listed_dt": date(1975, 6, 11), "listed_shares": 5969782550, "cap": 778046685000},
     ]
     count = repo.upsert_stock_info(records)
     assert count == 3
+    
+    mock_cursor.executemany.assert_called_once_with(
+        mocker.ANY,
+        [
+            (
+                "005930",
+                "삼성전자",
+                "KOSPI",
+                "listed",
+                date(1975, 6, 11),
+                5969782550,
+                778046685000
+            )
+        ]
+    )
 
 
 def test_get_all_active_stocks_returns_only_active(mocker):

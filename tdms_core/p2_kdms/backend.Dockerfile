@@ -23,6 +23,7 @@ RUN pip install -e /app/tdms_core/p2_kdms
 
 # 작업 디렉토리 이동 및 실행
 WORKDIR /app/tdms_core/p2_kdms
+ENV PYTHONPATH="/app/tdms_core"
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

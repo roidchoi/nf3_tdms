@@ -12,7 +12,7 @@ class OhlcvRepo:
         daily_ohlcv에 여러 OHLCV 레코드를 UPSERT. ON CONFLICT (stk_cd, dt) DO UPDATE.
 
         Args:
-            records: [{"stk_cd", "dt", "open", "high", "low", "close", "volume"}, ...]
+            records: [{"stk_cd", "dt", "open", "high", "low", "close", "volume", "amt", "turn_rt"}, ...]
         Returns:
             int: 처리된 행 수 (cursor.rowcount)
         """
@@ -20,14 +20,16 @@ class OhlcvRepo:
             return 0
 
         query = """
-            INSERT INTO daily_ohlcv (stk_cd, dt, open_prc, high_prc, low_prc, cls_prc, vol)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO daily_ohlcv (stk_cd, dt, open_prc, high_prc, low_prc, cls_prc, vol, amt, turn_rt)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (stk_cd, dt) DO UPDATE SET
                 open_prc = EXCLUDED.open_prc,
                 high_prc = EXCLUDED.high_prc,
                 low_prc = EXCLUDED.low_prc,
                 cls_prc = EXCLUDED.cls_prc,
-                vol = EXCLUDED.vol
+                vol = EXCLUDED.vol,
+                amt = EXCLUDED.amt,
+                turn_rt = EXCLUDED.turn_rt
         """
         
         data = [
@@ -38,7 +40,9 @@ class OhlcvRepo:
                 r["high"],
                 r["low"],
                 r["close"],
-                r["volume"]
+                r["volume"],
+                r.get("amt"),
+                r.get("turn_rt")
             )
             for r in records
         ]

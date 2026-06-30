@@ -10,6 +10,4 @@ lxml
 apscheduler==3.11.0
 pyarrow>=22.0
 pytest-asyncio
--e ../p1_shared
-
-
+websockets>=12.0

@@ -1,0 +1,30 @@
+[project]
+name = "p4_manager"
+version = "0.1.0"
+description = "TDMS Integrated Management UI/API (p4_manager)"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "psycopg2-binary>=2.9.9",
+    "requests>=2.31.0",
+    "pydantic-settings",
+    "httpx>=0.27.0",
+    "pandas>=2.2.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["p4_manager*"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+markers = [
+    "integration: marks tests as integration (requires real Nginx/Docker setup)",
+]

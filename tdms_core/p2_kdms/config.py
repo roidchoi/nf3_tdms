@@ -33,5 +33,11 @@ class Settings(BaseSettings):
     db_pool_max: int = 20
     log_level: str = "INFO"
 
+    # 공통 스케줄링 일정
+    schedule_kdms_daily_update: str = "17:10"
+    schedule_kdms_financial_update: str = "sat:14:00"
+    schedule_kdms_backfill_minute: str = "sat:16:00"
+
 # 기본적으로는 .env 파일 시도 (없어도 에러는 안남 - 기본값 사용)
 settings = Settings(_env_file=".env")
+

@@ -36,7 +36,8 @@ tdms_core/p1_shared/
 │       ├── __init__.py
 │       ├── date_utils.py        # 한국 거래일 및 미국 주식시장 영업일 유틸
 │       ├── env_detector.py      # 환경 자동 감지 (T-002)
-│       └── retry.py             # 지수 백오프 재시도 데코레이터 (T-001)
+│       ├── retry.py             # 지수 백오프 재시도 데코레이터 (T-001)
+│       └── schedule_utils.py    # 공통 스케줄 파싱 및 .env 실시간 업데이트 유틸 (T-011)
 ├── tests/                       ✅
 │   ├── test_connection.py
 │   ├── test_connection_integration.py
@@ -47,7 +48,8 @@ tdms_core/p1_shared/
 │   ├── test_retry.py
 │   ├── test_kis_api_core.py
 │   ├── test_kiwoom_api_core.py
-│   └── test_db_sync.py
+│   ├── test_db_sync.py
+│   └── test_schedule_utils.py   # 스케줄 유틸리티 단위 테스트 (T-011)
 ├── requirements.txt             # psycopg2-binary, requests, python-dotenv, pytest, pytest-mock
 ├── pyproject.toml               # 패키지 메타데이터
 └── p1_shared구현폴더.md         # 구현 폴더 규약 확인용
@@ -102,6 +104,7 @@ docs/p1_shared/
 | `utils/env_detector.py` | ✅ | EnvDetector | 개발PC/서버PC 자동 감지, .env 프로파일 로드 |
 | `utils/retry.py` | ✅ | retry(), async_retry() | 지수 백오프 데코레이터 |
 | `utils/date_utils.py` | ✅ | get_kr_trading_days(), is_us_trading_day() | 한국 주식 거래일 및 미국 주식시장 영업일 계산 |
+| `utils/schedule_utils.py` | ✅ | parse_schedule_string(), update_env_value() | 공통 스케줄 문자열 파싱, .env 물리 갱신 및 요일 접두사 보존 결합 유틸 |
 | `ops/logger.py` | ✅ | get_logger() | 공통 구조화 로거 |
 | `ops/backup_manager.py` | ✅ | BackupManager | pg_dump Fc 백업, pre-data→data→post-data 강건 복원 |
 | `ops/startup_validator.py` | ✅ | StartupValidator | Docker 재기동 후 DB 5종 검증 |
@@ -139,6 +142,7 @@ docs/p1_shared/
 | `test_kiwoom_api_core.py` | KiwoomApiCore | ✅ | — | ✅통과 |
 | `test_sync_manager.py` | SyncManager(폐기예정) | ✅ | — | ✅통과 |
 | `test_db_sync.py` | PhysicalSyncManager | ✅ | — | ✅통과 |
+| `test_schedule_utils.py` | schedule_utils | ✅ | — | ✅통과 |
 
 ---
 
@@ -156,3 +160,4 @@ docs/p1_shared/
 | T-008 | PhysicalSyncManager 구현 (T-009 흡수), tar+SSH 파이프라인 |
 | 2026-06-05 | 미국 주식시장 영업일 판별 유틸리티 (is_us_trading_day 등) 추가 |
 | 2026-05-28 | KIS/Kiwoom OpenAPI 속도 제어(Throttling Delay) 도입 |
+| T-011 | 스케줄링 변수 중앙화 및 API 개정 작업에 대응하는 공통 schedule_utils 및 단위 테스트 구현 |

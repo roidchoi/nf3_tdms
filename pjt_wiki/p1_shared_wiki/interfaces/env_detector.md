@@ -65,7 +65,7 @@ from p1_shared.utils.env_detector import EnvDetector
 detector = EnvDetector()
 env = detector.detect()  # "dev" | "server" | "unknown"
 
-# DB 접속 호스트 자동 결정
+# DB 접속 호스트 자동 결정 (도커 DNS 실패 시 172.20.0.3 / 172.20.0.4 자동 폴백)
 host = detector.get_db_host("kdms")
 
 # 동기화 대상 IP 자동 결정
@@ -78,7 +78,7 @@ if not detector.verify_dev_ip_sync():
 
 ---
 
-## 감지 로직 (코드 레벨)
+## 감지 로직 및 도커 DNS 폴백 (코드 레벨)
 
 ```python
 # 1. TDMS_ENV 환경변수 우선 확인
@@ -96,7 +96,12 @@ local_ips = get_local_ips()
 if dev_ip in local_ips: return "dev"
 if server_ip in local_ips: return "server"
 
-return "unknown"
+# 4. 도커 DNS 장애 대응 (get_db_host 예외 격리)
+try:
+    socket.gethostbyname("kdms_db")
+    return "kdms_db"
+except socket.gaierror:
+    return "172.20.0.3"  # 수동 할당된 고정 IP
 ```
 
 ---
@@ -106,3 +111,4 @@ return "unknown"
 - **WSL2 IP 불안정**: DHCP 재할당으로 DEV_IP가 바뀔 수 있음 → `verify_dev_ip_sync()` 주기적 호출 권장
 - **루프백 vs 내부망**: WSL → Host DB 접속 시 `127.0.0.1` 반환, WSL → 원격 서버 접속 시 실제 IP 반환
 - **`ip addr` 의존**: `get_local_ips()`는 Linux `ip` 명령에 의존. WSL2 환경에서만 테스트됨
+- **도커 가상 DNS 의존성 완화**: 가상 스위치의 DNS 리졸버 누락 오작동을 피하기 위해 `socket.gaierror` 처리와 컴포즈 Static IP(`172.20.0.0/16`) 지정을 이중 결합하여 안전성을 기함

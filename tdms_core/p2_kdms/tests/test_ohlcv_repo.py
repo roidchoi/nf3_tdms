@@ -22,15 +22,21 @@ def test_upsert_daily_ohlcv_inserts_new_records(mocker):
     records = [
         {"stk_cd": "005930", "dt": date(2026, 5, 14),
          "open": 70000, "high": 71000, "low": 69000,
-         "close": 70500, "volume": 1000000},
+         "close": 70500, "volume": 1000000, "amt": 70500000000, "turn_rt": 1.25},
         {"stk_cd": "000660", "dt": date(2026, 5, 14),
          "open": 180000, "high": 182000, "low": 178000,
-         "close": 181000, "volume": 500000},
+         "close": 181000, "volume": 500000, "amt": 90500000000, "turn_rt": 2.11},
     ]
     count = repo.upsert_daily_ohlcv(records)
 
     assert count == 2
-    mock_cursor.executemany.assert_called_once()
+    mock_cursor.executemany.assert_called_once_with(
+        mocker.ANY,
+        [
+            ("005930", date(2026, 5, 14), 70000, 71000, 69000, 70500, 1000000, 70500000000, 1.25),
+            ("000660", date(2026, 5, 14), 180000, 182000, 178000, 181000, 500000, 90500000000, 2.11),
+        ]
+    )
 
 
 def test_get_latest_date_returns_most_recent_date(mocker):

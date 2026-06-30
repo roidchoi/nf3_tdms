@@ -114,13 +114,29 @@ def test_config_loads_targeting_thresholds(mocker):
     # get_settings 싱글톤 캐시 오염을 방지하기 위해 캐시 강제 무효화
     mocker.patch("p3_usdms.config._settings", None)
     
-    # 1. 디폴트 값 검증
-    settings = Settings(SEC_USER_AGENT="TestAgent name@test.com")
-    assert settings.TARGET_MIN_MARKET_CAP == 50000000.0
-    assert settings.TARGET_MIN_PRICE == 1.00
-    assert settings.TARGET_RETAIN_MARKET_CAP == 35000000.0
-    assert settings.TARGET_RETAIN_PRICE == 0.80
-    assert settings.SCHEDULE_DAILY_ROUTINE == "07:30"
+    # 로컬 .env 및 os.environ 캐시의 간섭을 차단하기 위해 타깃 환경변수 임시 배제
+    env_keys = [
+        "TARGET_MIN_MARKET_CAP", "TARGET_MIN_PRICE", 
+        "TARGET_RETAIN_MARKET_CAP", "TARGET_RETAIN_PRICE", 
+        "SCHEDULE_USDMS_DAILY_ROUTINE", "SCHEDULE_USDMS_WEEKLY_MAINTENANCE"
+    ]
+    saved_env = {}
+    for k in env_keys:
+        if k in os.environ:
+            saved_env[k] = os.environ.pop(k)
+            
+    try:
+        # 1. 디폴트 값 검증 (_env_file=None을 통해 실제 .env 파일 로딩 우회)
+        settings = Settings(SEC_USER_AGENT="TestAgent name@test.com", _env_file=None)
+        assert settings.TARGET_MIN_MARKET_CAP == 50000000.0
+        assert settings.TARGET_MIN_PRICE == 1.00
+        assert settings.TARGET_RETAIN_MARKET_CAP == 35000000.0
+        assert settings.TARGET_RETAIN_PRICE == 0.80
+        assert settings.SCHEDULE_USDMS_DAILY_ROUTINE == "wed,sat:07:30"
+        assert settings.SCHEDULE_USDMS_WEEKLY_MAINTENANCE == "sat:09:00"
+    finally:
+        for k, v in saved_env.items():
+            os.environ[k] = v
 
     # 2. Mock 환경변수 대입 시 파싱 검증
     mocker.patch.dict("os.environ", {
@@ -128,24 +144,27 @@ def test_config_loads_targeting_thresholds(mocker):
         "TARGET_MIN_PRICE": "2.50",
         "TARGET_RETAIN_MARKET_CAP": "80000000.0",
         "TARGET_RETAIN_PRICE": "2.00",
-        "SCHEDULE_DAILY_ROUTINE": "08:15"
+        "SCHEDULE_USDMS_DAILY_ROUTINE": "tue-sat:08:15",
+        "SCHEDULE_USDMS_WEEKLY_MAINTENANCE": "sun:10:00"
     })
     custom_settings = Settings()
     assert custom_settings.TARGET_MIN_MARKET_CAP == 100000000.0
     assert custom_settings.TARGET_MIN_PRICE == 2.50
     assert custom_settings.TARGET_RETAIN_MARKET_CAP == 80000000.0
     assert custom_settings.TARGET_RETAIN_PRICE == 2.00
-    assert custom_settings.SCHEDULE_DAILY_ROUTINE == "08:15"
+    assert custom_settings.SCHEDULE_USDMS_DAILY_ROUTINE == "tue-sat:08:15"
+    assert custom_settings.SCHEDULE_USDMS_WEEKLY_MAINTENANCE == "sun:10:00"
 
 
 @pytest.mark.asyncio
 async def test_scheduler_daily_job_uses_configured_time(mocker):
     """
-    [목적] lifespan 내의 APScheduler 등록 시 SCHEDULE_DAILY_ROUTINE으로 지정한 설정을 파싱(HH:MM)하여 add_job을 실행하는지 검증
+    [목적] lifespan 내의 APScheduler 등록 시 SCHEDULE_USDMS_DAILY_ROUTINE으로 지정한 설정을 파싱(요일:HH:MM)하여 add_job을 실행하는지 검증
     """
     mock_settings = Settings(
         SEC_USER_AGENT="TestAgent name@test.com",
-        SCHEDULE_DAILY_ROUTINE="10:45"
+        SCHEDULE_USDMS_DAILY_ROUTINE="tue-sat:10:45",
+        SCHEDULE_USDMS_WEEKLY_MAINTENANCE="sat:11:15"
     )
     mocker.patch("p3_usdms.main.get_settings", return_value=mock_settings)
     
@@ -164,7 +183,10 @@ async def test_scheduler_daily_job_uses_configured_time(mocker):
     async with lifespan(app):
         pass
         
-    # scheduler.add_job 이 mock_settings에 지정된 10시 45분으로 호출되었는지 검증
+    # scheduler.add_job 이 mock_settings에 지정된 화~토 10시 45분으로 호출 되었는지 검증
     mock_scheduler.add_job.assert_any_call(
         mocker.ANY, "cron", day_of_week="tue-sat", hour=10, minute=45, id="daily_collection_job"
+    )
+    mock_scheduler.add_job.assert_any_call(
+        mocker.ANY, "cron", day_of_week="sat", hour=11, minute=15, id="weekly_maintenance_job"
     )

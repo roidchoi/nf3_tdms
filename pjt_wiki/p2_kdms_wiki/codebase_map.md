@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p2_kdms (한국 시장 데이터 백엔드)
-> **마지막 업데이트**: 2026-05-28 (시가총액 오버플로우 방어 패치 반영 완료)
+> **마지막 업데이트**: 2026-06-16 (KST 시간대 처리 수정 반영 완료)
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -11,7 +11,7 @@
 ```
 tdms_core/p2_kdms/
 ├── collectors/                  # 외부 API 클라이언트 레이어  ✅
-│   ├── kis_kr_client.py         # KIS REST API KR 래퍼 (OHLCV + 재무 + 마스터)
+│   ├── kis_kr_client.py         # KIS REST API KR 래퍼 (OHLCV + 재무 + 마스터, BC/MF/ELW 비주식성 특수 상품 필터링 내장)
 │   ├── kiwoom_client.py         # Kiwoom REST API 분봉 수집
 │   ├── pub_data_client.py       # pykrx 기반 시가총액 수집
 │   ├── factor_calculator.py     # 수정계수(Price Factor) 역산 계산기
@@ -32,27 +32,40 @@ tdms_core/p2_kdms/
 │   ├── financial_task.py        # 분기 PIT 재무제표 수집 및 비교 태스크
 │   └── backfill_task.py         # 분봉 백필 파이프라인 (DatabaseManager 내장)
 ├── ops/                         # 운영 스크립트  ✅
+│   ├── backfill_daily_cap.py    # 공공데이터포털 API 연동 과거 5개년 시가총액 백필 스크립트
+│   ├── backfill_daily_ohlcv_amt.py # 일봉 거래대금(amt) 백필 스크립트
+│   ├── backfill_minute_ohlcv.py # 과거 분봉 데이터 백필 스크립트
 │   ├── backfill_pipeline.py     # 코퍼레이트 액션 의심 종목 탐지 + 백필 실행
 │   ├── check_db.py              # DB 테이블/행수 헬스체크
 │   ├── cleanup_database.py      # 불필요 데이터 정리
+│   ├── fix_ohlcv_amt_from_kis.py # KIS API 대조 일봉 거래대금(amt) 정정 스크립트
 │   ├── pre_migration_backup.py  # 마이그레이션 전 백업 실행 (BackupManager 연동)
-│   └── run_monthly_backfill.py  # 월 단위 분봉 백필 범위 슬라이싱 실행기
+│   ├── rebuild_factors_from_kis.py # KIS API 기반 수정계수 일괄 재구축 스크립트
+│   ├── rebuild_minute_targets.py # 거래대금 기준 분봉 수집 타겟 종목 재구축 스크립트
+│   ├── run_financial_manual.py  # 수동 재무 업데이트 기동 스크립트
+│   ├── run_monthly_backfill.py  # 월 단위 분봉 백필 범위 슬라이싱 실행기
+│   └── verify_nulls.py          # DB 테이블 내 Null 값 검증 스크립트
 ├── tests/                       # 테스트  ✅
 │   ├── conftest.py              # mock_lifespan — FastAPI lifespan 오프라인 모킹
-│   ├── test_daily_task.py
 │   ├── test_backfill_task.py
-│   ├── test_financial_task.py
-│   ├── test_market_cap_scheduler.py
-│   ├── test_kis_kr_client.py
-│   ├── test_factor_calculator.py
-│   ├── test_factor_repo.py
-│   ├── test_financial_repo.py
-│   ├── test_financial_endpoints.py
-│   ├── test_factor_endpoints.py
 │   ├── test_base_repository.py
+│   ├── test_blacklist.py
+│   ├── test_daily_task.py
+│   ├── test_data_api_t007.py
+│   ├── test_factor_calculator.py
+│   ├── test_factor_endpoints.py
+│   ├── test_factor_repo.py
+│   ├── test_financial_endpoints.py
+│   ├── test_financial_repo.py
+│   ├── test_financial_task.py
+│   ├── test_health_t008.py
+│   ├── test_kis_kr_client.py
+│   ├── test_logs_ws_t008.py
+│   ├── test_market_cap_scheduler.py
+│   ├── test_master_repo.py
 │   ├── test_ohlcv_repo.py
 │   ├── test_ohlcv_repo_adjusted.py
-│   └── test_master_repo.py
+│   └── test_range_backfill_t010.py
 ├── main.py                      # FastAPI 앱, lifespan, APScheduler 등록
 ├── config.py                    # Settings (pydantic-settings, Layer A/B 분리)
 ├── pyproject.toml               # 패키지 메타데이터 (editable install)
@@ -117,8 +130,8 @@ tdms_core/p2_kdms/
 | `collectors/factor_calculator.py` | ✅ | FactorCalculator | Raw/Adj 비율 기반 수정계수 역산 (ZeroDivision 처리) |
 | `collectors/target_selector.py` | ✅ | TargetSelector | 거래대금 기준 분봉 수집 대상 Top-N 선정 |
 | `tasks/daily_task.py` | ✅ | DailyTask | 평일 17:00 KST 크론: OHLCV → 팩터 → 수정주가 → 시총(1000억주 컷오프/9경 초과 bigint 방어 필터) → 분봉 |
-| `tasks/financial_task.py` | ✅ | run_financial_update() | 매일 19:00 KST 크론: PIT 재무데이터 변경 감지 및 수집 |
-| `tasks/backfill_task.py` | ✅ | run_backfill_minute_data() | 분봉 갭 탐지 및 백필 (수동 트리거) |
+| `tasks/financial_task.py` | ✅ | run_financial_update() | 매일 19:00 KST 크론: PIT 재무데이터 변경 감지 및 수집 (KST 시간대 보정 완료) |
+| `tasks/backfill_task.py` | ✅ | run_backfill_minute_data() | 분봉 갭 탐지 및 백필 (수동 트리거, KST 시간대 보정 완료) |
 | `routers/data.py` | ✅ | data router | /api/data/* 데이터 조회 API |
 | `routers/admin.py` | ✅ | admin router | /api/v1/admin/* 배치 수동 트리거 및 상태 조회 |
 | `ops/backfill_pipeline.py` | ✅ | run_backfill() | 코퍼레이트 액션 의심 종목 탐지 + 일봉 팩터 백필 |
@@ -169,3 +182,5 @@ tdms_core/p2_kdms/
 | T-006~T-008 | 시가총액 수집 파이프라인 + MarketCapRepo + DailyTask 통합 |
 | 2026-05-26 | Graphify 기반 초기 지식화 (위키 codebase_map 전면 작성) |
 | 2026-05-28 | KIS 마스터 데이터 오차 대응을 위한 시가총액 bigint 오버플로우 방어 패치 적용 |
+| T-011 | 스케줄링 환경 변수 외부화 및 API 개정 작업 완료, KIS 마스터 비주식 특수 상품(BC/MF/EW) 제외 필터 적용 |
+| T-105 (2026-06-16) | 재무 업데이트 및 분봉 백필 태스크 기동/완료 상태 기록 시 KST 시간대(+09:00) 처리 및 isoformat() 적용 |

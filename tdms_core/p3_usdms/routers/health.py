@@ -269,3 +269,23 @@ def get_blacklist(
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=f"Failed to retrieve blacklist: {str(e)}")
+
+
+@router.post("/blacklist/{cik}/release")
+def release_blacklist_endpoint(
+    cik: str,
+    blacklist_repo: BlacklistRepo = Depends(get_blacklist_repo)
+) -> Dict[str, Any]:
+    """
+    특정 CIK의 수집 차단(블랙리스트) 상태를 수동으로 해제합니다.
+    """
+    try:
+        clean_cik = str(cik).zfill(10)
+        blacklist_repo.release_blacklist(clean_cik, admin_note="Released via P4 Manager Dashboard")
+        return {
+            "status": "SUCCESS",
+            "message": f"CIK {clean_cik} released from blacklist successfully."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to release CIK {clean_cik}: {str(e)}")
+

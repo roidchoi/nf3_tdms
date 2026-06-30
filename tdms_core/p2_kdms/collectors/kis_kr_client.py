@@ -56,7 +56,9 @@ class KisKrClient:
                     "high": int(row["stck_hgpr"]),
                     "low": int(row["stck_lwpr"]),
                     "close": int(row["stck_clpr"]),
-                    "volume": int(row["acml_vol"])
+                    "volume": int(row["acml_vol"]),
+                    "amt": int(row.get("acml_tr_pbmn", 0) or 0),
+                    "turn_rt": 0.0
                 }
         return None
 
@@ -95,7 +97,9 @@ class KisKrClient:
                         "high": int(row["stck_hgpr"]),
                         "low": int(row["stck_lwpr"]),
                         "close": int(row["stck_clpr"]),
-                        "volume": int(row["acml_vol"])
+                        "volume": int(row["acml_vol"]),
+                        "amt": int(row.get("acml_tr_pbmn", 0) or 0),
+                        "turn_rt": 0.0
                     })
         return records
 
@@ -183,40 +187,48 @@ class KisKrClient:
                                         line_str = line_bytes.decode('cp949', errors='ignore')
                                         parts = line_str.split('|')
                                         if len(parts) >= 10:
+                                            pipe_group = parts[3].strip() if len(parts) > 3 else ""
+                                            if pipe_group in ("BC", "MF", "EW"):
+                                                continue
                                             stk_cd = parts[0].strip()[-6:]
                                             stk_nm = parts[2].strip() if len(parts) > 2 else ""
                                             
                                             if market == "KOSPI":
                                                 listed_dt_str = parts[49].strip() if len(parts) > 49 else ""
                                                 listed_shares_str = parts[50].strip() if len(parts) > 50 else "0"
+                                                cap_str = parts[51].strip() if len(parts) > 51 else "0"
                                             else:
                                                 listed_dt_str = parts[44].strip() if len(parts) > 44 else ""
                                                 listed_shares_str = parts[45].strip() if len(parts) > 45 else "0"
+                                                cap_str = parts[46].strip() if len(parts) > 46 else "0"
                                         else:
                                             continue
                                     else:
-                                        # 고정 폭 바이트 슬라이싱 처리
-                                        # Part1: 단축코드 9바이트, 표준코드 12바이트, 한글명 40바이트
+                                        # 고정 폭 바이트 슬라이싱 처리 (절대 오프셋 기준)
                                         stk_cd_bytes = line_bytes[0:9]
                                         stk_nm_bytes = line_bytes[21:61]
+                                        group_code_bytes = line_bytes[61:63]
                                         
-                                        if market == "KOSPI":
-                                            part2_bytes = line_bytes[-total_kospi_width:]
-                                        else:
-                                            part2_bytes = line_bytes[-total_kosdaq_width:]
-                                        
+                                        group_code = group_code_bytes.decode('cp949', errors='ignore').strip()
+                                        # 비주식성 특수 상품(수익증권 BC, 뮤추얼펀드 MF, ELW EW 등) 필터링
+                                        if group_code in ("BC", "MF", "EW"):
+                                            continue
+                                            
                                         stk_cd = stk_cd_bytes.decode('cp949', errors='ignore').strip()[-6:]
                                         stk_nm = stk_nm_bytes.decode('cp949', errors='ignore').strip()
                                         
                                         if market == "KOSPI":
-                                            listed_dt_bytes = part2_bytes[offset_kospi_dt : offset_kospi_dt + 8]
-                                            listed_shares_bytes = part2_bytes[offset_kospi_shares : offset_kospi_shares + 15]
+                                            listed_dt_bytes = line_bytes[166:174]
+                                            listed_shares_bytes = line_bytes[174:189]
+                                            cap_bytes = line_bytes[189:210]
                                         else:
-                                            listed_dt_bytes = part2_bytes[offset_kosdaq_dt : offset_kosdaq_dt + 8]
-                                            listed_shares_bytes = part2_bytes[offset_kosdaq_shares : offset_kosdaq_shares + 15]
+                                            listed_dt_bytes = line_bytes[161:169]
+                                            listed_shares_bytes = line_bytes[169:184]
+                                            cap_bytes = line_bytes[184:205]
                                             
                                         listed_dt_str = listed_dt_bytes.decode('cp949', errors='ignore').strip()
                                         listed_shares_str = listed_shares_bytes.decode('cp949', errors='ignore').strip()
+                                        cap_str = cap_bytes.decode('cp949', errors='ignore').strip()
                                     
                                     # 6자리 단축코드만 수집 (알파벳 혼용 코드 대응)
                                     if not re.match(r'^[0-9A-Z]{6}$', stk_cd):
@@ -230,13 +242,18 @@ class KisKrClient:
                                         except ValueError:
                                             pass
                                             
-                                    # 상장주수 파싱 및 KOSDAQ 1,000배 보정
+                                    # 상장주수 파싱 및 1,000배 보정 (KOSPI & KOSDAQ 모두 천주 단위이므로 주 단위 변환)
                                     try:
                                         listed_shares = int(listed_shares_str)
-                                        if market == "KOSDAQ":
-                                            listed_shares *= 1000
+                                        listed_shares *= 1000
                                     except ValueError:
                                         listed_shares = 0
+                                        
+                                    # 자본금 파싱 (원 단위)
+                                    try:
+                                        cap = int(cap_str) if cap_str else None
+                                    except ValueError:
+                                        cap = None
                                         
                                     records.append({
                                         "stk_cd": stk_cd,
@@ -244,7 +261,8 @@ class KisKrClient:
                                         "market": market,
                                         "is_active": True,
                                         "listed_dt": listed_dt,
-                                        "listed_shares": listed_shares
+                                        "listed_shares": listed_shares,
+                                        "cap": cap
                                     })
             except Exception as e:
                 # 에러 로그 출력 후 다음 시장 진행
