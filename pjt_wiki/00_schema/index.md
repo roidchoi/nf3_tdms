@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-06-24
-> **총 등록 파일**: 52개
+> **마지막 업데이트**: 2026-07-03
+> **총 등록 파일**: 57개
 
 
 ---
@@ -164,6 +164,7 @@
 | `usdms-err-002_valuation_rebuild_timeout.md` | Valuation 자가치유 갭 탐색 쿼리 실행 지연 및 타임아웃 | High |
 | `usdms-err-003_logging_missing_and_running_status_loss.md` | 로깅 기본값 누락 및 백그라운드 실행 상태 유실 -> logging.basicConfig 및 _running_task 동적 상태 오버라이드 | High |
 | `usdms-err-004_financial_tag_and_date_filtering_null_metrics.md` | 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 (해결 및 백필 완료) | High |
+| `usdms-err-005_apscheduler_misfire_grace_time_skipped.md` | APScheduler misfire_grace_time 미지정으로 인한 스케줄러 트리거 누락 | High |
 
 ---
 
@@ -210,6 +211,10 @@
 | `p4err-005_scheduler_api_404_not_found.md` | 통합 관리자 KDMS 스케줄러 조회 시 누락된 접두사(/tasks) 매핑 불일치로 인한 404 에러 | Medium |
 | `p4err-006_websocket_upstream_failed.md` | 실시간 로그 스트리밍 웹소켓 프록시 연결 장애 (HTTP 404 및 403) | Medium |
 | `p4err-007_httpx_timeout_and_caching_loss.md` | HTTPX 타임아웃 및 캐싱 덮어쓰기 장애 -> timeout 10.0초 상향 및 중복 캐싱 오버라이딩 방지 | High |
+| `p4err-008_container_sync_sudo_ssh_missing.md` | 컨테이너 내부 물리 동기화 시 sudo 미존재 및 ssh/scp 바이너리, 개인키 공유 누락 에러 | High |
+| `p4err-009_container_sync_path_command_mismatch.md` | 컨테이너-호스트 간 data_path 불일치로 인한 압축해제 오류 및 docker-compose 유실 제어 차단 에러 | High |
+| `p4err-010_conda_missing_in_audit_report.md` | 정밀 감사 프로세스 기동 시 컨테이너 내 conda 부재 및 DB 패스워드 로드 실패 에러 | High |
+| `p4err-011_env_detector_docker_default_dev.md` | 도커 컴포즈 기본값 설정(dev)으로 인해 서버 PC가 개발 PC 환경으로 오표시되는 에러 | Medium |
 
 ---
 
@@ -226,12 +231,17 @@
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 - [USDMS-ERR-003] 로깅 기본값 누락 및 실행 상태 유실 → `p3_usdms_wiki/errors/usdms-err-003_logging_missing_and_running_status_loss.md`
 - [USDMS-ERR-004] 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 → `p3_usdms_wiki/errors/usdms-err-004_financial_tag_and_date_filtering_null_metrics.md`
+- [USDMS-ERR-005] APScheduler misfire_grace_time 미지정으로 인한 스케줄러 트리거 누락 → `p3_usdms_wiki/errors/usdms-err-005_apscheduler_misfire_grace_time_skipped.md`
 - [P4-ERR-002] 대용량 DB 볼륨 tar 백업 권한 장애 → `p4_manager_wiki/errors/p4err-002_real_db_volume_tar_permission.md`
 - [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
 - [P4-ERR-004] WSL2 에이전트 브라우저 실행 및 포워딩 장애 → `p4_manager_wiki/errors/p4err-004_wsl2_agent_browser_forwarding.md`
 - [P4-ERR-005] 통합 관리자 KDMS 스케줄러 조회 404 장애 → `p4_manager_wiki/errors/p4err-005_scheduler_api_404_not_found.md`
 - [P4-ERR-006] 실시간 로그 스트리밍 웹소켓 프록시 404/403 장애 → `p4_manager_wiki/errors/p4err-006_websocket_upstream_failed.md`
 - [P4-ERR-007] HTTPX 타임아웃 및 캐싱 덮어쓰기 장애 → `p4_manager_wiki/errors/p4err-007_httpx_timeout_and_caching_loss.md`
+- [P4-ERR-008] 컨테이너 기반 물리 동기화 sudo/ssh 부재 → `p4_manager_wiki/errors/p4err-008_container_sync_sudo_ssh_missing.md`
+- [P4-ERR-009] 컨테이너 기반 물리 동기화 경로/docker-compose 부재 → `p4_manager_wiki/errors/p4err-009_container_sync_path_command_mismatch.md`
+- [P4-ERR-010] 정밀 감사 리포트 Conda 누락/DB 비밀번호 오류 → `p4_manager_wiki/errors/p4err-010_conda_missing_in_audit_report.md`
+- [P4-ERR-011] 도커 컴포즈 기본값 설정 서버 환경 오인식 → `p4_manager_wiki/errors/p4err-011_env_detector_docker_default_dev.md`
 
 ### 📐 최근 변경된 인터페이스
 

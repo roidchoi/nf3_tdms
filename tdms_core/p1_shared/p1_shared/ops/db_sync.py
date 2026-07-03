@@ -25,8 +25,17 @@ class PhysicalSyncManager:
     def __init__(self, config: SyncConfig):
         self.config = config
 
+    def _clean_local_cmd(self, cmd: str) -> str:
+        """로컬 명령어 실행 시 sudo가 없으면 sudo 접두사를 제거"""
+        import shutil
+        if shutil.which("sudo") is None:
+            if cmd.startswith("sudo "):
+                cmd = cmd[5:]
+        return cmd
+
     def _run_local(self, cmd: str) -> subprocess.CompletedProcess:
         """로컬 셸 명령어 실행"""
+        cmd = self._clean_local_cmd(cmd)
         logger.debug(f"Local exec: {cmd}")
         return subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
@@ -52,38 +61,48 @@ class PhysicalSyncManager:
 
     def stop_containers(self) -> None:
         logger.info("2. 컨테이너 중지 (Maintenance Mode)")
-        svc_name = f"{self.config.db_name}_db"
-        cmd = f"cd /home/{self.config.ssh_user}/pjt/nf3/01_nf3_tdms && docker compose stop {svc_name}"
+        env_var = "KDMS_CONTAINER_NAME" if self.config.db_name == "kdms" else "USDMS_CONTAINER_NAME"
+        container_name = os.getenv(env_var, f"{self.config.db_name}_timescaledb")
         
         # 로컬 중지
         logger.info("   - 로컬 DB 중지 중...")
-        self._run_local(cmd)
+        self._run_local(f"docker stop {container_name}")
         
         # 원격 중지
         remote_host = self.config.target_ip if self.config.direction == "push" else self.config.source_ip
         logger.info(f"   - 원격({remote_host}) DB 중지 중...")
-        self._run_remote(remote_host, cmd)
+        self._run_remote(remote_host, f"docker stop {container_name}")
 
     def start_containers(self) -> None:
         logger.info("5. 컨테이너 재기동")
-        svc_name = f"{self.config.db_name}_db"
-        cmd = f"cd /home/{self.config.ssh_user}/pjt/nf3/01_nf3_tdms && docker compose start {svc_name}"
+        env_var = "KDMS_CONTAINER_NAME" if self.config.db_name == "kdms" else "USDMS_CONTAINER_NAME"
+        container_name = os.getenv(env_var, f"{self.config.db_name}_timescaledb")
         
+        # 로컬 기동
         logger.info("   - 로컬 DB 기동 중...")
-        self._run_local(cmd)
+        self._run_local(f"docker start {container_name}")
         
+        # 원격 기동
         remote_host = self.config.target_ip if self.config.direction == "push" else self.config.source_ip
         logger.info(f"   - 원격({remote_host}) DB 기동 중...")
-        self._run_remote(remote_host, cmd)
+        self._run_remote(remote_host, f"docker start {container_name}")
 
     def transfer_data(self) -> bool:
         logger.info("3. 물리 데이터 전송 시작 (Safe 2-Step Transfer)")
         
-        db_path = f"{self.config.data_path}/{self.config.db_name}_db"
+        local_db_path = f"{self.config.data_path}/{self.config.db_name}_db"
+        
+        # 원격지 경로 파싱 (만약 로컬이 컨테이너 내부 /app/data 라면, 원격지는 호스트 OS 상의 홈 디렉토리 경로로 보정)
+        remote_data_path = self.config.data_path
+        if remote_data_path.startswith("/app/data"):
+            remote_data_path = f"/home/{self.config.ssh_user}/pjt/nf3/01_nf3_tdms/data"
+        remote_db_path = f"{remote_data_path}/{self.config.db_name}_db"
+        
         tmp_tar = f"/tmp/{self.config.db_name}_sync.tar.gz"
         
         # subprocess.run 대신 터미널(TTY) 제어권을 넘겨 sudo 비밀번호를 입력받을 수 있게 함
         def run_interactive(cmd):
+            cmd = self._clean_local_cmd(cmd)
             logger.debug(f"Interactive exec: {cmd}")
             return subprocess.call(cmd, shell=True)
 
@@ -93,7 +112,7 @@ class PhysicalSyncManager:
             cmd_pack = (
                 f"ssh -t -i {self.config.ssh_key_path} -o StrictHostKeyChecking=no "
                 f"{self.config.ssh_user}@{self.config.source_ip} "
-                f"\"sudo tar -czf {tmp_tar} -C {db_path} . && sudo chmod 644 {tmp_tar}\""
+                f"\"sudo tar -czf {tmp_tar} -C {remote_db_path} . && sudo chmod 644 {tmp_tar}\""
             )
             if run_interactive(cmd_pack) != 0: return False
 
@@ -102,7 +121,7 @@ class PhysicalSyncManager:
             if run_interactive(cmd_fetch) != 0: return False
 
             logger.info("   [3/3] 로컬에 압축을 해제합니다...")
-            cmd_unpack = f"sudo tar -xzf {tmp_tar} -C {db_path}"
+            cmd_unpack = f"sudo tar -xzf {tmp_tar} -C {local_db_path}"
             if run_interactive(cmd_unpack) != 0: return False
 
             # 임시 파일 정리
@@ -112,7 +131,7 @@ class PhysicalSyncManager:
         else:
             # 로컬 -> 서버
             logger.info("   [1/3] 로컬에서 데이터를 압축합니다 (비밀번호 입력 필요)...")
-            cmd_pack = f"sudo tar -czf {tmp_tar} -C {db_path} ."
+            cmd_pack = f"sudo tar -czf {tmp_tar} -C {local_db_path} ."
             if run_interactive(cmd_pack) != 0: return False
 
             logger.info("   [2/3] 서버로 압축 파일을 업로드합니다...")
@@ -123,7 +142,7 @@ class PhysicalSyncManager:
             cmd_unpack = (
                 f"ssh -t -i {self.config.ssh_key_path} -o StrictHostKeyChecking=no "
                 f"{self.config.ssh_user}@{self.config.target_ip} "
-                f"\"sudo tar -xzf {tmp_tar} -C {db_path}\""
+                f"\"sudo tar -xzf {tmp_tar} -C {remote_db_path}\""
             )
             if run_interactive(cmd_unpack) != 0: return False
 
@@ -136,15 +155,20 @@ class PhysicalSyncManager:
 
     def fix_permissions(self) -> None:
         logger.info("4. 수신 측 폴더 권한 교정")
-        db_path = f"{self.config.data_path}/{self.config.db_name}_db"
+        local_db_path = f"{self.config.data_path}/{self.config.db_name}_db"
+        
+        remote_data_path = self.config.data_path
+        if remote_data_path.startswith("/app/data"):
+            remote_data_path = f"/home/{self.config.ssh_user}/pjt/nf3/01_nf3_tdms/data"
+        remote_db_path = f"{remote_data_path}/{self.config.db_name}_db"
         
         if self.config.direction == "pull":
             # 로컬 수신이므로 로컬 권한 교정
-            cmd = f"sudo chown -R 1000:1000 {db_path}"
+            cmd = f"sudo chown -R 1000:1000 {local_db_path}"
             self._run_local(cmd)
         else:
             # 서버 수신이므로 원격 권한 교정
-            cmd = f"sudo chown -R 1000:1000 {db_path}"
+            cmd = f"sudo chown -R 1000:1000 {remote_db_path}"
             self._run_remote(self.config.target_ip, cmd)
 
     def execute(self) -> bool:

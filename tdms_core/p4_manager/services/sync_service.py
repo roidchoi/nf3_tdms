@@ -71,14 +71,17 @@ class SyncService:
             raise PermissionError("서버 PC는 로컬 동기화 수신 쓰기 동작을 허용하지 않습니다. (403 Forbidden)")
 
         # 3. sudo 무인화 설정 검증
-        # 로컬 sudo 검사
-        local_sudo_check = subprocess.run(["sudo", "-n", "true"], capture_output=True, text=True)
-        if local_sudo_check.returncode != 0:
-            raise RuntimeError(
-                "로컬 서버에서 비밀번호 없이 sudo 명령을 실행할 수 없습니다. "
-                "아래 명령을 개발PC 터미널에 등록해 주십시오 (412 Precondition Failed):\n"
-                'echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/tar, /usr/bin/rm, /usr/bin/chown, /usr/bin/docker" | sudo tee /etc/sudoers.d/tdms_sync'
-            )
+        # 로컬 sudo 검사 (sudo가 있고 root가 아닌 경우에만)
+        has_sudo = shutil.which("sudo") is not None
+        is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+        if has_sudo and not is_root:
+            local_sudo_check = subprocess.run(["sudo", "-n", "docker", "--version"], capture_output=True, text=True)
+            if local_sudo_check.returncode != 0:
+                raise RuntimeError(
+                    "로컬 서버에서 비밀번호 없이 sudo 명령을 실행할 수 없습니다. "
+                    "아래 명령을 개발PC 터미널에 등록해 주십시오 (412 Precondition Failed):\n"
+                    'echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/tar, /usr/bin/rm, /usr/bin/chown, /usr/bin/docker" | sudo tee /etc/sudoers.d/tdms_sync'
+                )
 
         # 원격지 sudo 검사
         peer_ip = self.env_detector.get_peer_host()
@@ -91,7 +94,7 @@ class SyncService:
 
         ssh_cmd = [
             "ssh", "-i", ssh_key_expanded, "-o", "StrictHostKeyChecking=no",
-            f"{ssh_user}@{peer_ip}", "sudo -n true"
+            f"{ssh_user}@{peer_ip}", "sudo -n docker --version"
         ]
         remote_sudo_check = subprocess.run(ssh_cmd, capture_output=True, text=True)
         if remote_sudo_check.returncode != 0:
@@ -174,9 +177,16 @@ class SyncService:
         """
         동기화 완료 후 audit_deep 또는 audit_usdms 스크립트를 비동기로 기동하여 데이터를 JSON으로 정규화 파싱.
         """
-        # conda 가상환경에서 실행
+        import shutil
+        import sys
         script = "audit_usdms" if market == "usdms" else "audit_deep"
-        cmd = ["conda", "run", "-n", "tdms_p1_env", "python", "-m", f"p1_shared.ops.auditors.{script}"]
+        
+        # conda가 존재하는 개발 호스트 환경이면 conda run을 사용하고,
+        # conda가 없는 컨테이너 내부 환경이면 현재 Python 실행기(sys.executable)를 사용하여 기동
+        if shutil.which("conda") is not None:
+            cmd = ["conda", "run", "-n", "tdms_p1_env", "python", "-m", f"p1_shared.ops.auditors.{script}"]
+        else:
+            cmd = [sys.executable, "-m", f"p1_shared.ops.auditors.{script}"]
         
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -221,12 +231,22 @@ class SyncService:
 
         # 2. 비동기 사설 C클래스 포트 스캔
         try:
-            local_ips = get_local_ips()
-            if not local_ips:
-                # 로컬 IP를 획득할 수 없을 시 default 대역 스캔
-                local_ips = ["192.168.35.1"]
+            # WSL2 가상 환경 대응: .env의 DEV_IP나 SERVER_IP에서 물리 대역(192.168.35.x 등) 추출 시도
+            base_ip = None
+            dev_ip = os.environ.get("DEV_IP", "").strip()
+            server_ip_env = os.environ.get("SERVER_IP", "").strip()
             
-            base_ip = local_ips[0]
+            if dev_ip and len(dev_ip.split(".")) == 4:
+                base_ip = dev_ip
+            elif server_ip_env and len(server_ip_env.split(".")) == 4:
+                base_ip = server_ip_env
+            else:
+                local_ips = get_local_ips()
+                if local_ips:
+                    base_ip = local_ips[0]
+                else:
+                    base_ip = "192.168.35.1"
+
             # 192.168.35.x 구조로 분할
             ip_parts = base_ip.split(".")
             if len(ip_parts) == 4:
@@ -321,6 +341,7 @@ class SyncService:
     def test_connection(self, ip: str, port: int) -> Dict[str, Any]:
         """
         수동 입력된 IP 및 포트에 대해 TCP 소켓 검사 및 SSH 가용 테스트 수행.
+        (입력된 포트 외에 추가로 80 포트에 대해서도 fallback 검사를 수행합니다)
         """
         # IP 형식 사전 검증
         try:
@@ -328,9 +349,17 @@ class SyncService:
         except socket.error:
             return {"connected": False, "message": "Invalid IP format"}
 
-        try:
-            with socket.create_connection((ip, port), timeout=1.0):
-                pass
-            return {"connected": True, "message": "Connection Success"}
-        except Exception as e:
-            return {"connected": False, "message": f"Socket connection failed: {str(e)}"}
+        ports_to_try = [port]
+        if port != 80:
+            ports_to_try.append(80)
+
+        last_error = None
+        for p in ports_to_try:
+            try:
+                with socket.create_connection((ip, p), timeout=1.0):
+                    pass
+                return {"connected": True, "message": f"Connection Success (Port: {p})"}
+            except Exception as e:
+                last_error = e
+
+        return {"connected": False, "message": f"Socket connection failed: {str(last_error)}"}

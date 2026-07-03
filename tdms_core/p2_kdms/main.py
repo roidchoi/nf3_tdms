@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
     scheduler = AsyncIOScheduler(
         timezone="Asia/Seoul",
         job_defaults={
-            "misfire_grace_time": 36000  # 10시간 유예 (KST/UTC 타임존 차이로 인한 기동 실패 방지)
+            "misfire_grace_time": 900  # 15분 유예 (지터 및 기동 지연으로 인한 스케줄 누락 방지)
         }
     )
     
@@ -199,6 +199,20 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to register backfill_minute_data schedule: {e}. Scheduling omitted.")
 
 
+
+    # 개발 PC(dev)인 경우 기동 시 스케줄을 일시정지 상태로 시작
+    from p1_shared.utils.env_detector import EnvDetector
+    try:
+        env = EnvDetector().detect()
+    except Exception:
+        env = "unknown"
+        
+    if env == "dev":
+        jobs = scheduler.get_jobs()
+        if isinstance(jobs, list):
+            for job in jobs:
+                job.pause()
+                logger.info(f"[DEV ENV] Paused job '{job.id}' on startup.")
 
     # 스케줄러 시작
     scheduler.start()

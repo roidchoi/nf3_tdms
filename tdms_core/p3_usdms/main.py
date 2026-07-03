@@ -77,10 +77,12 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(f"USDMS DB 기동 검증 실패: {report.missing_tables} / {report.low_row_tables}")
         
     # 3. APScheduler 기동 및 태스크 등록
-    scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
-    
-    # 3. APScheduler 기동 및 태스크 등록
-    scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
+    scheduler = AsyncIOScheduler(
+        timezone="Asia/Seoul",
+        job_defaults={
+            "misfire_grace_time": 900  # 15분 유예 (지터 및 기동 지연으로 인한 스케줄 누락 방지)
+        }
+    )
     
     settings = get_settings()
     from p1_shared.utils.schedule_utils import parse_schedule_string
@@ -136,6 +138,20 @@ async def lifespan(app: FastAPI):
         )
 
     
+    # 개발 PC(dev)인 경우 기동 시 스케줄을 일시정지 상태로 시작
+    from p1_shared.utils.env_detector import EnvDetector
+    try:
+        env = EnvDetector().detect()
+    except Exception:
+        env = "unknown"
+        
+    if env == "dev":
+        jobs = scheduler.get_jobs()
+        if isinstance(jobs, list):
+            for job in jobs:
+                job.pause()
+                logger.info(f"[DEV ENV] Paused job '{job.id}' on startup.")
+
     scheduler.start()
     app.state.scheduler = scheduler
     logger.info("APScheduler started: daily collection and weekly maintenance jobs registered successfully.")

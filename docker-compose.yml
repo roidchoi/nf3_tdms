@@ -140,6 +140,7 @@ services:
       - ./data:/app/data
       - ./backups:/app/backups
       - ./.env:/app/.env
+      - ~/.ssh:/root/.ssh:ro
     networks:
       tdms-net:
         ipv4_address: 172.20.0.7

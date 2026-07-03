@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 from dotenv import load_dotenv, find_dotenv
 
 # .env 파일 로딩
-load_dotenv(find_dotenv())
+load_dotenv(find_dotenv(), override=True)
 
 class Settings(BaseSettings):
     # DSN 및 환경변수

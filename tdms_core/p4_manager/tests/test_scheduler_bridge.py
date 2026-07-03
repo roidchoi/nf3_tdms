@@ -56,7 +56,7 @@ def test_get_integrated_schedules_us_success(mock_respx):
                 "job_id": "daily_collection_job",
                 "name": "daily_collection_job",
                 "next_run_time": None,
-                "trigger": {"hour": "19", "minute": "0"}
+                "trigger": "cron[hour='19', minute='0']"
             }
         ],
         status_code=200

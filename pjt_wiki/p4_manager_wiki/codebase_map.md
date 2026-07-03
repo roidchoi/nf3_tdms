@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p4_manager (통합 관리 레이어)  
-> **마지막 업데이트**: 2026-06-30 (물리 DB 동기화 UI 및 스토어 연동 반영 완료)  
+> **마지막 업데이트**: 2026-07-03 (컨테이너 내 물리 동기화 sudo/ssh/경로 장애 조치 및 환경 오인식 디버깅 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -176,3 +176,4 @@ tdms_core/p4_manager/
 | T-010 | 물리 동기화 백라운드 파이프라인, 로컬/원격 sudo NOPASSWD 사전 점검, powershell.exe DNS 우회 쿼리, asyncio 사설 대역 비동기 스캔 및 .env 실시간 갱신 구현 완료 |
 | T-011 | 스케줄링 변수 중앙화에 따른 KDMS/USDMS 스케줄 중계 및 API 개정 대응, proxy_ws 웹소켓 로그 스트리밍 연결 장애 해결 가이드 반영 |
 | T-105 (2026-06-16) | HTTPX ReadTimeout 예외 해결을 위한 timeout 상향(2.0s -> 10.0s) 및 상태 캐싱 중복 오버라이딩 방지 로직 적용 |
+| T-110 (2026-07-03) | 컨테이너 내 물리 동기화 실행 시 sudo/ssh 누락 보완, `/app/data` 호스트 경로 자동 변환 및 docker-compose 바이너리 부재 극복을 위한 direct docker stop/start 제어권 이관, 정밀 감사용 conda 누락 시 인터프리터 Fallback 연동 및 DB 환경 감지 도커 폴백 오류 수정 |

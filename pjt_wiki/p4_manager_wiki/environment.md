@@ -1,7 +1,7 @@
 # Sub Project 개발/운영 환경 (environment.md)
 
 > **Sub Project**: p4_manager  
-> **마지막 업데이트**: 2026-06-12 (T-010 완료)  
+> **마지막 업데이트**: 2026-07-03 (컨테이너화 런타임 의존성 보강 및 키 마운트 정책 추가)  
 > **타입**: Type E (배경/환경 지식)  
 > **공통 환경**: `parent_wiki/environment.md` 참조 (중복 기재 금지)
 
@@ -97,3 +97,5 @@
 | **TypeScript 6.0 빌드 시 tsconfig.json 내 baseUrl 감쇄 에러 (TS5101)** | `tsconfig.app.json` 내에 구식 `"baseUrl": "."` 설정이 남아 있는 경우 컴파일 시 `error TS5101` 빌드 에러 발생 | 현대적 TypeScript 에일리어스 해석법에 따라 `"baseUrl": "."` 속성을 완전히 제거하고 `"paths"`의 상대적 경로 매핑(`"@/*": ["./src/*"]`) 정보만 기재하여 컴파일러가 config 파일 폴더를 기준으로 resolve하게 설계합니다. |
 | **TypeScript 빌드 시 미사용 변수 에러 (TS6133)** | `tsconfig.app.json` 내에 `"noUnusedLocals": true` 옵션이 켜져 있는 상태에서 테스트 코드(예: `DashboardView.spec.ts`)에서 임포트한 `vi` 등의 라이브러리 객체를 사용하지 않으면 `TS6133` 에러와 함께 빌드가 차단됨 | 소스 코드 상에서 실제 호출되지 않는 미사용 변수 및 라이브러리 임포트 구문을 완전히 제거하여 정적 분석 빌드가 통과되도록 보완합니다. |
 | **WSL2 환경 하 호스트네임 리졸빙 실패 및 IP 불일치** | WSL2 리눅스 환경에서 `SERVER_HOSTNAME`을 이용해 윈도우 호스트 통신을 시도할 경우, 브릿지 네트워크 DNS 구조의 결함으로 인해 IP를 리졸브하지 못하거나 서버 PC의 IP가 DHCP로 변동되어 동기화가 불통됨 | `powershell.exe` 서브프로세스를 기동하여 윈도우 호스트의 DNS 쿼리(`[System.Net.Dns]::GetHostAddresses()`)를 우회 실행해 IP를 획득합니다. 만약 쿼리 실패 시, 로컬 IP 서브넷 대역 C클래스를 `asyncio`로 병렬 TCP 스캔하여 `/api/mgr/env` 응답에서 `env=server`를 던지는 IP를 자동 검출하고 `.env`를 갱신합니다. |
+| **도커 컴포즈 기본값 설정(dev)으로 인한 서버 환경 오표시 (P4ERR-011)** | 서버 PC의 `.env` 파일에 `TDMS_ENV`를 비워둘 시 `docker-compose.yml` 내의 `${TDMS_ENV:-dev}` 기본값에 의해 컨테이너 내 환경변수가 `dev`로 오버라이드 됨 | 서버 PC의 로컬 `.env` 파일에 명시적으로 `TDMS_ENV=server`를 입력한 뒤 `docker compose up -d`를 수행하여 컨테이너를 재생성합니다. |
+| **컨테이너 환경 내 SSH/SCP 전송 에러 및 키 미공유 (P4ERR-008)** | `p4_backend` 컨테이너 내부에서 물리 동기화(Push/Pull) 기동 시 `ssh` 및 `scp` 유틸리티 탐색 실패와 SSH 인증키(`tdms_sync_rsa`) 파일 탐색 불가 장애 발생 | `backend.Dockerfile` 빌드 명세에 `openssh-client` 설치를 추가하고, `docker-compose.yml` 볼륨 정의에 `~/.ssh:/root/.ssh:ro` 마운트를 명시합니다. |

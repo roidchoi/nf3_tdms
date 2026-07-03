@@ -2,7 +2,7 @@ import os
 import socket
 import subprocess
 from typing import Literal
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv, find_dotenv, dotenv_values
 
 def get_local_ips() -> list[str]:
     """
@@ -37,7 +37,14 @@ class EnvDetector:
     """
 
     def __init__(self):
-        # .env 파일 값 환경변수로 로드
+        env_file = find_dotenv()
+        if env_file:
+            # .env 파일의 값을 읽음 (비어있지 않은 실제 명시된 값만 환경변수로 오버라이드 주입)
+            vals = dotenv_values(env_file)
+            for k, v in vals.items():
+                if v is not None and v.strip() != "":
+                    os.environ[k] = v
+        # 그 외 누락되었거나 비어 있는 키들은 기본 load_dotenv로 폴백 로드
         load_dotenv(find_dotenv())
 
     def detect(self) -> Literal["dev", "server", "unknown"]:

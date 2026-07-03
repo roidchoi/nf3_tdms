@@ -176,17 +176,11 @@ def get_schedules(request: Request) -> List[Dict[str, Any]]:
     jobs = scheduler.get_jobs()
     jobs_info = []
     for job in jobs:
-        trigger_info = {}
-        if hasattr(job.trigger, "fields"):
-            # CronTrigger 필드 값 추출
-            for field in job.trigger.fields:
-                trigger_info[field.name] = str(field)
-                
         jobs_info.append({
             "job_id": job.id,
             "name": job.name,
             "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
-            "trigger": trigger_info or str(job.trigger)
+            "trigger": str(job.trigger)
         })
     return jobs_info
 
