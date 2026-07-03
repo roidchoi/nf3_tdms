@@ -1,9 +1,8 @@
-import os
 from pydantic_settings import BaseSettings
-from dotenv import load_dotenv, find_dotenv
+from p1_shared.utils.env_detector import EnvDetector
 
-# .env 파일 로딩
-load_dotenv(find_dotenv(), override=True)
+# EnvDetector 초기화를 통해 .env 파일의 값을 안전하게 로딩 및 선택적 환경변수 오버라이드 수행
+detector = EnvDetector()
 
 class Settings(BaseSettings):
     # DSN 및 환경변수
