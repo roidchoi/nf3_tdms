@@ -4,6 +4,7 @@ services:
     image: timescale/timescaledb-ha:pg16
     container_name: kdms_timescaledb
     restart: always
+    shm_size: '512mb'
     environment:
       POSTGRES_USER: ${DEV_KDMS_DB_USER:-roid}
       POSTGRES_PASSWORD: ${DEV_KDMS_DB_PASSWORD:-password}
@@ -46,6 +47,7 @@ services:
     image: timescale/timescaledb@sha256:9e9f50161784dc57d3f547b89ded4af73553f9acb4677345ed05f45af7c7f664
     container_name: usdms_timescaledb
     restart: always
+    shm_size: '512mb'
     environment:
       POSTGRES_USER: ${DEV_USDMS_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DEV_USDMS_DB_PASSWORD:-password}

@@ -22,3 +22,7 @@
 |[[decisions/dec-002_price_adjustment_dual_strategy\|P2DEC-002]]|수정주가 이중 제공 전략 (On-the-fly + 물리 테이블)|T-003|active|
 |[[decisions/dec-003_support_alphanumeric_stock_codes\|P2DEC-003]]|한국거래소(KRX) 알파벳 혼용 종목코드 지원을 위한 필터 정책 완화|—|active|
 |[[decisions/dec-004_kis_api_throttling_strategy\|P2DEC-004]]|KIS API 안전 마진 속도 제어 및 방어적 시가총액 연산 정책|Task-010|active|
+|[[decisions/dec-005_filter_non_equity_instruments\|P2DEC-005]]|비주식형 자산 필터링 정책|—|active|
+|[[decisions/dec-006_fallback_listed_shares_mechanism\|P2DEC-006]]|상장주식수 0 처리 예외 복구 메커니즘|—|active|
+|[[decisions/dec-007_financial_update_optimization\|P2DEC-007]]|KDMS 재무 업데이트 성능 최적화 전략|—|active|
+|[[decisions/dec-008_scheduler_reload_and_logging\|P2DEC-008]]|KDMS 스케줄러 동적 리로드 및 진행률 로깅 개선|—|active|

@@ -18,6 +18,7 @@ export interface PreviewResponse {
   count: number
   data: any[]
   message?: string
+  applied_quarter?: string
 }
 
 export const useExplorerStore = defineStore('explorer', () => {
@@ -28,6 +29,8 @@ export const useExplorerStore = defineStore('explorer', () => {
   const stkCd = ref<string>('')
   const startDate = ref<string>('')
   const endDate = ref<string>('')
+  const quarter = ref<string>('')
+  const marketFilter = ref<string>('')
   const limit = ref<number>(50)
   const offset = ref<number>(0)
   
@@ -74,6 +77,12 @@ export const useExplorerStore = defineStore('explorer', () => {
       if (endDate.value) {
         params.end_date = endDate.value
       }
+      if (quarter.value.trim()) {
+        params.quarter = quarter.value.trim()
+      }
+      if (marketFilter.value.trim()) {
+        params.market_filter = marketFilter.value.trim()
+      }
 
       const resp = await http.get<PreviewResponse>(
         `/preview/${selectedMarket.value}/${selectedTable.value}`,
@@ -89,6 +98,13 @@ export const useExplorerStore = defineStore('explorer', () => {
       } else {
         tableData.value = resData.data || []
         totalCount.value = resData.count || 0
+        if (resData.applied_quarter) {
+          if (selectedTable.value === 'minute_target_history' && stkCd.value.trim() && !quarter.value.trim()) {
+            // 종목코드가 있고 분기가 빈 상태에서 여러 분기를 보려 할 때는 덮어쓰지 않음
+          } else {
+            quarter.value = resData.applied_quarter
+          }
+        }
       }
     } catch (err: any) {
       isOffline.value = true
@@ -105,19 +121,79 @@ export const useExplorerStore = defineStore('explorer', () => {
     stkCd.value = ''
     startDate.value = ''
     endDate.value = ''
+    quarter.value = ''
+    marketFilter.value = ''
     offset.value = 0
+  }
+
+  // 3.5 테이블별 기본 필터 주입
+  const applyDefaultFiltersForTable = (table: string) => {
+    resetFilters()
+    
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+    
+    const oneMonthAgo = new Date()
+    oneMonthAgo.setDate(oneMonthAgo.getDate() - 30)
+    const oneMonthAgoStr = oneMonthAgo.toISOString().split('T')[0]
+    
+    const threeDaysAgo = new Date()
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+    const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0]
+
+    if (selectedMarket.value === 'kr') {
+      if (table === 'stock_info') {
+        marketFilter.value = ''
+      } else if (table === 'daily_ohlcv' || table === 'daily_market_cap') {
+        stkCd.value = '005930'
+        startDate.value = oneMonthAgoStr
+        endDate.value = todayStr
+      } else if (table === 'minute_ohlcv') {
+        stkCd.value = '005930'
+        startDate.value = threeDaysAgoStr
+        endDate.value = todayStr
+      } else if (table === 'financial_statements' || table === 'financial_ratios' || table === 'price_adjustment_factors') {
+        stkCd.value = '005930'
+      } else if (table === 'minute_target_history') {
+        quarter.value = ''
+        marketFilter.value = 'KOSPI'
+      } else if (table === 'trading_calendar' || table === 'system_milestones') {
+        startDate.value = oneMonthAgoStr
+        endDate.value = todayStr
+      }
+    } else if (selectedMarket.value === 'us') {
+      if (table === 'us_ticker_master') {
+        marketFilter.value = ''
+      } else if (table === 'us_daily_price') {
+        stkCd.value = 'AAPL'
+        startDate.value = oneMonthAgoStr
+        endDate.value = todayStr
+      } else if (table === 'us_financial_facts' || table === 'us_standard_financials' || table === 'us_share_history' || table === 'us_price_adjustment_factors' || table === 'us_financial_metrics') {
+        stkCd.value = '0000320193'
+      } else if (table === 'us_daily_valuation') {
+        stkCd.value = '0000320193'
+        const sixMonthsAgo = new Date()
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+        startDate.value = sixMonthsAgo.toISOString().split('T')[0]
+        endDate.value = todayStr
+      } else if (table === 'us_ticker_history' || table === 'us_collection_blacklist') {
+        startDate.value = oneMonthAgoStr
+        endDate.value = todayStr
+      }
+    }
   }
 
   // 4. 시장 선택 전환
   const setMarket = (market: 'kr' | 'us') => {
     selectedMarket.value = market
-    resetFilters()
     
     const tables = metadata.value[market] || []
     if (tables.length > 0) {
       selectedTable.value = tables[0].table
+      applyDefaultFiltersForTable(tables[0].table)
     } else {
       selectedTable.value = ''
+      resetFilters()
     }
     tableData.value = []
     totalCount.value = 0
@@ -130,6 +206,8 @@ export const useExplorerStore = defineStore('explorer', () => {
     stkCd,
     startDate,
     endDate,
+    quarter,
+    marketFilter,
     limit,
     offset,
     loading,
@@ -140,6 +218,7 @@ export const useExplorerStore = defineStore('explorer', () => {
     fetchMetadata,
     fetchPreviewData,
     resetFilters,
+    applyDefaultFiltersForTable,
     setMarket
   }
 })

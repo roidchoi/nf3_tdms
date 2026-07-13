@@ -61,11 +61,12 @@ async def lifespan(app: FastAPI):
     if not report.is_healthy:
         raise RuntimeError(f"DB 기동 검증 실패: {report.missing_tables}")
     
-    # 4. 스케줄러 생성 및 의존성 주입
     scheduler = AsyncIOScheduler(
         timezone="Asia/Seoul",
         job_defaults={
-            "misfire_grace_time": 900  # 15분 유예 (지터 및 기동 지연으로 인한 스케줄 누락 방지)
+            "misfire_grace_time": 900,   # 15분 유예 (찰나의 지터는 허용하고 과도한 지연 기동은 방지)
+            "coalesce": True,            # 동일 작업 누적 시 1회만 병합 실행
+            "max_instances": 1           # 중복 동시 실행 철저 제한
         }
     )
     
@@ -119,13 +120,26 @@ async def lifespan(app: FastAPI):
     websocket_handler = WebSocketLogHandler()
     websocket_handler.setFormatter(KstFormatter("[%(asctime)s] %(levelname)s - %(message)s"))
     
+    # 로컬 파일 로깅 설정 (실시간이 아닐 때도 로그가 파일에 남아 모니터링 보드 진입 시 복구 가능하게 지원)
+    import sys
+    import os
+    logs_dir = "logs"
+    os.makedirs(logs_dir, exist_ok=True)
+    is_test = os.environ.get("TDMS_ENV") == "test" or "pytest" in sys.modules
+    log_filename = "daily_update_test.log" if is_test else "daily_update.log"
+    log_file_path = os.path.join(logs_dir, log_filename)
+    
+    file_handler = logging.FileHandler(log_file_path, mode="a", encoding="utf-8")
+    file_handler.setFormatter(KstFormatter("[%(asctime)s] %(levelname)s - %(message)s"))
+    file_handler.setLevel(logging.INFO)
+    
     # INFO 레벨 이상의 로그를 정상 포착하도록 로거 및 핸들러 레벨 명시적 상향
     websocket_handler.setLevel(logging.INFO)
     logger.setLevel(logging.INFO)
     logging.getLogger().setLevel(logging.INFO)
     
     logging.getLogger().addHandler(websocket_handler)
-    logger.addHandler(websocket_handler)
+    logging.getLogger().addHandler(file_handler)
 
     # 데일리 시세 & 시가총액 수집: settings.schedule_kdms_daily_update 로딩
     try:
@@ -239,6 +253,22 @@ from utils.log_broadcaster import log_broadcaster
 @app.websocket("/ws/logs")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    
+    # 1. 파일에서 이전 로그 기록이 있으면 마지막 100라인 전송하여 모니터링 보드 진입 시 복구되도록 지원 (tail -f 유사 구현)
+    import os
+    logs_dir = "logs"
+    log_file_path = os.path.join(logs_dir, "daily_update.log")
+    if os.path.exists(log_file_path):
+        try:
+            with open(log_file_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                for line in lines[-100:]:
+                    await websocket.send_text(line.strip())
+        except Exception as e:
+            # 로깅 핸들러가 연결되기 전이거나 모듈 내부 로거 사용
+            print(f"Failed to pre-stream log file: {e}")
+
+    # 2. 실시간 로그 브로드캐스터 연동
     await log_broadcaster.connect(websocket)
     try:
         while True:

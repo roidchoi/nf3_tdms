@@ -11,24 +11,26 @@ class ValuationCalculator:
     def __init__(self, repo: ValuationRepo = None):
         self.repo = repo if repo else ValuationRepo()
 
-    def calculate_and_save(self, cik: str, start_date=None, rebuild=False, latest_val_dates_cache: Dict[str, Any] = None) -> None:
+    def calculate_and_save(self, cik: str, start_date=None, rebuild=False, latest_val_dates_cache: Dict[str, Any] = None, self_healing: bool = True) -> None:
         """
         특정 CIK의 PIT 가치평가 데이터를 계산하고 데이터베이스에 저장합니다.
         """
         # 1. 증분 계산(Incremental) 범위 처리
         latest_dt = None
         if not rebuild and start_date is None:
-            # [Self-healing] 최근 60일 이내의 가격 데이터 중 가치평가가 비어 있는 최초의 갭(Gap) 날짜를 판별합니다.
             import datetime
             from datetime import timedelta
             lookback_limit = (datetime.date.today() - timedelta(days=60)).strftime('%Y-%m-%d')
             
-            gap_dt = self.repo.get_earliest_valuation_gap_date(cik, start_date=lookback_limit)
+            gap_dt = None
+            if self_healing:
+                gap_dt = self.repo.get_earliest_valuation_gap_date(cik, start_date=lookback_limit)
+                
             if gap_dt:
                 start_date = str(gap_dt)
                 logger.info(f"[{cik}] Valuation gap detected starting at {start_date}. Activating self-healing mode.")
             else:
-                if latest_val_dates_cache is not None:
+                if latest_val_dates_cache is not None and cik in latest_val_dates_cache:
                     latest_dt = latest_val_dates_cache.get(cik)
                 else:
                     latest_dt = self.repo.get_latest_valuation_date(cik)

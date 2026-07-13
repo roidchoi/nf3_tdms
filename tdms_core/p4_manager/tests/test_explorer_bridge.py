@@ -77,6 +77,46 @@ def test_get_preview_table_us_success(mock_respx):
     assert data["count"] == 1
     assert data["data"][0]["ticker"] == "AAPL"
 
+def test_get_preview_table_with_new_filters_success(mock_respx):
+    """
+    [목적] 중계 API 호출 시 quarter, market_filter 쿼리 파라미터가 한국 백엔드로 올바르게 중계되는지 검증
+    """
+    mock_respx.get("http://p2_kdms:8000/api/data/preview/minute_target_history?limit=10&offset=0&quarter=2026Q1&market=KOSPI").respond(
+        json={
+            "table": "minute_target_history",
+            "count": 1,
+            "data": [{"quarter": "2026Q1", "market": "KOSPI", "symbol": "005930", "avg_trade_value": 1000.0, "rank": 1}],
+            "applied_quarter": "2026Q1"
+        },
+        status_code=200
+    )
+
+    response = client.get("/api/mgr/preview/kr/minute_target_history?limit=10&offset=0&quarter=2026Q1&market_filter=KOSPI")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["offline"] is False
+    assert data["applied_quarter"] == "2026Q1"
+    assert data["data"][0]["symbol"] == "005930"
+
+def test_get_preview_table_with_search_options_success(mock_respx):
+    """
+    [목적] 중계 API 호출 시 match_type, search_field 쿼리 파라미터가 백엔드로 올바르게 중계되는지 검증
+    """
+    mock_respx.get("http://p2_kdms:8000/api/data/preview/stock_info?limit=15&offset=0&keyword=%EC%82%BC%EC%84%B1&match_type=exact&search_field=name").respond(
+        json={
+            "table": "stock_info",
+            "count": 1,
+            "data": [{"stk_cd": "005930", "stk_nm": "삼성전자"}]
+        },
+        status_code=200
+    )
+
+    response = client.get("/api/mgr/preview/kr/stock_info?limit=15&offset=0&keyword=삼성&match_type=exact&search_field=name")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["offline"] is False
+    assert data["data"][0]["stk_nm"] == "삼성전자"
+
 # =================================================================
 # 3. 입력 검증 및 오류 처리 테스트 (Tier 1)
 # =================================================================

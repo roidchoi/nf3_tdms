@@ -131,19 +131,29 @@ async def run_task(
                 ),
                 trigger="date",
                 run_date=current_time,
-                misfire_grace_time=36000,
+                misfire_grace_time=900,
                 id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
                 name=task_id
             )
         else:
-            scheduler.add_job(
-                func=lambda: task_func(job_statuses, test_mode=test_mode),
-                trigger="date",
-                run_date=current_time,
-                misfire_grace_time=36000,
-                id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
-                name=task_id
-            )
+            if task_id == "financial_update":
+                scheduler.add_job(
+                    func=lambda: task_func(job_statuses, test_mode=test_mode, target_group=-1),
+                    trigger="date",
+                    run_date=current_time,
+                    misfire_grace_time=900,
+                    id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
+                    name=task_id
+                )
+            else:
+                scheduler.add_job(
+                    func=lambda: task_func(job_statuses, test_mode=test_mode),
+                    trigger="date",
+                    run_date=current_time,
+                    misfire_grace_time=900,
+                    id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
+                    name=task_id
+                )
 
         logger.info(f"수동 실행 요청 완료: '{task_id}' 등록 완료 (Test Mode: {test_mode})")
         return {
@@ -213,10 +223,11 @@ async def toggle_job(
 async def reschedule_job(
     job_id: str,
     hour: int,
-    minute: int
+    minute: int,
+    day_of_week: Optional[str] = Query(None, description="요일 설정 (예: 'mon-fri', 'wed,sat' 등)")
 ):
     """
-    특정 작업(job_id)의 매일 실행 시간(hour, minute)을 동적으로 변경(reschedule)하며,
+    특정 작업(job_id)의 매일 실행 시간(hour, minute) 및 요일(day_of_week)을 동적으로 변경(reschedule)하며,
     .env 파일의 스케줄 설정도 영구 보존 업데이트합니다.
     """
     if scheduler is None:
@@ -236,9 +247,12 @@ async def reschedule_job(
     var_name = var_map.get(job_id)
     
     try:
-        new_time_str = f"{hour:02d}:{minute:02d}"
+        if day_of_week:
+            new_time_str = f"{day_of_week}:{hour:02d}:{minute:02d}"
+        else:
+            new_time_str = f"{hour:02d}:{minute:02d}"
         
-        # 1. .env 파일 및 os.environ 업데이트 (요일 보존 처리 내장)
+        # 1. .env 파일 및 os.environ 업데이트
         if var_name:
             from p1_shared.utils.schedule_utils import update_env_value, parse_schedule_string
             import os
@@ -246,19 +260,65 @@ async def reschedule_job(
             
             # 2. 업데이트된 값에서 요일 정보 등을 다시 읽어 스케줄러 갱신
             updated_val = os.environ.get(var_name, new_time_str)
-            h, m, day_of_week = parse_schedule_string(updated_val)
+            h, m, parsed_dow = parse_schedule_string(updated_val)
             
-            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=parsed_dow, hour=h, minute=m)
             logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {updated_val}")
         else:
             # 매핑 변수가 없는 특수 job의 경우 기존 방식 적용
-            scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=hour, minute=minute)
             logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {new_time_str}")
             
-        return {"status": "SUCCESS", "job_id": job_id, "hour": hour, "minute": minute}
+        return {"status": "SUCCESS", "job_id": job_id, "hour": hour, "minute": minute, "day_of_week": day_of_week}
     except Exception as e:
         logger.error(f"스케줄러 일정 변경 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"스케줄 일정 변경에 실패했습니다: {str(e)}")
+
+
+@router.post("/scheduler/reload", summary="환경설정(.env)에서 스케줄을 다시 읽어 스케줄러 갱신")
+async def reload_scheduler_from_env():
+    """
+    물리 .env 파일을 다시 읽고, os.environ 갱신 후 
+    스케줄러에 등록된 각 작업들의 일정을 동적으로 갱신합니다.
+    """
+    if scheduler is None:
+        raise HTTPException(status_code=500, detail="스케줄러 시스템이 작동 중이 아닙니다.")
+        
+    try:
+        from dotenv import load_dotenv
+        import os
+        from p1_shared.utils.schedule_utils import parse_schedule_string
+        
+        # 1. .env 파일 강제 덮어쓰기 로드 (override=True)
+        env_path = "/app/.env" if os.path.exists("/app/.env") else None
+        load_dotenv(dotenv_path=env_path, override=True)
+        
+        # 2. 각 작업의 설정 키 갱신
+        var_map = {
+            "daily_update": ("SCHEDULE_KDMS_DAILY_UPDATE", "mon-fri"),
+            "financial_update": ("SCHEDULE_KDMS_FINANCIAL_UPDATE", None),
+            "backfill_minute_data": ("SCHEDULE_KDMS_BACKFILL_MINUTE", "sat")
+        }
+        
+        updated_jobs = []
+        for job_id, (env_key, default_days) in var_map.items():
+            job = scheduler.get_job(job_id)
+            if not job:
+                continue
+            
+            val = os.environ.get(env_key)
+            if not val:
+                continue
+                
+            h, m, day_of_week = parse_schedule_string(val, default_days=default_days)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            updated_jobs.append({"job_id": job_id, "schedule": val})
+            
+        logger.info(f"스케줄러 .env 재로드 완료: {updated_jobs}")
+        return {"status": "SUCCESS", "updated_jobs": updated_jobs}
+    except Exception as e:
+        logger.error(f"스케줄러 .env 재로드 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"스케줄 재로드 실패: {str(e)}")
 
 
 

@@ -114,7 +114,7 @@ def test_daily_task_runs_factor_calculation_and_refresh(mocker):
         master_repo=mock_master_repo,
         factor_repo=mock_factor_repo
     )
-    result = task.run(date(2026, 5, 14))
+    result = task.run(date(2026, 5, 14), rebuild_factors=True)
 
     # factor_repo 및 refresh_adjusted_ohlcv_batch 가 정상 호출되었는지 단언
     mock_factor_repo.upsert_adjustment_factors.assert_called_once()

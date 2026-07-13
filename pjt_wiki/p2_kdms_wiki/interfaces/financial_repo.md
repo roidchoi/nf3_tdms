@@ -37,15 +37,31 @@ class FinancialRepo:
 
 ---
 
+### `get_latest_statements_bulk(stk_cds: List[str], div_cls_code: str) -> List[Dict[str, Any]]`
+- **위치**: Line 38 [NEW]
+- **원리**: `DISTINCT ON (stk_cd, stac_yymm)`를 사용하여 지정한 복수 종목들의 결산년월별 최신 스냅샷 데이터를 조회
+- **쿼리**: `SELECT DISTINCT ON (stk_cd, stac_yymm) * FROM financial_statements WHERE stk_cd = ANY(%s) AND div_cls_code = %s ORDER BY stk_cd, stac_yymm, retrieved_at DESC;`
+- **반환**: 각 종목의 결산년월별 최신 재무제표 딕셔너리 리스트
+
+---
+
 ### `get_latest_ratio(stk_cd: str, stac_yymm: str, div_cls_code: str) -> Optional[Dict[str, Any]]`
-- **위치**: Line 38
+- **위치**: Line 55
 - **쿼리**: `SELECT * FROM financial_ratios ... ORDER BY retrieved_at DESC LIMIT 1`
 - **반환**: 딕셔너리 or `None`
 
 ---
 
+### `get_latest_ratios_bulk(stk_cds: List[str], div_cls_code: str) -> List[Dict[str, Any]]`
+- **위치**: Line 70 [NEW]
+- **원리**: `DISTINCT ON (stk_cd, stac_yymm)`를 사용하여 지정한 복수 종목들의 결산년월별 최신 비율 스냅샷 데이터를 조회
+- **쿼리**: `SELECT DISTINCT ON (stk_cd, stac_yymm) * FROM financial_ratios WHERE stk_cd = ANY(%s) AND div_cls_code = %s ORDER BY stk_cd, stac_yymm, retrieved_at DESC;`
+- **반환**: 각 종목의 결산년월별 최신 재무비율 딕셔너리 리스트
+
+---
+
 ### `insert_statements(statements: List[Dict[str, Any]]) -> int`
-- **위치**: Line 53
+- **위치**: Line 87
 - **테이블**: `financial_statements`
 - **전략**: ON CONFLICT 없이 항상 신규 INSERT → retrieved_at 별 버전 누적 (PIT 원칙)
 - **컬럼**: `stk_cd`, `stac_yymm`, `div_cls_code`, `cras`, `fxas`, `total_aset`, `flow_lblt`, `fix_lblt`, `total_lblt`, `cpfn`, `total_cptl`, `sale_account`, `sale_cost`, `sale_totl_prfi`, `bsop_prti`, `op_prfi`, `thtr_ntin`

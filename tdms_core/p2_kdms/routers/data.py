@@ -402,6 +402,38 @@ TABLE_DATE_COLUMNS = {
     "system_milestones": "milestone_date"
 }
 
+TABLE_FILTER_COLUMNS = {
+    "minute_target_history": {
+        "stk_cd": "symbol",
+        "quarter": "quarter",
+        "market": "market"
+    },
+    "stock_info": {
+        "stk_cd": "stk_cd",
+        "market": "market_type"
+    },
+    "daily_ohlcv": {
+        "stk_cd": "stk_cd"
+    },
+    "daily_market_cap": {
+        "stk_cd": "stk_cd"
+    },
+    "minute_ohlcv": {
+        "stk_cd": "stk_cd"
+    },
+    "financial_statements": {
+        "stk_cd": "stk_cd",
+        "quarter": "stac_yymm"
+    },
+    "financial_ratios": {
+        "stk_cd": "stk_cd",
+        "quarter": "stac_yymm"
+    },
+    "price_adjustment_factors": {
+        "stk_cd": "stk_cd"
+    }
+}
+
 @router.get("/preview/{table}")
 def get_preview_table(
     table: str,
@@ -410,6 +442,11 @@ def get_preview_table(
     stk_cd: str | None = Query(None, description="종목 코드 필터"),
     start_date: str | None = Query(None, description="시작 날짜 필터 (YYYY-MM-DD)"),
     end_date: str | None = Query(None, description="종료 날짜 필터 (YYYY-MM-DD)"),
+    quarter: str | None = Query(None, description="분기/결산연월 필터"),
+    market: str | None = Query(None, description="시장 구분 필터"),
+    keyword: str | None = Query(None, description="종목명/종목코드 검색 키워드"),
+    match_type: str = Query("contains", description="검색 매칭 방식 (contains | exact)"),
+    search_field: str = Query("all", description="검색 대상 필드 (all | code | name)"),
     pool = Depends(get_db_pool)
 ):
     if table not in ALLOWED_TABLES:
@@ -423,9 +460,60 @@ def get_preview_table(
     where_clauses = []
     params = []
 
-    if stk_cd:
-        where_clauses.append("stk_cd = %s")
-        params.append(stk_cd)
+    applied_quarter = None
+    if table == "minute_target_history":
+        # 사용자가 stk_cd를 명시적으로 검색하고, quarter를 입력하지 않은 경우에는
+        # 전체 분기를 다 조회할 수 있도록 quarter 조건을 생략한다.
+        if stk_cd and not quarter:
+            pass
+        else:
+            if not quarter:
+                try:
+                    with pool.get_cursor() as cursor:
+                        cursor.execute("SELECT MAX(quarter) FROM minute_target_history")
+                        row = cursor.fetchone()
+                        if row and row[0]:
+                            applied_quarter = row[0]
+                except Exception:
+                    pass
+                
+                if applied_quarter:
+                    where_clauses.append("quarter = %s")
+                    params.append(applied_quarter)
+            else:
+                applied_quarter = quarter
+                where_clauses.append("quarter = %s")
+                params.append(quarter)
+
+    # 키워드 검색 (stock_info 테이블인 경우)
+    if table == "stock_info" and keyword:
+        kw_pattern = keyword if match_type == "exact" else f"%{keyword}%"
+        operator = "=" if match_type == "exact" else "LIKE"
+        
+        if search_field == "code":
+            where_clauses.append(f"stk_cd {operator} %s")
+            params.append(kw_pattern)
+        elif search_field == "name":
+            where_clauses.append(f"stk_nm {operator} %s")
+            params.append(kw_pattern)
+        else: # all
+            where_clauses.append(f"(stk_cd {operator} %s OR stk_nm {operator} %s)")
+            params.extend([kw_pattern, kw_pattern])
+
+    filters = TABLE_FILTER_COLUMNS.get(table, {})
+    for filter_param, col_name in filters.items():
+        if table == "minute_target_history" and filter_param == "quarter":
+            continue
+        
+        if filter_param == "stk_cd" and stk_cd:
+            where_clauses.append(f"{col_name} = %s")
+            params.append(stk_cd)
+        elif filter_param == "quarter" and quarter:
+            where_clauses.append(f"{col_name} = %s")
+            params.append(quarter)
+        elif filter_param == "market" and market:
+            where_clauses.append(f"{col_name} = %s")
+            params.append(market)
 
     date_col = TABLE_DATE_COLUMNS.get(table)
     if date_col:
@@ -441,7 +529,9 @@ def get_preview_table(
         where_str = "WHERE " + " AND ".join(where_clauses)
 
     order_clause = ""
-    if date_col:
+    if table == "minute_target_history":
+        order_clause = "ORDER BY quarter DESC, market DESC, rank DESC"
+    elif date_col:
         order_clause = f"ORDER BY {date_col} DESC"
     elif table == "stock_info":
         order_clause = "ORDER BY stk_cd ASC"
@@ -470,11 +560,14 @@ def get_preview_table(
                         row_dict[col_name] = val
                 data.append(row_dict)
 
-            return {
+            resp_obj = {
                 "table": table,
                 "count": total_count,
                 "data": data
             }
+            if applied_quarter is not None:
+                resp_obj["applied_quarter"] = applied_quarter
+            return resp_obj
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
 

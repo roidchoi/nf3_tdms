@@ -13,6 +13,11 @@
     *   `stk_cd`: `str | null` (선택, 종목코드 필터링)
     *   `start_date`: `str | null` (선택, YYYY-MM-DD 포맷)
     *   `end_date`: `str | null` (선택, YYYY-MM-DD 포맷)
+    *   `quarter`: `str | null` (선택, YYYYQn 포맷 분기 필터링)
+    *   `market_filter`: `str | null` (선택, 시장/거래소 필터링)
+    *   `keyword`: `str | null` (선택, 종목 코드/명칭 헬퍼 검색어)
+    *   `match_type`: `str | null` (선택, 'contains' | 'exact' 매칭 방식)
+    *   `search_field`: `str | null` (선택, 'all' | 'code' | 'name' 검색 범위)
 
 ## 2. 응답 구조 (JSON)
 

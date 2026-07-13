@@ -114,6 +114,22 @@ def test_financial_parser_handles_sec_client_timeout(mocker):
     parser.run(["0000320193"]) 
 
 
+def test_financial_parser_handles_304_not_modified_by_skipping(mocker):
+    """
+    [목적] SECClient.get_company_facts가 None(304 Not Modified)을 반환할 때,
+           FinancialParser가 parsing 및 적재 로직을 조기 스킵하는지 검증.
+    """
+    parser = FinancialParser()
+    mocker.patch.object(parser.sec_client, "get_company_facts", return_value=None)
+    mock_process_shares = mocker.patch.object(parser, "_process_shares_outstanding")
+    
+    # 304 상태이므로 get_company_facts가 None을 리턴하고, 
+    # 이후 _process_shares_outstanding이나 레포지토리 저장 호출 등이 스킵되어야 함.
+    parser.run(["0000320193"])
+    
+    mock_process_shares.assert_not_called()
+
+
 # =====================================================================
 # TIER 3 - 실제 통합 테스트 (Physical Integration Tests)
 # =====================================================================

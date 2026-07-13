@@ -376,6 +376,24 @@ TABLE_DATE_COLUMNS = {
     "us_financial_metrics": "filed_dt"
 }
 
+TABLE_FILTER_COLUMNS = {
+    "us_ticker_master": {
+        "stk_cd": "latest_ticker",
+        "market": "exchange"
+    },
+    "us_daily_price": {
+        "stk_cd": "ticker"
+    },
+    "us_ticker_history": { "stk_cd": "cik" },
+    "us_collection_blacklist": { "stk_cd": "cik" },
+    "us_financial_facts": { "stk_cd": "cik" },
+    "us_standard_financials": { "stk_cd": "cik" },
+    "us_share_history": { "stk_cd": "cik" },
+    "us_price_adjustment_factors": { "stk_cd": "cik" },
+    "us_daily_valuation": { "stk_cd": "cik" },
+    "us_financial_metrics": { "stk_cd": "cik" }
+}
+
 @router.get("/preview/{table}")
 def get_preview_table(
     table: str,
@@ -384,6 +402,11 @@ def get_preview_table(
     stk_cd: Optional[str] = Query(None, description="Target stock ticker/symbol filter"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
+    quarter: Optional[str] = Query(None, description="Quarter/period filter"),
+    market: Optional[str] = Query(None, description="Market/Exchange filter"),
+    keyword: Optional[str] = Query(None, description="Search keyword for ticker/name/cik"),
+    match_type: str = Query("contains", description="검색 매칭 방식 (contains | exact)"),
+    search_field: str = Query("all", description="검색 대상 필드 (all | code | name)"),
     pool = Depends(get_db_pool)
 ):
     """
@@ -403,18 +426,32 @@ def get_preview_table(
     where_clauses = []
     params = []
 
-    # 종목 코드/CIK 필터링 (미국 주식은 테이블에 따라 ticker 또는 cik 컬럼을 가짐)
-    if stk_cd:
-        # us_ticker_master 등에는 latest_ticker 필드, 시세 등에는 ticker 필드나 cik 필드를 쓸 수 있음
-        # 심플하게 ticker 또는 latest_ticker 등 테이블 형태에 따라 matching 처리
-        if table in ["us_ticker_master"]:
-            where_clauses.append("latest_ticker = %s")
-        elif table in ["us_daily_price"]:
-            where_clauses.append("ticker = %s")
-        else:
-            # 다른 테이블은 ticker가 없으므로 cik에 대한 맵핑 시도로 간주
-            where_clauses.append("cik = %s")
-        params.append(stk_cd)
+    # 키워드 검색 (us_ticker_master 테이블인 경우)
+    if table == "us_ticker_master" and keyword:
+        kw_pattern = keyword if match_type == "exact" else f"%{keyword}%"
+        operator = "=" if match_type == "exact" else "ILIKE"
+        
+        if search_field == "code":
+            where_clauses.append(f"(latest_ticker {operator} %s OR cik {operator} %s)")
+            params.extend([kw_pattern, kw_pattern])
+        elif search_field == "name":
+            where_clauses.append(f"latest_name {operator} %s")
+            params.append(kw_pattern)
+        else: # all
+            where_clauses.append(f"(latest_ticker {operator} %s OR latest_name {operator} %s OR cik {operator} %s)")
+            params.extend([kw_pattern, kw_pattern, kw_pattern])
+
+    filters = TABLE_FILTER_COLUMNS.get(table, {})
+    for filter_param, col_name in filters.items():
+        if filter_param == "stk_cd" and stk_cd:
+            where_clauses.append(f"{col_name} = %s")
+            params.append(stk_cd)
+        elif filter_param == "quarter" and quarter:
+            where_clauses.append(f"{col_name} = %s")
+            params.append(quarter)
+        elif filter_param == "market" and market:
+            where_clauses.append(f"{col_name} = %s")
+            params.append(market)
 
     # 날짜 필터링
     date_col = TABLE_DATE_COLUMNS.get(table)

@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
 
 class DailyRoutine:
-    def __init__(self):
-        self.master_repo = MasterRepo()
-        self.blacklist_repo = BlacklistRepo()
-        self.blacklist_mgr = BlacklistManager(repo=self.blacklist_repo)
+    def __init__(self, master_repo=None, blacklist_repo=None, blacklist_mgr=None):
+        self.master_repo = master_repo or MasterRepo()
+        self.blacklist_repo = blacklist_repo or BlacklistRepo()
+        self.blacklist_mgr = blacklist_mgr or BlacklistManager(repo=self.blacklist_repo)
         
         # 외부 수집 모듈 지연 초기화
         self.master = MasterSync()
@@ -76,15 +76,19 @@ class DailyRoutine:
                 cur.execute(query, (current, opnd_yn))
                 current += timedelta(days=1)
 
-    async def run(self, test_limit: int = None, target_date: date = None) -> Dict[str, Any]:
+    async def run(self, test_limit: int = None, target_date: date = None, target_group: int = None) -> Dict[str, Any]:
         """
         Step 1~5 일일 자동화 파이프라인 전체를 오케스트레이션합니다.
         각 스텝은 예외 차단을 통해 부분 성공(Partial Success)을 보장합니다.
         """
         # 0. 동적 FileHandler 바인딩 (실시간 웹소켓 로그 스트리밍용)
+        import sys
         logs_dir = "logs"
         os.makedirs(logs_dir, exist_ok=True)
-        log_file_path = os.path.join(logs_dir, "daily_routine.log")
+        # 테스트 환경인 경우 테스트 로그 파일로 경로 격리하여 프로덕션 로그 오염 방지
+        is_test = os.environ.get("TDMS_ENV") == "test" or "pytest" in sys.modules
+        log_filename = "daily_routine_test.log" if is_test else "daily_routine.log"
+        log_file_path = os.path.join(logs_dir, log_filename)
         
         file_handler = None
         root_logger = logging.getLogger()
@@ -112,19 +116,8 @@ class DailyRoutine:
             except Exception as e:
                 logger.error(f"Failed to sync trading calendar up to {target_date}: {e}", exc_info=True)
      
-            # 1. target_date가 미국 영업일이 아니면 수집 루틴 전체 생략 후 즉시 스킵 리포트 리턴
-            if not is_us_trading_day(target_date):
-                logger.info(f"Target date {target_date} is not a US trading day. Skipping daily routine.")
-                report = {
-                    "routine": "daily_routine",
-                    "start_time": datetime.now(KST).isoformat(),
-                    "end_time": datetime.now(KST).isoformat(),
-                    "status": "SKIPPED",
-                    "msg": f"US Holiday or weekend on {target_date}. skipping execution.",
-                    "steps": []
-                }
-                self._save_report(report)
-                return report
+            # 1. target_date가 미국 영업일인지 여부와 상관없이 수/토 정기 수집 파이프라인 전체를 기동합니다.
+            # (단, trading_calendar 동기화를 통해 휴장 여부는 DB에 계속 누적 갱신됩니다.)
      
             start_time = datetime.now(KST)
             report = {
@@ -157,11 +150,38 @@ class DailyRoutine:
                     "error": str(e)
                 })
 
-            # 수집 대상 CIK 추출 (블랙리스트 제외)
-            targets = self.master_repo.get_collect_targets()
-            ciks = [t['cik'] for t in targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
+            # 수집 대상 CIK 추출 및 블랙리스트 제외 (가격 수집용 전체 대상)
+            all_targets = self.master_repo.get_collect_targets()
+            all_ciks = [t['cik'] for t in all_targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
             if test_limit:
-                ciks = ciks[:test_limit]
+                all_ciks_for_price = all_ciks[:test_limit]
+            else:
+                all_ciks_for_price = all_ciks
+
+            # 재무정보(SEC Filing) 및 가치평가 연산 대상에만 2분할 MOD 2 샤딩 적용
+            if target_group is None:
+                current_weekday = datetime.now(KST).weekday()
+                if current_weekday in (2, 3, 4):
+                    target_group = 0
+                else:
+                    target_group = 1
+
+            import hashlib
+            if target_group in (0, 1):
+                sharded_targets = []
+                for t in all_targets:
+                    cik_str = t['cik']
+                    h_val = int(hashlib.md5(cik_str.encode()).hexdigest(), 16) % 2
+                    if h_val == target_group:
+                        sharded_targets.append(t)
+                logger.info(f"Target Group Filter (Financial & Calculators): Selected Group {target_group} ({len(sharded_targets)}/{len(all_targets)} targets).")
+                sharded_ciks = [t['cik'] for t in sharded_targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
+            else:
+                logger.info(f"Target Group Filter (Financial & Calculators): Disabled (target_group={target_group}). Processing all {len(all_targets)} targets.")
+                sharded_ciks = all_ciks.copy()
+
+            if test_limit:
+                sharded_ciks = sharded_ciks[:test_limit]
 
             # DB 내 최신 가격 적재일 기준 동적 lookback_days 계산
             db_max_date = None
@@ -188,15 +208,18 @@ class DailyRoutine:
             # ----------------------------------------------------
             # Step 2: Market Data Update (OHLCV & Factors)
             # ----------------------------------------------------
+            # ----------------------------------------------------
+            # Step 2: Market Data Update (OHLCV & Factors) - 가격 정보는 전체 수집
+            # ----------------------------------------------------
             step_start = datetime.now(KST)
-            logger.info(f"[Step 2] Fetching Market Prices and Factors for {len(ciks)} companies (Lookback: {lookback_days} days)...")
+            logger.info(f"[Step 2] Fetching Market Prices and Factors for {len(all_ciks_for_price)} companies (Lookback: {lookback_days} days)...")
             try:
-                await asyncio.to_thread(self.market_loader.collect_daily_updates, lookback_days=lookback_days, ciks=ciks)
+                await asyncio.to_thread(self.market_loader.collect_daily_updates, lookback_days=lookback_days, ciks=all_ciks_for_price)
                 report["steps"].append({
                     "step": "Market Data Loader",
                     "status": "SUCCESS",
                     "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
-                    "details": {"processed_count": len(ciks), "lookback_days": lookback_days}
+                    "details": {"processed_count": len(all_ciks_for_price), "lookback_days": lookback_days}
                 })
             except Exception as e:
                 logger.error(f"[Step 2] Market Data Loader failed: {e}", exc_info=True)
@@ -208,18 +231,18 @@ class DailyRoutine:
                 })
 
             # ----------------------------------------------------
-            # Step 3: SEC Filing Index & Financial Parser
+            # Step 3: SEC Filing Index & Financial Parser - 재무정보는 분할 수집
             # ----------------------------------------------------
             step_start = datetime.now(KST)
-            logger.info(f"[Step 3] SEC Filing Financial Parsing for {len(ciks)} companies...")
+            logger.info(f"[Step 3] SEC Filing Financial Parsing for {len(sharded_ciks)} companies...")
             try:
                 # financial_parser.run은 동기 함수임
-                await asyncio.to_thread(self.fin_parser.run, ciks=ciks)
+                await asyncio.to_thread(self.fin_parser.run, ciks=sharded_ciks)
                 report["steps"].append({
                     "step": "Financial Parser",
                     "status": "SUCCESS",
                     "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
-                    "details": {"processed_count": len(ciks)}
+                    "details": {"processed_count": len(sharded_ciks)}
                 })
             except Exception as e:
                 logger.error(f"[Step 3] Financial Parser failed: {e}", exc_info=True)
@@ -231,22 +254,37 @@ class DailyRoutine:
                 })
 
             # ----------------------------------------------------
-            # Step 3.5 & 4: Metric & Valuation Calculators
+            # Step 3.5 & 4: Metric & Valuation Calculators - 가치평가는 분할 적용
             # ----------------------------------------------------
             step_start = datetime.now(KST)
-            logger.info("[Step 3.5 & 4] Calculating Financial Metrics & Valuations...")
+            logger.info(f"[Step 3.5 & 4] Calculating Financial Metrics & Valuations for {len(sharded_ciks)} companies...")
             try:
-                calc_success, calc_fail = await asyncio.to_thread(self._run_calculations, ciks)
+                # CIK별 최신 가치평가 날짜 사전 벌크 적재 캐시 구축 (1회 쿼리)
+                latest_val_dates_cache = {}
+                if self.val_calc and hasattr(self.val_calc.repo, "get_all_latest_valuation_dates"):
+                    try:
+                        latest_val_dates_cache = self.val_calc.repo.get_all_latest_valuation_dates(sharded_ciks)
+                        logger.info(f"Loaded {len(latest_val_dates_cache)} latest valuation dates into memory cache.")
+                    except Exception as cache_err:
+                        logger.warning(f"Failed to load latest valuation dates bulk cache: {cache_err}")
+
+                # 일일 루틴 시에는 self_healing=False로 설정하여 매번 갭 탐색 SQL(3,000회) 방지
+                calc_success, calc_fail = await asyncio.to_thread(
+                    self._run_calculations, 
+                    sharded_ciks, 
+                    latest_val_dates_cache=latest_val_dates_cache, 
+                    self_healing=False
+                )
             except Exception as e:
                 logger.error(f"[Step 3.5 & 4] Calculation loop failed: {e}", exc_info=True)
-                calc_success, calc_fail = 0, len(ciks)
+                calc_success, calc_fail = 0, len(sharded_ciks)
 
             report["steps"].append({
                 "step": "Metric & Valuation Calculation",
                 "status": "SUCCESS" if calc_fail == 0 else "PARTIAL_SUCCESS",
                 "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
                 "details": {
-                    "total_target": len(ciks),
+                    "total_target": len(sharded_ciks),
                     "success_count": calc_success,
                     "fail_count": calc_fail
                 }
@@ -293,14 +331,40 @@ class DailyRoutine:
                 file_handler.close()
                 root_logger.removeHandler(file_handler)
 
-    def _run_calculations(self, ciks: List[str]) -> tuple[int, int]:
+    def _run_calculations(self, ciks: List[str], latest_val_dates_cache: Dict[str, Any] = None, self_healing: bool = False) -> tuple[int, int]:
         """CIK별 지표 및 밸류에이션 동기 연산 루프"""
+        import time
         calc_success = 0
         calc_fail = 0
-        for cik in ciks:
+        total = len(ciks)
+        loop_start_time = time.time()
+        
+        for idx, cik in enumerate(ciks):
+            # 50개 종목 연산마다 또는 마지막 종목일 때 진행 정보 로깅
+            if idx % 50 == 0 or idx == total - 1:
+                elapsed = time.time() - loop_start_time
+                if elapsed == 0:
+                    elapsed = 1e-6
+                items_per_sec = (idx + 1) / elapsed
+                remaining = total - (idx + 1)
+                eta_seconds = remaining / items_per_sec if items_per_sec > 0 else 0
+                eta_str = time.strftime('%H:%M:%S', time.gmtime(eta_seconds))
+                progress_pct = (idx + 1) / total * 100.0
+                
+                logger.info(
+                    f"[Metric & Valuation Calculation] Progress: {progress_pct:.1f}% ({idx+1}/{total}) | "
+                    f"Speed: {items_per_sec:.1f} it/s | Elapsed: {elapsed:.0f}s | ETA: {eta_str} | "
+                    f"Current CIK: {cik}"
+                )
+
             try:
                 self.metric_calc.calculate_and_save(cik, rebuild=False)
-                self.val_calc.calculate_and_save(cik, rebuild=False)
+                self.val_calc.calculate_and_save(
+                    cik, 
+                    rebuild=False, 
+                    latest_val_dates_cache=latest_val_dates_cache, 
+                    self_healing=self_healing
+                )
                 calc_success += 1
             except Exception as e:
                 logger.error(f"Calculator failed for CIK: {cik}. Error: {e}")
@@ -330,16 +394,22 @@ class DailyRoutine:
         from p3_usdms.collectors.master_enricher import MasterEnricher
         enricher = MasterEnricher(master_repo=self.master_repo, blacklist_mgr=self.blacklist_mgr)
         
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            enriched_count = loop.create_task(enricher.run_enrichment(limit=50))
-            # 비동기 실행 스케줄로 던짐
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(enricher.run_enrichment(limit=50))
             enriched = 0
-        else:
-            enriched = loop.run_until_complete(enricher.run_enrichment(limit=50))
+            logger.info("Weekly Backfill: Scheduled MasterEnricher task in running loop.")
+        except RuntimeError:
+            enriched = asyncio.run(enricher.run_enrichment(limit=50))
             
         # 3. Dynamic Targeting 적용
         target_stats = self.master_repo.apply_targeting_rules()
+        
+        # 4. Valuation 갭 복구 (Self-healing=True)
+        targets = self.master_repo.get_collect_targets()
+        ciks = [t['cik'] for t in targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
+        logger.info(f"Weekly Backfill: Running Valuation self-healing (gap scanning) for {len(ciks)} companies...")
+        calc_success, calc_fail = self._run_calculations(ciks, self_healing=True)
         
         report = {
             "routine": "weekly_backfill",
@@ -349,7 +419,8 @@ class DailyRoutine:
             "details": {
                 "auto_released_blacklist_count": released,
                 "enriched_metadata_count": enriched,
-                "targeting_rules_applied": target_stats
+                "targeting_rules_applied": target_stats,
+                "self_healing_valuation": {"success": calc_success, "fail": calc_fail}
             }
         }
         self._save_report(report)

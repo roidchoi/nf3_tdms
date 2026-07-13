@@ -49,6 +49,17 @@ class SECClient:
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
         self.timeout = 30
+        
+        # If-Modified-Since HTTP 캐시 관리를 위한 로컬 파일 캐시 설정
+        import json
+        self.cache_file = os.path.join(os.path.dirname(__file__), "sec_last_modified_cache.json")
+        self.last_modified_cache = {}
+        if os.path.exists(self.cache_file):
+            try:
+                with open(self.cache_file, "r") as f:
+                    self.last_modified_cache = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load SEC Last-Modified cache: {e}")
 
     def _enforce_rate_limit(self):
         elapsed = time.time() - self.last_request_time
@@ -93,18 +104,40 @@ class SECClient:
             logger.error(f"Failed to fetch company_tickers.json: {e}")
             raise
 
-    def get_company_facts(self, cik: str) -> dict[str, Any]:
+    def get_company_facts(self, cik: str) -> Optional[dict[str, Any]]:
         """
         특정 CIK의 XBRL company facts raw 데이터를 조회합니다.
         URL: https://data.sec.gov/api/xbrl/companyfacts/CIK{cik_10digit}.json
+        If-Modified-Since 헤더를 지원하여 변경 사항이 없을 때는 None을 반환(304 Not Modified).
         """
         padded_cik = str(cik).zfill(10)
         url = f"{self.BASE_URL}/api/xbrl/companyfacts/CIK{padded_cik}.json"
         
+        headers = self.headers.copy()
+        last_mod = self.last_modified_cache.get(padded_cik)
+        if last_mod:
+            headers["If-Modified-Since"] = last_mod
+            
         self._enforce_rate_limit()
         try:
-            resp = self.session.get(url, headers=self.headers, timeout=self.timeout)
+            resp = self.session.get(url, headers=headers, timeout=self.timeout)
+            if resp.status_code == 304:
+                logger.info(f"CIK {cik} facts data not modified (304). Skipping fetch.")
+                return None
+                
             resp.raise_for_status()
+            
+            # Last-Modified 헤더 갱신 및 캐시 저장
+            new_last_mod = resp.headers.get("Last-Modified")
+            if new_last_mod:
+                self.last_modified_cache[padded_cik] = new_last_mod
+                try:
+                    import json
+                    with open(self.cache_file, "w") as f:
+                        json.dump(self.last_modified_cache, f)
+                except Exception as cache_err:
+                    logger.warning(f"Failed to save SEC Last-Modified cache to file: {cache_err}")
+                    
             return resp.json()
         except requests.exceptions.ReadTimeout:
             logger.error(f"Read timeout fetching facts for CIK {cik} from {url}")

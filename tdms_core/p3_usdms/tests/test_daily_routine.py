@@ -23,8 +23,12 @@ def test_daily_routine_health_check_isolates_and_rolls_back_anomalies(mocker):
 
     from p3_usdms.tasks.daily_routine import DailyRoutine
     from datetime import date
-    routine = DailyRoutine()
-    routine.db = mock_db
+    mock_blacklist_mgr = mocker.MagicMock()
+    routine = DailyRoutine(
+        master_repo=mock_db,
+        blacklist_repo=mocker.MagicMock(),
+        blacklist_mgr=mock_blacklist_mgr
+    )
     # Anomaly Detection 및 롤백 실행
     anomalies = routine._detect_anomalies_and_quarantine(date.today())
     
@@ -50,7 +54,11 @@ async def test_daily_routine_continues_on_step_failure(mocker):
     [유도] Step 1 실행 시 강제 Exception을 발생시켰을 때, Step 2의 실행 메서드가 여전히 호출되는지 검증.
     """
     from p3_usdms.tasks.daily_routine import DailyRoutine
-    routine = DailyRoutine()
+    routine = DailyRoutine(
+        master_repo=mocker.MagicMock(),
+        blacklist_repo=mocker.MagicMock(),
+        blacklist_mgr=mocker.MagicMock()
+    )
     
     # Step 1 (MasterSync) 강제 실패 설정
     mock_master = mocker.Mock()
@@ -99,6 +107,64 @@ def test_daily_routine_manual_run_prevents_concurrency_conflict(mocker):
     assert "already running" in response.json()["detail"]
 
 
+@pytest.mark.asyncio
+async def test_daily_routine_uses_valuation_bulk_cache_and_disables_self_healing(mocker):
+    """
+    [목적] DailyRoutine.run() 실행 시, CIK별 최신 가치평가 날짜를 벌크 캐시(get_all_latest_valuation_dates)하고,
+           self_healing=False로 설정하여 갭 탐색을 최소화하는지 검증.
+    """
+    from p3_usdms.tasks.daily_routine import DailyRoutine
+    from datetime import date
+    
+    routine = DailyRoutine(
+        master_repo=mocker.Mock(),
+        blacklist_repo=mocker.Mock(),
+        blacklist_mgr=mocker.Mock()
+    )
+    
+    # dependencies 모킹
+    routine.master = mocker.Mock()
+    routine.master.sync_daily.return_value = {}
+    routine.market_loader = mocker.Mock()
+    routine.fin_parser = mocker.Mock()
+    
+    # 밸류에이션 계산 모듈 및 리포지토리 모킹
+    routine.val_calc = mocker.Mock()
+    routine.val_calc.repo = mocker.Mock()
+    # 2개 CIK에 대한 최신 날짜 벌크 리턴 설정
+    mock_cache = {"0000320193": date(2026, 5, 13), "00000660": date(2026, 5, 12)}
+    routine.val_calc.repo.get_all_latest_valuation_dates.return_value = mock_cache
+    
+    # collect_targets 설정
+    routine.master_repo = mocker.Mock()
+    routine.master_repo.get_collect_targets.return_value = [
+        {"cik": "0000320193"}, {"cik": "00000660"}
+    ]
+    routine.db = routine.master_repo
+    routine.blacklist_mgr = mocker.Mock()
+    routine.blacklist_mgr.is_blacklisted.return_value = False
+    
+    # _run_calculations 직접 호출 가로채서 인자 검증
+    mock_run_calc = mocker.patch.object(routine, "_run_calculations", return_value=(2, 0))
+    
+    # anomaly detection 및 report 스킵
+    routine._detect_anomalies_and_quarantine = mocker.Mock(return_value=[])
+    routine._save_report = mocker.Mock()
+    
+    # 실행 (전체 수집 모드인 target_group=-1로 구동하여 샤딩 필터링 우회)
+    report = await routine.run(target_date=date(2026, 5, 14), target_group=-1)
+    
+    # assert get_all_latest_valuation_dates 가 올바르게 호출됨
+    routine.val_calc.repo.get_all_latest_valuation_dates.assert_called_once_with(["0000320193", "00000660"])
+    
+    # assert _run_calculations에 캐시가 들어가고 self_healing=False가 적용됨
+    mock_run_calc.assert_called_once_with(
+        ["0000320193", "00000660"],
+        latest_val_dates_cache=mock_cache,
+        self_healing=False
+    )
+
+
 @pytest.mark.integration
 def test_blacklist_repository_with_real_db(real_pool):
     """
@@ -125,3 +191,65 @@ def test_blacklist_repository_with_real_db(real_pool):
     # 3. 릴리즈 및 확인
     repo.release_blacklist(test_cik, admin_note="Test Release")
     assert repo.is_blocked(test_cik) is False
+
+
+@pytest.mark.asyncio
+async def test_daily_routine_partition_sharding(mocker):
+    """
+    [목적] DailyRoutine.run() 실행 시, CIK 해시 MOD 2 연산에 따라 
+           target_group (0 또는 1) 필터링이 정상적으로 종목을 분할 수집하는지 검증.
+    """
+    from p3_usdms.tasks.daily_routine import DailyRoutine
+    from datetime import date
+    
+    routine = DailyRoutine(
+        master_repo=mocker.Mock(),
+        blacklist_repo=mocker.Mock(),
+        blacklist_mgr=mocker.Mock()
+    )
+    
+    # dependencies 모킹
+    routine.master = mocker.Mock()
+    routine.master.sync_daily.return_value = {}
+    routine.market_loader = mocker.Mock()
+    routine.fin_parser = mocker.Mock()
+    
+    # 밸류에이션 계산 모듈 및 리포지토리 모킹
+    routine.val_calc = mocker.Mock()
+    routine.val_calc.repo = mocker.Mock()
+    routine.val_calc.repo.get_all_latest_valuation_dates.return_value = {}
+    
+    # collect_targets 설정: 
+    # '0000320193' -> MD5 해시 MOD 2 == 0
+    # '00000660' -> MD5 해시 MOD 2 == 1
+    routine.master_repo = mocker.Mock()
+    routine.master_repo.get_collect_targets.return_value = [
+        {"cik": "0000320193"}, {"cik": "00000660"}
+    ]
+    routine.db = routine.master_repo
+    routine.blacklist_mgr = mocker.Mock()
+    routine.blacklist_mgr.is_blacklisted.return_value = False
+    
+    # _run_calculations 가로채기
+    mock_run_calc = mocker.patch.object(routine, "_run_calculations", return_value=(1, 0))
+    
+    # anomaly detection 및 report 스킵
+    routine._detect_anomalies_and_quarantine = mocker.Mock(return_value=[])
+    routine._save_report = mocker.Mock()
+    
+    # 1. target_group = 0 실행 -> '0000320193'만 수집해야 함
+    await routine.run(target_date=date(2026, 5, 14), target_group=0)
+    mock_run_calc.assert_called_with(
+        ["0000320193"],
+        latest_val_dates_cache={},
+        self_healing=False
+    )
+    
+    # 2. target_group = 1 실행 -> '00000660'만 수집해야 함
+    mock_run_calc.reset_mock()
+    await routine.run(target_date=date(2026, 5, 14), target_group=1)
+    mock_run_calc.assert_called_with(
+        ["00000660"],
+        latest_val_dates_cache={},
+        self_healing=False
+    )

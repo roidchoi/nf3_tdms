@@ -29,9 +29,9 @@ class DailyRoutine:
         일일 수집 파이프라인의 전체 과정을 비동기로 실행합니다.
         
         [실행 절차]
-        - Step 0: 캘린더 자동 동기화 (`sync_trading_calendar`) 및 영업일 검사
-          * target_date(기본값: 오늘 - 1일) 시점까지 `trading_calendar` 테이블을 자동 갱신합니다.
-          * target_date가 미국 영업일이 아니면(is_us_trading_day가 False), 즉시 스킵 리포트(`"status": "SKIPPED", "msg": "Skipping Daily Routine: US Holiday or Weekend"`)를 생성하여 종료합니다.
+        - Step 0: 캘린더 자동 동기화 (`sync_trading_calendar`) 및 영업일 기록
+          * target_date(기본값: 오늘 - 1일) 시점까지 `trading_calendar` 테이블을 자동 갱신(영업일 여부 'Y'/'N' 입력)합니다.
+          * 수/토요일 배치 기동의 특성상 target_date가 미국 영업일이 아니더라도(휴장일/공휴일 등) 수집기 파이프라인 전체를 스킵하지 않고 정상 기동하여 SEC 공시 싱크 및 최신 캘린더 데이터 갱신을 누적 지속하도록 스킵 조기 종료 처리를 배제합니다.
         - Step 1: MasterSync 구동 (SEC 마스터 종목 및 이력 동기화)
         - 대상 추출: Active 수집 대상 중 Blacklist에 의해 차단되지 않은 CIK 목록을 스캔합니다.
         - 동적 Lookback 산출: DB 내 `us_daily_price` 최신 적재 날짜를 조회하여, 오늘 대비 공백 기간(days_diff)에 안전 마진(+2)을 준 동적 `lookback_days`를 결정합니다. (최소 10일, DB 데이터가 없으면 기본 30일)

@@ -32,11 +32,33 @@ class DatabaseManager:
         stocks = self.master_repo.get_all_active_stocks()
         return [s["stk_cd"] for s in stocks if s.get("stk_cd")]
 
+    def get_financial_update_targets(self, limit: int = 600) -> List[str]:
+        """가장 오랫동안 업데이트 검사를 받지 않았거나 수집 이력이 없는 종목을 선별합니다."""
+        query = """
+            SELECT s.stk_cd, MAX(COALESCE(fs.retrieved_at, '1970-01-01 00:00:00+09')) as last_retrieved
+            FROM stock_info s
+            LEFT JOIN financial_statements fs ON s.stk_cd = fs.stk_cd
+            WHERE s.status = 'listed'
+            GROUP BY s.stk_cd
+            ORDER BY last_retrieved ASC
+            LIMIT %s;
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (limit,))
+            rows = cursor.fetchall()
+            return [r[0] for r in rows if r[0]]
+
     def get_latest_financial_statement(self, stk_cd: str, stac_yymm: str, div_cls_code: str) -> Optional[Dict[str, Any]]:
         return self.financial_repo.get_latest_statement(stk_cd, stac_yymm, div_cls_code)
 
     def get_latest_financial_ratio(self, stk_cd: str, stac_yymm: str, div_cls_code: str) -> Optional[Dict[str, Any]]:
         return self.financial_repo.get_latest_ratio(stk_cd, stac_yymm, div_cls_code)
+
+    def get_latest_statements_bulk(self, stk_cds: List[str], div_cls_code: str) -> List[Dict[str, Any]]:
+        return self.financial_repo.get_latest_statements_bulk(stk_cds, div_cls_code)
+
+    def get_latest_ratios_bulk(self, stk_cds: List[str], div_cls_code: str) -> List[Dict[str, Any]]:
+        return self.financial_repo.get_latest_ratios_bulk(stk_cds, div_cls_code)
 
     def insert_financial_statements(self, data: List[Dict[str, Any]]) -> int:
         return self.financial_repo.insert_statements(data)
@@ -85,12 +107,13 @@ class KisAPIError(Exception):
         self.error_code = error_code
 
 
-def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
+def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, target_group: Optional[int] = None):
     """
     KIS 재무정보 수집 및 PIT 버전 관리 파이프라인 태스크.
     
     :param job_statuses: 전역 상태 공유용 딕셔너리
     :param test_mode: True일 경우 대표 종목군만 샘플링하여 수행
+    :param target_group: None이면 요일별 자동 5분할, 0~4이면 특정 그룹 수집, -1이면 수동 전 종목 수집
     """
     job_id = "financial_update"
     start_time = datetime.now(KST)
@@ -113,7 +136,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
         kis_api = KisREST(mock=test_mode, log_level=1)
         db = DatabaseManager()
 
-        # 1. 대상 종목 결정
+        # 1. 대상 종목 결정 (결정론적 해시 5분할 또는 수동 전종목)
         job_statuses[job_id].update({
             "phase": "1/3",
             "phase_name": "대상 종목 조회",
@@ -126,9 +149,29 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             target_stocks = ["005930", "000660"]
             logger.info(f"[{job_id}] 테스트 대상: {len(target_stocks)}개 종목")
         else:
-            logger.info(f"[{job_id}] 전체 상장 종목 대상 재무정보 수집 시작")
-            target_stocks = db.get_all_stock_codes(active_only=True)
-            logger.info(f"[{job_id}] 총 {len(target_stocks)}개 종목 조회 완료")
+            import hashlib
+            all_active_stocks = db.get_all_stock_codes(active_only=True)
+            logger.info(f"[{job_id}] 활성 전 종목 수: {len(all_active_stocks)}개")
+            
+            if target_group == -1:
+                logger.info(f"[{job_id}] 수동 전체 실행 모드: 활성 전 종목 수집")
+                target_stocks = all_active_stocks
+            else:
+                if target_group is None:
+                    current_group = datetime.now(KST).weekday() % 5
+                    logger.info(f"[{job_id}] 크론 자동 실행: 현재 요일 기준 {current_group}번 그룹 수집")
+                else:
+                    current_group = target_group % 5
+                    logger.info(f"[{job_id}] 지정 그룹 실행: {current_group}번 그룹 수집")
+                    
+                target_stocks = []
+                for stk_cd in all_active_stocks:
+                    h = hashlib.md5(stk_cd.encode('utf-8')).hexdigest()
+                    grp = int(h, 16) % 5
+                    if grp == current_group:
+                        target_stocks.append(stk_cd)
+                        
+                logger.info(f"[{job_id}] 결정론적 해시 5분할 필터링 완료: 총 {len(target_stocks)}개 종목 선정")
 
         if not target_stocks:
             logger.warning(f"[{job_id}] 수집 대상 종목이 없습니다. 작업 종료.")
@@ -138,6 +181,15 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
         
         statements_to_insert = []
         ratios_to_insert = []
+
+        # 1.5 벌크 캐싱 수행 (루프 내부의 N+1 SELECT 차단)
+        logger.info(f"[{job_id}] 대상 {len(target_stocks)}개 종목의 최신 재무 데이터 벌크 로드 중...")
+        bulk_statements = db.get_latest_statements_bulk(target_stocks, '1')
+        bulk_ratios = db.get_latest_ratios_bulk(target_stocks, '1')
+        
+        statements_cache = {(r['stk_cd'], r['stac_yymm']): r for r in bulk_statements if r.get('stac_yymm')}
+        ratios_cache = {(r['stk_cd'], r['stac_yymm']): r for r in bulk_ratios if r.get('stac_yymm')}
+        logger.info(f"[{job_id}] 벌크 로드 완료 (Statement 캐시: {len(statements_cache)}건, Ratio 캐시: {len(ratios_cache)}건)")
 
         # 2. 종목 순회 및 PIT 변경 감지
         job_statuses[job_id].update({
@@ -216,8 +268,8 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False):
                     api_ratio.update(api_maps.get('stability_ratio', {}).get(yymm, {}))
                     api_ratio.update(api_maps.get('growth_ratio', {}).get(yymm, {}))
                     
-                    db_statement = db.get_latest_financial_statement(stk_cd, yymm, '1')
-                    db_ratio = db.get_latest_financial_ratio(stk_cd, yymm, '1')
+                    db_statement = statements_cache.get((stk_cd, yymm))
+                    db_ratio = ratios_cache.get((stk_cd, yymm))
                     
                     # 비교 대상 필드 정의
                     statement_cols = [

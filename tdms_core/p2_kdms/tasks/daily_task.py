@@ -37,7 +37,7 @@ class DailyTask:
         self.market_cap_repo = market_cap_repo
         self.kiwoom_client = kiwoom_client
 
-    def run(self, target_date: date, end_date: date | None = None) -> Dict[str, Any]:
+    def run(self, target_date: date, end_date: date | None = None, rebuild_factors: bool = False) -> Dict[str, Any]:
         """
         일일 데이터 수집 및 갱신 태스크를 실행합니다.
         순서: 
@@ -82,7 +82,14 @@ class DailyTask:
             except Exception as re_err:
                 logger.error(f"Failed to load recent event stocks map: {re_err}")
 
-        # 1. 종목마스터 수집 및 갱신
+        # 1. 종목마스터 수집 및 갱신 전, 전일 상장주식수 정보를 사전 로딩 (수정계수 이벤트 감지용)
+        prev_shares_map = {}
+        try:
+            old_active = self.master_repo.get_all_active_stocks()
+            prev_shares_map = {s["stk_cd"]: s.get("listed_shares", 0) or 0 for s in old_active}
+        except Exception as pre_shares_err:
+            logger.warning(f"Failed to pre-load active stock shares: {pre_shares_err}")
+
         try:
             master_records = self.kis_client.fetch_stock_master()
             if master_records:
@@ -90,6 +97,19 @@ class DailyTask:
         except Exception as e:
             # 마스터 수집 실패 시 전체 중단하지 않고 로그를 남긴 뒤 기존 DB 상의 active 종목으로 진행
             logger.warning(f"Stock master update failed: {e}")
+
+        # 전일 종가 정보 벌크 로딩 (주가 괴리 감지용)
+        prev_close_map = {}
+        try:
+            with self.ohlcv_repo.pool.get_cursor() as cursor:
+                cursor.execute("SELECT MAX(dt) FROM daily_ohlcv WHERE dt < %s", (start_date,))
+                prev_dt_row = cursor.fetchone()
+                if prev_dt_row and prev_dt_row[0]:
+                    prev_dt = prev_dt_row[0]
+                    cursor.execute("SELECT stk_cd, cls_prc FROM daily_ohlcv WHERE dt = %s", (prev_dt,))
+                    prev_close_map = {row[0]: row[1] for row in cursor.fetchall()}
+        except Exception as pc_err:
+            logger.warning(f"Failed to pre-load previous close prices: {pc_err}")
 
         # 2. 수집 대상 활성 종목 조회
         active_stocks = self.master_repo.get_all_active_stocks()
@@ -105,10 +125,30 @@ class DailyTask:
                 logger.error(f"Failed to load blacklisted stocks: {bl_err}")
 
         # 3. 각 종목별 OHLCV 및 수정계수 수집/처리 (Loop 1)
-        for stock in active_stocks:
+        all_ohlcv_records = []
+        total_stocks = len(active_stocks)
+        loop_start_time = time.time()
+        for idx, stock in enumerate(active_stocks):
             stk_cd = stock.get("stk_cd")
             if not stk_cd:
                 continue
+
+            # 50개 종목 수집마다 또는 마지막 종목일 때 진행 정보 로깅
+            if idx % 50 == 0 or idx == total_stocks - 1:
+                elapsed = time.time() - loop_start_time
+                if elapsed == 0:
+                    elapsed = 1e-6
+                items_per_sec = (idx + 1) / elapsed
+                remaining = total_stocks - (idx + 1)
+                eta_seconds = remaining / items_per_sec if items_per_sec > 0 else 0
+                eta_str = time.strftime('%H:%M:%S', time.gmtime(eta_seconds))
+                progress_pct = (idx + 1) / total_stocks * 100.0
+                
+                logger.info(
+                    f"[KDMS 일일 시세 수집] Progress: {progress_pct:.1f}% ({idx+1}/{total_stocks}) | "
+                    f"Speed: {items_per_sec:.1f} it/s | Elapsed: {elapsed:.0f}s | ETA: {eta_str} | "
+                    f"Current: {stk_cd}"
+                )
 
             if stk_cd in blacklisted_stocks:
                 logger.info(f"[{stk_cd}] Skip data collection due to blacklist.")
@@ -145,8 +185,8 @@ class DailyTask:
                     for ohlcv in ohlcv_list:
                         ohlcv["turn_rt"] = float((ohlcv["volume"] / shares) * 100.0) if shares > 0 else 0.0
 
-                    # DB에 원본 시세 UPSERT
-                    self.ohlcv_repo.upsert_daily_ohlcv(ohlcv_list)
+                    # DB에 원본 시세 적재를 위한 메모리 리스트에 추가 (벌크화)
+                    all_ohlcv_records.extend(ohlcv_list)
                     
                     # 시가총액 레코드 빌드
                     if self.market_cap_repo is not None:
@@ -171,44 +211,63 @@ class DailyTask:
 
                     # 4. 수정계수 역산 및 저장 (FactorRepo가 존재할 경우에만)
                     if self.factor_repo is not None:
-                        # 최근 45일 범위의 Raw 및 Adjusted 시세 조회
-                        calc_start_dt = end_date - timedelta(days=45)
-                        try:
-                            raw_list = self.kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, end_date, adj_price='1')
-                            adj_list = self.kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, end_date, adj_price='0')
-                            
-                            df_raw = pd.DataFrame(raw_list).rename(columns={"close": "raw_close"})
-                            df_adj = pd.DataFrame(adj_list).rename(columns={"close": "adj_close"})
-                            
-                            if not df_raw.empty and not df_adj.empty:
-                                df = pd.merge(df_raw, df_adj, on="dt", how="inner")
-                                factors = calculate_factors(df, stk_cd, "KIS")
-                                if factors:
-                                    self.factor_repo.upsert_adjustment_factors(factors)
-                                    
-                                    # 이벤트 사후 소멸 보정 (Loop 1)
-                                    if stk_cd in recent_event_map:
-                                        oldest_raw = df["raw_close"].iloc[0]
-                                        oldest_adj = df["adj_close"].iloc[0]
-                                        if oldest_raw == oldest_adj:
-                                            new_event_dts = {f["event_dt"] for f in factors}
-                                            obsolete_dates = [dt for dt in recent_event_map[stk_cd] if dt not in new_event_dts]
+                        # 4-1. 수정계수 계산 대상 필터링 적용 (안정성 및 완결성 보장)
+                        prev_shares = prev_shares_map.get(stk_cd, 0)
+                        
+                        # 괴리율 계산 (전일 종가 대비 오늘 종가가 25% 초과 변동한 경우)
+                        has_price_anomaly = False
+                        if ohlcv_list:
+                            today_close = ohlcv_list[-1]["close"]
+                            prev_close = prev_close_map.get(stk_cd, 0)
+                            if prev_close > 0:
+                                change_rate = abs(today_close - prev_close) / prev_close
+                                if change_rate > 0.25:
+                                    has_price_anomaly = True
+
+                        has_share_changed = (prev_shares != shares)
+                        has_recent_event = (stk_cd in recent_event_map)
+                        is_new_stock = (stk_cd not in prev_shares_map)
+
+                        # rebuild_factors 옵션이 활성화되었거나 필터링 조건 만족 시에만 API 45일 범위 조회 실행
+                        if rebuild_factors or has_share_changed or has_price_anomaly or has_recent_event or is_new_stock:
+                            # 최근 45일 범위의 Raw 및 Adjusted 시세 조회
+                            calc_start_dt = end_date - timedelta(days=45)
+                            try:
+                                raw_list = self.kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, end_date, adj_price='1')
+                                adj_list = self.kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, end_date, adj_price='0')
+                                
+                                df_raw = pd.DataFrame(raw_list).rename(columns={"close": "raw_close"})
+                                df_adj = pd.DataFrame(adj_list).rename(columns={"close": "adj_close"})
+                                
+                                if not df_raw.empty and not df_adj.empty:
+                                    df = pd.merge(df_raw, df_adj, on="dt", how="inner")
+                                    factors = calculate_factors(df, stk_cd, "KIS")
+                                    if factors:
+                                        self.factor_repo.upsert_adjustment_factors(factors)
+                                        
+                                        # 이벤트 사후 소멸 보정 (Loop 1)
+                                        if stk_cd in recent_event_map:
+                                            oldest_raw = df["raw_close"].iloc[0]
+                                            oldest_adj = df["adj_close"].iloc[0]
+                                            if oldest_raw == oldest_adj:
+                                                new_event_dts = {f["event_dt"] for f in factors}
+                                                obsolete_dates = [dt for dt in recent_event_map[stk_cd] if dt not in new_event_dts]
+                                                if obsolete_dates:
+                                                    self.factor_repo.delete_adjustment_factors_by_dates(stk_cd, obsolete_dates, price_source='KIS')
+                                                    logger.info(f"[{stk_cd}] {len(obsolete_dates)} obsolete factors deleted (Loop 1).")
+                                                del recent_event_map[stk_cd]
+                                    else:
+                                        # KIS API 상에서 팩터가 감지되지 않았는데, DB 내 10일 이내에 이벤트가 존재하는 경우
+                                        # 사후 정정으로 인해 소멸되었을 수 있으므로 obsolete_dates 제거 진행
+                                        if stk_cd in recent_event_map:
+                                            # 45일 범위가 맞으므로 이 기간의 기존 DB 내 팩터 삭제
+                                            obsolete_dates = [dt for dt in recent_event_map[stk_cd] if calc_start_dt <= dt <= end_date]
                                             if obsolete_dates:
                                                 self.factor_repo.delete_adjustment_factors_by_dates(stk_cd, obsolete_dates, price_source='KIS')
-                                                logger.info(f"[{stk_cd}] {len(obsolete_dates)} obsolete factors deleted (Loop 1).")
+                                                logger.info(f"[{stk_cd}] {len(obsolete_dates)} obsolete factors deleted (Loop 1 - empty API).")
                                             del recent_event_map[stk_cd]
-                                else:
-                                    # KIS API 상에서 팩터가 감지되지 않았는데, DB 내 10일 이내에 이벤트가 존재하는 경우
-                                    # 사후 정정으로 인해 소멸되었을 수 있으므로 obsolete_dates 제거 진행
-                                    if stk_cd in recent_event_map:
-                                        # 45일 범위가 맞으므로 이 기간의 기존 DB 내 팩터 삭제
-                                        obsolete_dates = [dt for dt in recent_event_map[stk_cd] if calc_start_dt <= dt <= end_date]
-                                        if obsolete_dates:
-                                            self.factor_repo.delete_adjustment_factors_by_dates(stk_cd, obsolete_dates, price_source='KIS')
-                                            logger.info(f"[{stk_cd}] {len(obsolete_dates)} obsolete factors deleted (Loop 1 - empty API).")
-                                        del recent_event_map[stk_cd]
-                        except Exception as fe:
-                            logger.warning(f"Failed to calculate factors for {stk_cd}: {fe}")
+                            except Exception as fe:
+                                logger.warning(f"Failed to calculate factors for {stk_cd}: {fe}")
                     
                     collected += len(ohlcv_list)
                 else:
@@ -219,6 +278,13 @@ class DailyTask:
                 # 수집 에러 발생 -> Gap 기록
                 self.ohlcv_repo.record_gap(stk_cd, end_date, str(e))
                 failed += 1
+
+        # 3.5. 수집된 모든 일봉 데이터 일괄 적재 (벌크 업서트)
+        if all_ohlcv_records:
+            try:
+                self.ohlcv_repo.upsert_daily_ohlcv(all_ohlcv_records)
+            except Exception as oe:
+                logger.error(f"Failed to bulk upsert daily ohlcv records: {oe}")
 
         # 4. 시가총액 일괄 저장
         if self.market_cap_repo is not None and mc_records:

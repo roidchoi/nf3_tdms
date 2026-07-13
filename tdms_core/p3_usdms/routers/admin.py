@@ -189,10 +189,11 @@ def update_schedule(
     job_id: str,
     hour: int,
     minute: int,
-    request: Request
+    request: Request,
+    day_of_week: Optional[str] = Query(None, description="요일 설정")
 ) -> Dict[str, Any]:
     """
-    특정 스케줄 작업(예: daily_collection_job)의 실행 시각을 동적으로 변경하며,
+    특정 스케줄 작업(예: daily_collection_job)의 실행 시각 및 요일을 동적으로 변경하며,
     .env 파일의 스케줄 설정도 영구 보존 업데이트합니다.
     """
     scheduler = getattr(request.app.state, "scheduler", None)
@@ -211,20 +212,23 @@ def update_schedule(
     var_name = var_map.get(job_id)
     
     try:
-        new_time_str = f"{hour:02d}:{minute:02d}"
+        if day_of_week:
+            new_time_str = f"{day_of_week}:{hour:02d}:{minute:02d}"
+        else:
+            new_time_str = f"{hour:02d}:{minute:02d}"
         
         if var_name:
             from p1_shared.utils.schedule_utils import update_env_value, parse_schedule_string
             import os
             
-            # 1. .env 파일 및 os.environ 업데이트 (요일 보존 처리 내장)
+            # 1. .env 파일 및 os.environ 업데이트
             update_env_value(var_name, new_time_str)
             
             # 2. 업데이트된 값에서 요일 정보 등을 다시 읽어 스케줄러 갱신
             updated_val = os.environ.get(var_name, new_time_str)
-            h, m, day_of_week = parse_schedule_string(updated_val)
+            h, m, parsed_dow = parse_schedule_string(updated_val)
             
-            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=parsed_dow, hour=h, minute=m)
             logger.info(f"Successfully updated job {job_id} schedule to {updated_val} (and persisted to .env).")
             return {
                 "status": "SUCCESS",
@@ -232,7 +236,7 @@ def update_schedule(
             }
         else:
             # 매핑 변수가 없는 특수 job의 경우 기존 방식 적용
-            scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=hour, minute=minute)
             logger.info(f"Successfully updated job {job_id} schedule to {new_time_str}.")
             return {
                 "status": "SUCCESS",
@@ -241,6 +245,52 @@ def update_schedule(
     except Exception as e:
         logger.error(f"Failed to reschedule job {job_id}: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Failed to reschedule job {job_id}: {str(e)}")
+
+
+@router.post("/schedules/reload", summary="환경설정(.env)에서 스케줄을 다시 읽어 스케줄러 갱신")
+def reload_schedules(request: Request) -> Dict[str, Any]:
+    """
+    물리 .env 파일을 다시 읽고, os.environ 갱신 후 
+    스케줄러에 등록된 각 작업들의 일정을 동적으로 갱신합니다.
+    """
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if not scheduler:
+        raise HTTPException(status_code=500, detail="Scheduler is not running or not registered.")
+        
+    try:
+        from dotenv import load_dotenv
+        import os
+        from p1_shared.utils.schedule_utils import parse_schedule_string
+        
+        # 1. .env 파일 강제 덮어쓰기 로드 (override=True)
+        env_path = "/app/.env" if os.path.exists("/app/.env") else None
+        load_dotenv(dotenv_path=env_path, override=True)
+        
+        # 2. 각 작업의 설정 키 갱신
+        var_map = {
+            "daily_collection_job": ("SCHEDULE_USDMS_DAILY_ROUTINE", "tue-sat"),
+            "weekly_maintenance_job": ("SCHEDULE_USDMS_WEEKLY_MAINTENANCE", "sat")
+        }
+        
+        updated_jobs = []
+        for job_id, (env_key, default_days) in var_map.items():
+            job = scheduler.get_job(job_id)
+            if not job:
+                continue
+            
+            val = os.environ.get(env_key)
+            if not val:
+                continue
+                
+            h, m, day_of_week = parse_schedule_string(val, default_days=default_days)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            updated_jobs.append({"job_id": job_id, "schedule": val})
+            
+        logger.info(f"스케줄러 .env 재로드 완료: {updated_jobs}")
+        return {"status": "SUCCESS", "updated_jobs": updated_jobs}
+    except Exception as e:
+        logger.error(f"Failed to reload schedules from .env: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"스케줄 재로드 실패: {str(e)}")
 
 
 
@@ -300,9 +350,9 @@ async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = Query(N
         if os.path.exists(safe_path):
             target_log_path = safe_path
     else:
-        # logs/ 디렉토리 내에서 가장 최신의 daily_routine_*.log 또는 daily_routine.log 파일 탐색
+        # logs/ 디렉토리 내에서 가장 최신의 daily_routine_*.log 또는 daily_routine.log 파일 탐색 (테스트용 _test.log 파일 제외)
         if os.path.exists(logs_dir):
-            log_files = [f for f in os.listdir(logs_dir) if f.endswith(".log")]
+            log_files = [f for f in os.listdir(logs_dir) if f.endswith(".log") and not f.endswith("_test.log")]
             if log_files:
                 log_files.sort(reverse=True)
                 target_log_path = os.path.join(logs_dir, log_files[0])

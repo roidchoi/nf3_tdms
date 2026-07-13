@@ -21,6 +21,12 @@
       >
         🇺🇸 미국 (USDMS)
       </button>
+      <button 
+        class="tab-btn btn-reload-env" 
+        @click="reloadSchedulesFromEnv"
+      >
+        🔄 환경설정(.env) 재로드
+      </button>
     </div>
 
     <div v-if="isLoading" class="loading-state">
@@ -154,12 +160,29 @@ export default defineComponent({
       isModalOpen.value = false;
     };
 
-    const saveNewSchedule = async (payload: { job_id: string, hour: number, minute: number }) => {
+    const saveNewSchedule = async (payload: { job_id: string, hour: number, minute: number, day_of_week?: string }) => {
       try {
-        await scheduleStore.rescheduleJob(currentMarket.value, payload.job_id, payload.hour, payload.minute);
+        await scheduleStore.rescheduleJob(
+          currentMarket.value,
+          payload.job_id,
+          payload.hour,
+          payload.minute,
+          payload.day_of_week
+        );
         closeModal();
       } catch (err) {
         console.error('Failed to save new schedule:', err);
+      }
+    };
+
+    const reloadSchedulesFromEnv = async () => {
+      if (confirm(`${currentMarket.value.toUpperCase()} 마켓의 .env 설정을 재로드하시겠습니까?`)) {
+        try {
+          await scheduleStore.reloadSchedules(currentMarket.value);
+          alert('환경설정이 정상적으로 재로드되었습니다.');
+        } catch (err: any) {
+          alert('재로드 실패: ' + (err.response?.data?.detail || err.message));
+        }
       }
     };
 
@@ -198,6 +221,7 @@ export default defineComponent({
       openRescheduleModal,
       closeModal,
       saveNewSchedule,
+      reloadSchedulesFromEnv,
       formatTime
     };
   }
@@ -258,6 +282,19 @@ export default defineComponent({
   border-color: rgba(59, 130, 246, 0.35);
   color: #60a5fa;
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
+}
+
+.btn-reload-env {
+  margin-left: auto;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.btn-reload-env:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10b981;
 }
 
 .loading-state {

@@ -21,9 +21,9 @@ def test_is_us_trading_day_weekend_and_holidays():
 # [Tier 2 — 격리 통합]
 # 파일: tdms_core/p3_usdms/tests/test_holiday_sync.py
 @pytest.mark.asyncio
-async def test_daily_routine_skips_when_holiday(mocker):
+async def test_daily_routine_continues_even_when_holiday(mocker):
     """
-    [목적] 수집 기준일(target_date)이 미국 주식시장 휴장일일 때 DailyRoutine.run()이 데이터를 수집하지 않고 스킵 리포트를 정상 반환하는지 검증
+    [목적] 수집 기준일(target_date)이 미국 주식시장 휴장일일 때도 DailyRoutine.run()이 스킵되지 않고 데이터를 정상 수집하는지 검증
     """
     from p3_usdms.tasks.daily_routine import DailyRoutine
     
@@ -41,18 +41,38 @@ async def test_daily_routine_skips_when_holiday(mocker):
     routine.sync_trading_calendar = mocker.MagicMock()
     # 외부 수집기들 모킹
     routine.master = mocker.MagicMock()
-    routine.master.sync_daily = mocker.AsyncMock()
+    routine.master.sync_daily = mocker.AsyncMock(return_value={"added_tickers": 0})
     routine.market_loader = mocker.MagicMock()
     routine.market_loader.collect_daily_updates = mocker.MagicMock()
+    routine.fin_parser = mocker.MagicMock()
+    routine.val_calc = mocker.MagicMock()
+    routine.val_calc.repo = mocker.MagicMock()
+    routine.val_calc.repo.get_all_latest_valuation_dates.return_value = {}
+    
+    # target 추출을 위한 mock 설정
+    routine.master_repo = mocker.MagicMock()
+    routine.master_repo.get_collect_targets.return_value = [{"cik": "0000320193"}]
+    routine.blacklist_mgr = mocker.MagicMock()
+    routine.blacklist_mgr.is_blacklisted.return_value = False
+    
+    # DB max price mock 설정
+    mock_db = mocker.MagicMock()
+    mock_cursor = mocker.MagicMock()
+    mock_cursor.fetchone.return_value = {"d": date(2026, 5, 22)}
+    mock_db.get_cursor.return_value.__enter__.return_value = mock_cursor
+    routine.db = mock_db
+    
+    # 헬스체크 및 격리/리포트 세이브 모킹
+    routine._detect_anomalies_and_quarantine = mocker.Mock(return_value=[])
+    routine._save_report = mocker.Mock()
     
     # 실행
     report = await routine.run(target_date=target_dt)
     
-    # 검증: sync_daily 및 collect_daily_updates 등이 호출되지 않았고 스킵되었음을 판단
-    assert report["status"] == "SKIPPED"
-    assert "US Holiday" in report["msg"]
-    routine.master.sync_daily.assert_not_called()
-    routine.market_loader.collect_daily_updates.assert_not_called()
+    # 검증: status가 SKIPPED가 아니며, sync_daily 및 collect_daily_updates 등이 정상 기동되었는지 검증
+    assert report["status"] != "SKIPPED"
+    routine.master.sync_daily.assert_called_once()
+    routine.market_loader.collect_daily_updates.assert_called_once()
 
 
 # [Tier 2 — 격리 통합]

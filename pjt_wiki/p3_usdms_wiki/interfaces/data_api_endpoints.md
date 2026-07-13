@@ -75,6 +75,9 @@
   - `offset` (Optional, Default: `0`)
   - `stk_cd` (Optional): CIK 또는 ticker 등의 특정 종목 필터 조건
   - `start_date` / `end_date` (Optional): 날짜 컬럼을 보유한 테이블에 대한 범위 필터
+  - `keyword` (Optional): 종목 검색용 키워드 (티커, 이름 등)
+  - `match_type` (Optional, Default: `'contains'`): 일치 방식 (`'contains'` 부분 일치 | `'exact'` 정확히 일치)
+  - `search_field` (Optional, Default: `'all'`): 검색 범위 (`'all'` 전체 | `'code'` 코드/티커 | `'name'` 명칭)
 - **보안 및 제약**:
   - **SQL Injection 방지**: 테이블 화이트리스트 검증 및 SQL의 모든 조건 필터는 바인딩 파라미터(`%s`)로만 대입합니다.
   - **허용된 테이블 목록**:

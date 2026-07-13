@@ -35,6 +35,23 @@ class FinancialRepo:
             row = cursor.fetchone()
             return self._row_to_dict(cursor, row)
 
+    def get_latest_statements_bulk(self, stk_cds: List[str], div_cls_code: str) -> List[Dict[str, Any]]:
+        """
+        지정된 종목들의 각 결산년월(stac_yymm) 별 최신 재무제표 스냅샷 데이터를 벌크 조회합니다.
+        """
+        if not stk_cds:
+            return []
+        query = """
+            SELECT DISTINCT ON (stk_cd, stac_yymm) *
+            FROM financial_statements
+            WHERE stk_cd = ANY(%s) AND div_cls_code = %s
+            ORDER BY stk_cd, stac_yymm, retrieved_at DESC;
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (stk_cds, div_cls_code))
+            rows = cursor.fetchall()
+            return [self._row_to_dict(cursor, r) for r in rows if r]
+
     def get_latest_ratio(self, stk_cd: str, stac_yymm: str, div_cls_code: str) -> Optional[Dict[str, Any]]:
         """
         stk_cd, stac_yymm, div_cls_code 기준 DB에 가장 최근(retrieved_at DESC) 저장된 재무비율 레코드를 반환합니다.
@@ -49,6 +66,23 @@ class FinancialRepo:
             cursor.execute(query, (stk_cd, stac_yymm, div_cls_code))
             row = cursor.fetchone()
             return self._row_to_dict(cursor, row)
+
+    def get_latest_ratios_bulk(self, stk_cds: List[str], div_cls_code: str) -> List[Dict[str, Any]]:
+        """
+        지정된 종목들의 각 결산년월(stac_yymm) 별 최신 재무비율 스냅샷 데이터를 벌크 조회합니다.
+        """
+        if not stk_cds:
+            return []
+        query = """
+            SELECT DISTINCT ON (stk_cd, stac_yymm) *
+            FROM financial_ratios
+            WHERE stk_cd = ANY(%s) AND div_cls_code = %s
+            ORDER BY stk_cd, stac_yymm, retrieved_at DESC;
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query, (stk_cds, div_cls_code))
+            rows = cursor.fetchall()
+            return [self._row_to_dict(cursor, r) for r in rows if r]
 
     def insert_statements(self, statements: List[Dict[str, Any]]) -> int:
         """
