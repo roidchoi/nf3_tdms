@@ -162,6 +162,7 @@
 | `decisions.md#USDMS_DEC-005` | 수/토요일 시분할 일정에 따른 미국 휴장일 전체 스킵 로직 제거 및 캘린더 싱크 보존 | — |
 | `decisions.md#USDMS_DEC-006` | 2분할 MOD 2 해시 샤딩 기반 가치평가 연산 최적화 [NEW] | — |
 | `decisions.md#USDMS_DEC-007` | USDMS 스케줄러 동적 리로드 및 진행률 로깅 개선 [NEW] | — |
+| `decisions/dec-008_blacklist_progressive_cooldown.md` | 수집 오류 누적 횟수 기반 점진적 쿨다운 및 5회차 영구 제외 의사결정 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 

@@ -203,6 +203,8 @@ CREATE TABLE IF NOT EXISTS us_collection_blacklist (
     reason_detail TEXT,
     is_blocked BOOLEAN DEFAULT TRUE,   -- TRUE: 수집 제외, FALSE: 해제(재시도)
     fail_count INTEGER DEFAULT 0,
+    re_blocked_count INTEGER DEFAULT 0, -- 재차단 누적 횟수
+    is_permanently_blocked BOOLEAN DEFAULT FALSE, -- 자동 해제 영구 제외 플래그
     last_failed_at TIMESTAMP,
     last_verified_at TIMESTAMP,        -- 관리자 검증 시각
     admin_note TEXT,                   -- 대시보드 관리자 메모

@@ -39,6 +39,45 @@ const isKoreanMarketOpen = () => {
   return (hour > 9 || (hour === 9 && minute >= 0)) && (hour < 15 || (hour === 15 && minute <= 30))
 }
 
+// 미국 장 운영 시간대 판별 (뉴욕 시간: 09:30 ~ 16:00, 월~금)
+const isUSMarketOpen = () => {
+  try {
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'America/New_York',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      weekday: 'short'
+    }
+    const formatter = new Intl.DateTimeFormat('en-US', options)
+    const parts = formatter.formatToParts(new Date())
+    const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]))
+    
+    const weekday = partMap.weekday
+    const hour = parseInt(partMap.hour || '0', 10)
+    const minute = parseInt(partMap.minute || '0', 10)
+    
+    if (weekday === 'Sat' || weekday === 'Sun') return false
+    
+    const totalMinutes = hour * 60 + minute
+    const startMinutes = 9 * 60 + 30
+    const endMinutes = 16 * 60
+    
+    return totalMinutes >= startMinutes && totalMinutes < endMinutes
+  } catch (e) {
+    return false
+  }
+}
+
+const isWarningActive = computed(() => {
+  if (props.market === 'kr') {
+    return !isTestMode.value && isKoreanMarketOpen()
+  } else if (props.market === 'us') {
+    return isUSMarketOpen()
+  }
+  return false
+})
+
 const handleRun = async () => {
   let message = `[${props.title}] 작업을 실행하시겠습니까?\n\n`
   
@@ -51,6 +90,10 @@ const handleRun = async () => {
     }
   } else {
     message += `▶ 실행 모드: ⚠️ 운영 수집 모드\n`
+    
+    if (isUSMarketOpen()) {
+      message += `\n🚨 [경고] 현재 미국 주식시장 장중 거래 시간(09:30~16:00 EST)입니다!\n실시간 수집 시 데이터 정합성 충돌 및 API 호출 초과 위험이 매우 높습니다.\n정말 진행하시겠습니까?`
+    }
   }
 
   if (!confirm(message)) return
@@ -66,7 +109,7 @@ const handleRun = async () => {
 </script>
 
 <template>
-  <div class="card" :style="{ '--glow-color': themeColor }" :class="{ 'warning-border': market === 'kr' && !isTestMode && isKoreanMarketOpen() }">
+  <div class="card" :style="{ '--glow-color': themeColor }" :class="{ 'warning-border': isWarningActive }">
     <div class="card-header">
       <div class="title-group">
         <span class="icon">{{ icon }}</span>

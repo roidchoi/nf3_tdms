@@ -13,6 +13,7 @@ import SyncView from '@/views/SyncView.vue'
 const statusStore = useStatusStore()
 const backupStore = useBackupStore()
 const activeTab = ref<'dashboard' | 'schedules' | 'health' | 'explorer' | 'backup' | 'sync'>('dashboard')
+const subTab = ref<'kdms' | 'usdms' | 'kdms_quality' | 'usdms_quality'>('kdms')
 
 // 2초 주기 상태 폴링
 let pollInterval: ReturnType<typeof setInterval> | null = null
@@ -118,123 +119,248 @@ onUnmounted(() => {
 
     <!-- 1. 모니터링 대시보드 탭 콘텐츠 -->
     <div v-if="activeTab === 'dashboard'" class="tab-content-wrapper">
-      <!-- 통합 게이트웨이 / 시장 헬스 보드 -->
-      <section class="health-board">
-        <!-- 한국 시장(KDMS) -->
-        <div class="health-card" :class="statusStore.status.kr.status.toLowerCase()">
-          <div class="health-info">
-            <div class="market-tag">
-              <span class="flag">🇰🇷</span>
-              <span>한국 시장 (KDMS)</span>
+      <!-- 상단 영역: [상태 표시 세로 적재] 와 [제어 상세보고 탭] 가로 분할 -->
+      <div class="dashboard-top-split">
+        <!-- 좌측: 상태 표시 세로 배치 (너비 30% 수준) -->
+        <aside class="split-status-sidebar">
+          <div class="sidebar-title-header">
+            <h2>📢 실시간 수집 상태</h2>
+          </div>
+          <!-- 한국 시장(KDMS) -->
+          <div class="health-card" :class="statusStore.status.kr.status.toLowerCase()">
+            <div class="health-info">
+              <div class="market-tag">
+                <span class="flag">🇰🇷</span>
+                <span>한국 시장 (KDMS)</span>
+              </div>
+              <div class="status-indicator">
+                <span class="pulse-dot"></span>
+                <span class="status-text">{{ statusStore.status.kr.status }}</span>
+              </div>
             </div>
-            <div class="status-indicator">
-              <span class="pulse-dot"></span>
-              <span class="status-text">{{ statusStore.status.kr.status }}</span>
+            <div class="freshness-details" v-if="statusStore.status.kr.freshness">
+              <div class="metric">
+                <span class="m-label">최종 수집일</span>
+                <span class="m-value">{{ statusStore.status.kr.freshness.latest_trading_date || '-' }}</span>
+              </div>
+              <div class="metric">
+                <span class="m-label">수집 완료율</span>
+                <span class="m-value">{{ (statusStore.status.kr.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="metric">
+                <span class="m-label">신선도 상태</span>
+                <span class="status-badge" :style="{ backgroundColor: statusStore.status.kr.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
+                  {{ statusStore.status.kr.freshness.status }}
+                </span>
+              </div>
+            </div>
+            <div class="offline-placeholder" v-else>
+              <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
             </div>
           </div>
-          <div class="freshness-details" v-if="statusStore.status.kr.freshness">
-            <div class="metric">
-              <span class="m-label">최종 수집일</span>
-              <span class="m-value">{{ statusStore.status.kr.freshness.latest_trading_date || '-' }}</span>
+
+          <!-- 미국 시장(USDMS) -->
+          <div class="health-card" :class="statusStore.status.us.status.toLowerCase()">
+            <div class="health-info">
+              <div class="market-tag">
+                <span class="flag">🇺🇸</span>
+                <span>미국 시장 (USDMS)</span>
+              </div>
+              <div class="status-indicator">
+                <span class="pulse-dot"></span>
+                <span class="status-text">{{ statusStore.status.us.status }}</span>
+              </div>
             </div>
-            <div class="metric">
-              <span class="m-label">수집 완료율</span>
-              <span class="m-value">{{ (statusStore.status.kr.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+            <div class="freshness-details" v-if="statusStore.status.us.freshness">
+              <div class="metric">
+                <span class="m-label">최종 수집일</span>
+                <span class="m-value">{{ statusStore.status.us.freshness.latest_trading_date || '-' }}</span>
+              </div>
+              <div class="metric">
+                <span class="m-label">수집 완료율</span>
+                <span class="m-value">{{ (statusStore.status.us.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="metric">
+                <span class="m-label">신선도 상태</span>
+                <span class="status-badge" :style="{ backgroundColor: statusStore.status.us.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
+                  {{ statusStore.status.us.freshness.status }}
+                </span>
+              </div>
             </div>
-            <div class="metric">
-              <span class="m-label">신선도 상태</span>
-              <span class="status-badge" :style="{ backgroundColor: statusStore.status.kr.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
-                {{ statusStore.status.kr.freshness.status }}
-              </span>
+            <div class="offline-placeholder" v-else>
+              <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
             </div>
           </div>
-          <div class="offline-placeholder" v-else>
-            <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
+        </aside>
+
+        <!-- 우측: 제어 상세보고 탭 영역 (너비 70% 수준) -->
+        <main class="split-control-panel">
+          <div class="control-tab-headers">
+            <button 
+              class="tab-btn" 
+              :class="{ active: subTab === 'kdms' }" 
+              @click="subTab = 'kdms'"
+            >
+              🇰🇷 KDMS 제어
+            </button>
+            <button 
+              class="tab-btn" 
+              :class="{ active: subTab === 'usdms' }" 
+              @click="subTab = 'usdms'"
+            >
+              🇺🇸 USDMS 제어
+            </button>
+            <button 
+              class="tab-btn" 
+              :class="{ active: subTab === 'kdms_quality' }" 
+              @click="subTab = 'kdms_quality'"
+            >
+              📊 KDMS 품질 요약
+            </button>
+            <button 
+              class="tab-btn" 
+              :class="{ active: subTab === 'usdms_quality' }" 
+              @click="subTab = 'usdms_quality'"
+            >
+              📊 USDMS 품질 요약
+            </button>
           </div>
-        </div>
 
-        <!-- 미국 시장(USDMS) -->
-        <div class="health-card" :class="statusStore.status.us.status.toLowerCase()">
-          <div class="health-info">
-            <div class="market-tag">
-              <span class="flag">🇺🇸</span>
-              <span>미국 시장 (USDMS)</span>
+          <div class="control-tab-content">
+            <!-- KDMS 제어 탭 -->
+            <div v-show="subTab === 'kdms'" class="tab-pane">
+              <div class="market-task-group">
+                <h3 class="market-group-title">🇰🇷 한국 주식 수집 제어 (KDMS)</h3>
+                <div class="tasks-grid">
+                  <TaskStatusCard 
+                    market="kr"
+                    taskId="daily_update"
+                    title="일일 업데이트"
+                    icon="📅"
+                    :status="statusStore.status.kr.tasks?.daily_update"
+                  />
+                  <TaskStatusCard 
+                    market="kr"
+                    taskId="financial_update"
+                    title="재무 업데이트"
+                    icon="💵"
+                    :status="statusStore.status.kr.tasks?.financial_update"
+                  />
+                  <TaskStatusCard 
+                    market="kr"
+                    taskId="backfill_minute_data"
+                    title="분봉 백필"
+                    icon="⏳"
+                    :status="statusStore.status.kr.tasks?.backfill_minute_data"
+                  />
+                </div>
+              </div>
             </div>
-            <div class="status-indicator">
-              <span class="pulse-dot"></span>
-              <span class="status-text">{{ statusStore.status.us.status }}</span>
+
+            <!-- USDMS 제어 탭 -->
+            <div v-show="subTab === 'usdms'" class="tab-pane">
+              <div class="market-task-group">
+                <h3 class="market-group-title">🇺🇸 미국 주식 수집 제어 (USDMS)</h3>
+                <div class="tasks-grid">
+                  <TaskStatusCard 
+                    market="us"
+                    taskId="daily_routine"
+                    title="Daily Routine"
+                    icon="🇺🇸"
+                    :status="statusStore.status.us.tasks?.daily_routine"
+                  />
+                  <TaskStatusCard 
+                    market="us"
+                    taskId="weekly_backfill"
+                    title="Weekly Backfill"
+                    icon="⏳"
+                    :status="statusStore.status.us.tasks?.weekly_backfill"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- KDMS 품질 상세보고 탭 -->
+            <div v-show="subTab === 'kdms_quality'" class="tab-pane quality-pane">
+              <div class="report-group-card full-width-card">
+                <h3>🇰🇷 한국 주식 (KDMS) 수집 품질 요약</h3>
+                <div class="quality-reports-grid">
+                  <div v-for="tId in ['daily_update', 'financial_update', 'backfill_minute_data']" :key="tId" class="quality-report-card">
+                    <div class="sub-report-header">
+                      <span class="sub-title"><strong>{{ tId === 'daily_update' ? '📅 일일 업데이트' : tId === 'financial_update' ? '💵 재무 업데이트' : '⏳ 분봉 백필' }}</strong></span>
+                      <span class="sub-status" :class="statusStore.status.kr.tasks?.[tId]?.last_status">
+                        {{ statusStore.status.kr.tasks?.[tId]?.last_status || '대기' }}
+                      </span>
+                    </div>
+                    <div class="sub-report-body" v-if="statusStore.status.kr.tasks?.[tId]?.details">
+                      <div class="report-grid-mini">
+                        <div><span>성공:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.collected || 0 }}건</strong></div>
+                        <div><span>실패:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.failed || 0 }}건</strong></div>
+                        <div><span>스킵:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.skipped || 0 }}건</strong></div>
+                        <div><span>소요시간:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.duration || '-' }}</strong></div>
+                      </div>
+                    </div>
+                    <div class="no-report-msg" v-else>
+                      최근 실행 리포트가 존재하지 않습니다.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- USDMS 품질 상세보고 탭 -->
+            <div v-show="subTab === 'usdms_quality'" class="tab-pane quality-pane">
+              <div class="report-group-card full-width-card">
+                <h3>🇺🇸 미국 주식 (USDMS) 수집 품질 요약</h3>
+                <div class="quality-reports-grid">
+                  <div v-for="tId in ['daily_routine', 'weekly_backfill']" :key="tId" class="quality-report-card">
+                    <div class="sub-report-header">
+                      <span class="sub-title"><strong>{{ tId === 'daily_routine' ? '🇺🇸 Daily Routine' : '⏳ Weekly Backfill' }}</strong></span>
+                      <span class="sub-status" :class="statusStore.status.us.tasks?.[tId]?.last_status?.toLowerCase()">
+                        {{ statusStore.status.us.tasks?.[tId]?.last_status || '대기' }}
+                      </span>
+                    </div>
+                    <div class="sub-report-body" v-if="statusStore.status.us.tasks?.[tId]?.details">
+                      <div class="report-grid-mini">
+                        <div><span>수집수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.collected_count || 0 }}건</strong></div>
+                        <div><span>성공수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.success_count || 0 }}건</strong></div>
+                        <div><span>실패수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.failed_count || 0 }}건</strong></div>
+                        <div><span>소요시간:</span> <strong>{{ statusStore.status.us.tasks[tId].details.duration || '-' }}</strong></div>
+                      </div>
+                      
+                      <!-- Enrichment 품질 보고 정보가 있는 경우 -->
+                      <div class="enrichment-info" v-if="statusStore.status.us.tasks[tId].details.enrichment">
+                        <span class="section-sub-label">📈 수집 및 통합 품질 (Enrichment)</span>
+                        <div class="report-grid-mini nested">
+                          <div><span>모수 티커수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.enrichment.total_tickers || 0 }}</strong></div>
+                          <div><span>정상 수집수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.enrichment.success_count || 0 }}</strong></div>
+                          <div><span>통합 완료율:</span> <strong style="color: #34d399">{{ ((statusStore.status.us.tasks[tId].details.enrichment.success_ratio || 0) * 100).toFixed(1) }}%</strong></div>
+                        </div>
+                      </div>
+
+                      <!-- 자가 치유(Self-healing) 보고 정보가 있는 경우 -->
+                      <div class="self-healing-info" v-if="statusStore.status.us.tasks[tId].details.self_healing">
+                        <span class="section-sub-label">🛡️ 블랙리스트 자가 치유 (Self-Healing)</span>
+                        <div class="report-grid-mini nested">
+                          <div><span>쿨다운 해제:</span> <strong>{{ statusStore.status.us.tasks[tId].details.self_healing.released_count || 0 }}건</strong></div>
+                          <div><span>누진 재차단:</span> <strong>{{ statusStore.status.us.tasks[tId].details.self_healing.re_blocked_count || 0 }}건</strong></div>
+                          <div><span>영구 차단:</span> <strong style="color: #f87171">{{ statusStore.status.us.tasks[tId].details.self_healing.permanently_blocked_count || 0 }}건</strong></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="no-report-msg" v-else>
+                      최근 실행 리포트가 존재하지 않습니다.
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="freshness-details" v-if="statusStore.status.us.freshness">
-            <div class="metric">
-              <span class="m-label">최종 수집일</span>
-              <span class="m-value">{{ statusStore.status.us.freshness.latest_trading_date || '-' }}</span>
-            </div>
-            <div class="metric">
-              <span class="m-label">수집 완료율</span>
-              <span class="m-value">{{ (statusStore.status.us.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
-            </div>
-            <div class="metric">
-              <span class="m-label">신선도 상태</span>
-              <span class="status-badge" :style="{ backgroundColor: statusStore.status.us.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
-                {{ statusStore.status.us.freshness.status }}
-              </span>
-            </div>
-          </div>
-          <div class="offline-placeholder" v-else>
-            <span>대상 백엔드가 오프라인 상태이거나 정보를 가져올 수 없습니다.</span>
-          </div>
-        </div>
-      </section>
+        </main>
+      </div>
 
-      <!-- 수집 태스크 제어 섹션 -->
-      <main class="tasks-section">
-        <div class="section-title">
-          <h2>⚡ 실시간 태스크 제어 및 수동 기동</h2>
-          <div class="divider"></div>
-        </div>
-
-        <div class="tasks-grid">
-          <!-- 한국: 일일 수집 -->
-          <TaskStatusCard 
-            market="kr"
-            taskId="daily_update"
-            title="일일 업데이트"
-            icon="📅"
-            :status="statusStore.status.kr.tasks?.daily_update"
-          />
-
-          <!-- 한국: 재무 제표 -->
-          <TaskStatusCard 
-            market="kr"
-            taskId="financial_update"
-            title="재무 업데이트"
-            icon="💵"
-            :status="statusStore.status.kr.tasks?.financial_update"
-          />
-
-          <!-- 미국: 일일 Routine -->
-          <TaskStatusCard 
-            market="us"
-            taskId="daily_routine"
-            title="Daily Routine"
-            icon="🇺🇸"
-            :status="statusStore.status.us.tasks?.daily_routine"
-          />
-
-          <!-- 미국: 주간 Backfill -->
-          <TaskStatusCard 
-            market="us"
-            taskId="weekly_backfill"
-            title="Weekly Backfill"
-            icon="⏳"
-            :status="statusStore.status.us.tasks?.weekly_backfill"
-          />
-        </div>
-      </main>
-
-      <!-- 실시간 로그 모니터링 섹션 -->
-      <section class="log-monitor-wrapper">
+      <!-- 하단 영역: 실시간 로그 스트리밍 (Output Stream) 한 행 전체 배치 -->
+      <section class="dashboard-bottom-log-stream">
         <div class="section-title">
           <h2>📊 실시간 로그 스트리밍 (Output Stream)</h2>
           <div class="divider"></div>
@@ -273,7 +399,7 @@ onUnmounted(() => {
 
 <style scoped>
 .dashboard-container {
-  max-width: 1280px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem;
   display: flex;
@@ -351,11 +477,13 @@ onUnmounted(() => {
   font-size: 1rem;
 }
 
-/* 헬스 보드 */
-.health-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+/* 헬스 보드 사이드바 */
+.split-status-sidebar {
+  width: 290px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .health-card {
@@ -364,10 +492,10 @@ onUnmounted(() => {
   -webkit-backdrop-filter: blur(12px);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 1.5rem;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.75rem;
   transition: all 0.3s ease;
 }
 
@@ -499,7 +627,7 @@ onUnmounted(() => {
 
 .tasks-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1.5rem;
 }
 
@@ -569,5 +697,318 @@ onUnmounted(() => {
 @keyframes blink-dot {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 1; box-shadow: 0 0 8px var(--color-rose); }
+}
+/* 마켓별 태스크 분리 레이아웃 */
+.market-task-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: rgba(30, 41, 59, 0.2);
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.market-group-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #a5b4fc;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* 실행 품질 보고서 CSS */
+.reports-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.reports-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.report-group-card {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.report-group-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #f1f5f9;
+  font-weight: 700;
+}
+
+.report-content-box {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.sub-report-item {
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 12px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sub-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.5rem;
+}
+
+.sub-title {
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.sub-status {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}
+
+.sub-status.success, .sub-status.running {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+}
+
+.sub-status.failed, .sub-status.interrupted {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.sub-report-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.report-grid-mini {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.report-grid-mini div {
+  display: flex;
+  justify-content: space-between;
+  color: #94a3b8;
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.2);
+  border-radius: 6px;
+}
+
+.report-grid-mini div span {
+  color: #64748b;
+}
+
+.report-grid-mini div strong {
+  color: #f8fafc;
+}
+
+.report-grid-mini.nested {
+  grid-template-columns: repeat(3, 1fr);
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  padding: 0.5rem;
+  border-radius: 8px;
+}
+
+.section-sub-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #818cf8;
+  margin-top: 0.5rem;
+  display: inline-block;
+}
+
+.log-message {
+  font-size: 0.75rem;
+  background: #0f172a;
+  padding: 8px;
+  border-radius: 6px;
+  color: #cbd5e1;
+  word-break: break-all;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+.no-report-msg {
+  color: #475569;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 0.5rem;
+}
+/* 상단 가로 분할 영역 */
+.dashboard-top-split {
+  display: flex;
+  gap: 2rem;
+  align-items: stretch;
+  margin-top: 1.5rem;
+  width: 100%;
+}
+
+.split-control-panel {
+  flex: 1;
+  min-width: 0;
+  background: rgba(30, 41, 59, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 1.5rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 좌측 실시간 상태 헤더 (우측 탭 헤더와 정확한 높이 정렬) */
+.sidebar-title-header {
+  border-bottom: 2px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.5rem;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.sidebar-title-header h2 {
+  font-size: 1.05rem;
+  color: #f8fafc;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* 하단 실시간 로그 스트리밍 영역 */
+.dashboard-bottom-log-stream {
+  width: 100%;
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 서브 탭 헤더 스타일 */
+.control-tab-headers {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.5rem;
+  height: 38px;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #f1f5f9;
+}
+
+.tab-btn.active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.control-tab-content {
+  background: rgba(15, 23, 42, 0.15);
+  border-radius: 16px;
+  min-height: 280px;
+  padding: 1rem;
+}
+
+.panel-section-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.05rem;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.tab-pane {
+  animation: fadeIn 0.25s ease-in;
+}
+
+.full-width-card {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.quality-reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.quality-report-card {
+  background: rgba(15, 23, 42, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 모바일 및 소형 화면 대응 반응형 */
+@media (max-width: 1024px) {
+  .dashboard-top-split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .split-status-sidebar {
+    width: 100%;
+  }
+  .sidebar-title-header {
+    height: auto;
+    padding-bottom: 0.25rem;
+  }
+  .control-tab-headers {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
 }
 </style>

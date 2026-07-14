@@ -67,7 +67,8 @@ class StatusService:
                 tasks_data[task_id] = {
                     "is_running": info.get("is_running", False),
                     "last_run_time": last_run_time,
-                    "last_status": last_status
+                    "last_status": last_status,
+                    "details": info
                 }
             
             return {
@@ -128,7 +129,8 @@ class StatusService:
                 tasks_data[job_id] = {
                     "is_running": info.get("is_running", False),
                     "last_run_time": last_run_time,
-                    "last_status": last_status
+                    "last_status": last_status,
+                    "details": info
                 }
             
             return {

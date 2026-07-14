@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI
 from p1_shared.ops.startup_validator import StartupValidator
 from p1_shared.ops.backup_manager import BackupManager
@@ -17,13 +18,18 @@ KDMS_EXPECTED_TABLES = [
 ]
 KDMS_MIN_ROW_COUNTS = {"daily_ohlcv": 1_000_000}
 
-# 전역 작업 상태 관리
-job_statuses = {
+# 전역 작업 상태 관리 (파일 영구화 적용)
+from utils.persistent_dict import FilePersistentDict
+
+default_statuses = {
     "daily_update": {"is_running": False, "last_status": "none"},
     "financial_update": {"is_running": False, "last_status": "none"},
     "backfill_minute_data": {"is_running": False, "last_status": "none"},
     "backfill_market_cap": {"is_running": False, "last_status": "none"}
 }
+cache_dir = "/app/logs" if os.path.exists("/app") else "logs"
+cache_path = os.path.join(cache_dir, "task_status_cache.json")
+job_statuses = FilePersistentDict(cache_path, default_statuses)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -57,25 +57,37 @@ class StartupValidator:
         """
         report = ValidationReport(db_name=db_name)
 
-        # 1. DB 접속 가능 여부 (SELECT 1)
-        try:
-            with self.pool.get_cursor() as cur:
-                cur.execute("SELECT 1")
-                cur.fetchone()
-                report.is_connected = True
-        except Exception as e:
-            self.logger.error(f"DB 접속 실패 ({db_name}): {e}")
-            report.is_connected = False
+        # 1. DB 접속 가능 여부 (SELECT 1) - 최대 5회 재시도 (2초 간격)
+        import time
+        max_retries = 5
+        retry_delay = 2
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                with self.pool.get_cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+                    report.is_connected = True
+                    break
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    self.logger.warning(f"DB 접속 시도 {attempt}/{max_retries} 실패 ({db_name}): {e}")
+                    time.sleep(retry_delay)
+                else:
+                    self.logger.error(f"DB 최종 접속 실패 ({db_name}): {e}")
+                    report.is_connected = False
 
+        if not report.is_connected:
             # 네트워크 에러 시 IP 검증 로직 실행
-            err_str = str(e).lower()
-            if "no route to host" in err_str or "connection" in err_str or "timeout" in err_str:
-                try:
-                    from p1_shared.utils.env_detector import EnvDetector
-                    EnvDetector().verify_dev_ip_sync(self.logger)
-                except Exception:
-                    pass
-
+            if last_error:
+                err_str = str(last_error).lower()
+                if "no route to host" in err_str or "connection" in err_str or "timeout" in err_str:
+                    try:
+                        from p1_shared.utils.env_detector import EnvDetector
+                        EnvDetector().verify_dev_ip_sync(self.logger)
+                    except Exception:
+                        pass
             return report
 
         # 2. 핵심 테이블 존재 여부

@@ -46,15 +46,20 @@ class BlacklistManager:
 
     def auto_release_expired_blocks(self, cool_off_days: int = 7) -> int:
         """
-        차단 유예기간(cool-off-days)이 경과한 블랙리스트 종목들의 차단을 자동으로 해제하고,
-        해제된 종목의 총 개수를 반환합니다.
+        차단 유예기간이 경과한 블랙리스트 종목들의 차단을 자동으로 해제하고,
+        해제된 종목의 총 개수를 반환합니다. 누적 재차단 횟수를 해제 시 보존합니다.
         """
         candidates = self.repo.get_auto_release_candidates(cool_off_days)
         released_count = 0
         for cand in candidates:
             cik = cand['cik']
             ticker = cand.get('ticker')
-            logger.info(f"Auto-releasing blacklisted CIK: {cik} (ticker: {ticker}) after cool-off.")
-            self.repo.release_blacklist(cik, admin_note=f"Auto-released by system after {cool_off_days} days cool-off.")
+            re_count = cand.get('re_blocked_count', 0)
+            logger.info(f"Auto-releasing blacklisted CIK: {cik} (ticker: {ticker}) [re-block count: {re_count}] after cool-off.")
+            self.repo.release_blacklist(
+                cik, 
+                admin_note=f"Auto-released by system (re-block count: {re_count})", 
+                reset_counters=False
+            )
             released_count += 1
         return released_count

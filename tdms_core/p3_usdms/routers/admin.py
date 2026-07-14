@@ -157,6 +157,18 @@ def get_tasks_status() -> List[Dict[str, Any]]:
             }
             reports.insert(0, new_report)
             
+    # 3단계: 리포트 목록에 daily_routine 및 weekly_backfill에 대한 기본 placeholder가 없는 경우 주입
+    routines_found = {r.get("routine") for r in reports if r.get("routine")}
+    for r_type in ["daily_routine", "weekly_backfill"]:
+        if r_type not in routines_found:
+            reports.append({
+                "routine": r_type,
+                "is_running": False,
+                "status": "none",
+                "start_time": None,
+                "end_time": None
+            })
+            
     return reports
 
 # =================================================================

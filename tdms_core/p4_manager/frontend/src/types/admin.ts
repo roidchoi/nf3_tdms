@@ -36,6 +36,7 @@ export interface MarketTaskSummary {
   is_running: boolean;
   last_run_time: string | null;
   last_status: string;
+  details?: any;
 }
 
 export interface JobTaskSummary {
