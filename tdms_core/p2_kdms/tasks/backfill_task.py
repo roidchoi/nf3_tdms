@@ -7,10 +7,15 @@ from zoneinfo import ZoneInfo
 from psycopg2.extras import execute_values
 
 from collectors.kiwoom_client import KiwoomClient
+from collectors.kis_kr_client import KisKrClient
+from collectors.factor_calculator import calculate_factors
 from collectors import utils
 from repositories.base import create_kdms_pool
 from collectors.pub_data_client import PubDataClient
 from repositories.market_cap_repo import MarketCapRepo
+from repositories.master_repo import MasterRepo
+from repositories.ohlcv_repo import OhlcvRepo
+from repositories.factor_repo import FactorRepo
 
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
@@ -117,11 +122,25 @@ def run_backfill_minute_data(
         logger.info(f"[{job_id}] DatabaseManager 초기화...")
         db = DatabaseManager()
         
-        # 지정되지 않은 경우 기본값으로 지난 8일간 ~ 어제 적용
+        # 지정되지 않은 경우 .env 설정값 혹은 기본 30일 적용
+        import os
+        from p1_shared.utils.env_detector import EnvDetector
+        try:
+            detector = EnvDetector()
+            profile = detector.load_env_profile()
+            backfill_days = int(profile.get("kdms_backfill_days") or os.environ.get("KDMS_BACKFILL_DAYS", 30))
+        except Exception:
+            backfill_days = 30
+
         if start_date is None:
-            start_date = date.today() - timedelta(days=8)
+            start_date = date.today() - timedelta(days=backfill_days)
         if end_date is None:
-            end_date = date.today() - timedelta(days=1)
+            # 장 종료 후 시점(오후 4시 이후)이면 당일까지, 그렇지 않으면 전일까지
+            now_hour = datetime.now(KST).hour
+            if now_hour >= 16:
+                end_date = date.today()
+            else:
+                end_date = date.today() - timedelta(days=1)
         logger.info(f"[{job_id}] 백필 대상 기간: {start_date} ~ {end_date}")
         
         job_statuses[job_id]["last_log"] = f"대상 기간: {start_date} ~ {end_date}"
@@ -202,7 +221,7 @@ def run_backfill_minute_data(
             "progress": 35,
             "last_log": "Kiwoom API 호출 시작..."
         })
-        _execute_backfill_jobs(api, db, job_list, missing_map, test_mode, job_statuses, job_id)
+        _execute_backfill_jobs(api, db, job_list, missing_map, test_mode, job_statuses, job_id, end_date=end_date)
 
         # 완료 상태
         end_time = datetime.now(KST)
@@ -279,67 +298,85 @@ def _detect_missing_and_partial_days(
     start_date: date, 
     end_date: date
 ) -> Dict[str, Set[date]]:
-    """'완전/일부 누락일' 탐지"""
+    """'완전/일부 누락일' 탐지 (하이브리드 알고리즘 적용)"""
     logger.info("--- [3/5] '완전/일부 누락일' 탐지 시작 ---")
-    logger.info(f"'일부 누락' 기준: {PARTIAL_DAY_THRESHOLD}건 미만")
+    logger.info(f"'일부 누락' 개수 기준: {PARTIAL_DAY_THRESHOLD}건 미만")
+    logger.info("오탐 방지를 위해 일봉 거래량 대조 오차 5% 이하 종목은 정상으로 판단합니다.")
 
-    calendar_read_table = 'trading_calendar'
-    minute_read_table = 'minute_ohlcv'
-    
-    # 1. 기준 기간 내 모든 '거래일' 목록 조회
-    query_calendar = f"""
-        SELECT dt FROM {calendar_read_table}
-        WHERE opnd_yn = 'Y' AND dt BETWEEN %s AND %s;
+    # 1. 캘린더 개장일 및 일봉/분봉 실시간 요약 bulk 조회 (LEFT JOIN 구조)
+    query = """
+        SELECT 
+            tc.dt,
+            s.stk_cd,
+            COALESCE(d.vol, 0) as daily_volume,
+            COALESCE(m.record_count, 0) as record_count,
+            COALESCE(m.sum_min_vol, 0) as sum_min_vol
+        FROM trading_calendar tc
+        CROSS JOIN (
+            SELECT unnest(%s::varchar[]) as stk_cd
+        ) s
+        LEFT JOIN daily_ohlcv d ON d.stk_cd = s.stk_cd AND d.dt = tc.dt
+        LEFT JOIN (
+            SELECT stk_cd, DATE(dt_tm) as dt, COUNT(*) as record_count, SUM(vol) as sum_min_vol
+            FROM minute_ohlcv
+            WHERE stk_cd = ANY(%s) 
+              AND dt_tm >= %s::timestamp 
+              AND dt_tm < (%s::date + INTERVAL '1 day')::timestamp
+            GROUP BY 1, 2
+        ) m ON m.stk_cd = s.stk_cd AND m.dt = tc.dt
+        WHERE tc.opnd_yn = 'Y' 
+          AND tc.dt BETWEEN %s AND %s
+        ORDER BY s.stk_cd, tc.dt;
     """
-    results = db._execute_query(query_calendar, (start_date, end_date), fetch='all')
-    all_trading_days: Set[date] = {row['dt'] for row in results}
     
-    if not all_trading_days:
-        logger.warning(f"{calendar_read_table}에 탐지 기간 내 거래일 정보가 없습니다.")
+    results = db._execute_query(
+        query, 
+        (target_stocks, target_stocks, start_date, end_date, start_date, end_date), 
+        fetch='all'
+    )
+    
+    if not results:
+        logger.warning("탐지 기간 내 개장일 또는 수집 대조 정보가 없습니다.")
         return {}
-    logger.info(f"기준 기간 ({start_date} ~ {end_date}) 내 총 거래일: {len(all_trading_days)}일")
 
-    # 2. 기수집일 '건수' 맵 생성
-    query_collected = f"""
-        SELECT stk_cd, DATE(dt_tm) as dt, COUNT(*) as record_count
-        FROM {minute_read_table}
-        WHERE stk_cd = ANY(%s) 
-          AND dt_tm >= %s::timestamp 
-          AND dt_tm < (%s::date + INTERVAL '1 day')::timestamp
-        GROUP BY 1, 2;
-    """
-    results = db._execute_query(query_collected, (target_stocks, start_date, end_date), fetch='all')
-    
-    collected_day_counts: Dict[str, Dict[date, int]] = {}
-    for stk in target_stocks:
-        collected_day_counts[stk] = {}
-        
-    for row in results:
-        stk_cd = row['stk_cd']
-        if stk_cd in collected_day_counts:
-            collected_day_counts[stk_cd][row['dt']] = row['record_count']
-
-    # 3. '완전/일부 누락' 공백일 맵 생성
+    # 2. 하이브리드 기준(개수 또는 거래량 오차) 적용하여 누락 판단
     missing_map: Dict[str, Set[date]] = {}
     total_missing_days = 0
     total_partial_days = 0
 
-    for stk_cd in target_stocks:
-        stock_counts = collected_day_counts[stk_cd]
-        missing_days = set()
-        for day in all_trading_days:
-            if day not in stock_counts:
-                missing_days.add(day)
+    for row in results:
+        stk_cd = row['stk_cd']
+        day = row['dt']
+        daily_vol = row['daily_volume']
+        rec_cnt = row['record_count']
+        sum_min_vol = row['sum_min_vol']
+        
+        is_normal = False
+        
+        # 조건 1: 분봉 적재 건수가 기준치(360) 이상인 경우 정상
+        if rec_cnt >= PARTIAL_DAY_THRESHOLD:
+            is_normal = True
+        else:
+            # 조건 2: 거래가 매우 희소하여 건수는 적지만, 거래량 합산이 일봉 거래량과 오차 5% 이하인 경우 정상 구제
+            if daily_vol == 0:
+                is_normal = (rec_cnt == 0)
+            else:
+                diff_pct = abs(daily_vol - sum_min_vol) / daily_vol
+                if diff_pct <= 0.05:
+                    is_normal = True
+
+        if not is_normal:
+            if stk_cd not in missing_map:
+                missing_map[stk_cd] = set()
+            missing_map[stk_cd].add(day)
+            if rec_cnt == 0:
                 total_missing_days += 1
-            elif stock_counts[day] < PARTIAL_DAY_THRESHOLD:
-                missing_days.add(day)
+            else:
                 total_partial_days += 1
-        if missing_days:
-            missing_map[stk_cd] = missing_days
-    
+
     logger.info(f"✅ 공백일 탐지 완료: 총 {len(missing_map)}개 종목")
     logger.info(f"  - 완전 누락일: {total_missing_days}건")
-    logger.info(f"  - 일부 누락일: {total_partial_days}건 (기준: {PARTIAL_DAY_THRESHOLD}건 미만)")
+    logger.info(f"  - 일부 누락일 (오차 > 5%): {total_partial_days}건")
     return missing_map
 
 
@@ -370,7 +407,8 @@ def _execute_backfill_jobs(
     missing_map: Dict[str, Set[date]],
     test_mode: bool,
     job_statuses: Dict, 
-    job_id: str
+    job_id: str,
+    end_date: Optional[date] = None
 ):
     """API 호출 -> 필터링 -> UPSERT"""
     logger.info("--- [5/5] 분봉 데이터 백필 작업 시작 ---")
@@ -400,19 +438,40 @@ def _execute_backfill_jobs(
         })
         logger.info(progress_msg)
         
+        stk_missing_set = missing_map.get(stk_cd)
+        if not stk_missing_set:
+            continue
+
+        # 실제 백필이 필요한 영업일 갭 크기에 맞춰 max_requests 동적 제한 (API 조회 한도 최적화)
+        if end_date:
+            try:
+                query = """
+                    SELECT COUNT(*) as count 
+                    FROM trading_calendar 
+                    WHERE dt >= %s AND dt <= %s AND opnd_yn = 'Y';
+                """
+                res = db._execute_query(query, (earliest_missing_date, end_date), fetch='all')
+                gap_days = res[0]['count'] if res else 1
+            except Exception as ce:
+                logger.warning(f"[{stk_cd}] 영업일 수 계산 쿼리 실패: {ce}")
+                gap_days = (end_date - earliest_missing_date).days + 1
+        else:
+            gap_days = (date.today() - earliest_missing_date).days + 1
+            
+        if gap_days <= 0:
+            gap_days = 1
+        stk_max_requests = min(30, max(1, (gap_days * 380) // 600 + 1))
+
         try:
             start_date_str = earliest_missing_date.strftime('%Y%m%d')
-            all_collected_data = api.get_minute_chart(stk_cd, start_date=start_date_str, max_requests=30)
+            logger.info(f"[{stk_cd}] Fetching minute chart from {start_date_str} with max_requests={stk_max_requests}")
+            all_collected_data = api.get_minute_chart(stk_cd, start_date=start_date_str, max_requests=stk_max_requests)
             if not all_collected_data:
                 logger.warning(f"[{stk_cd}] API가 {start_date_str} 기준 데이터를 반환하지 않았습니다.")
                 continue
             logger.info(f"[{stk_cd}] API 응답 수신: 총 {len(all_collected_data)}건")
         except Exception as e:
             logger.error(f"[{stk_cd}] API 호출 실패: {e}", exc_info=True)
-            continue
-            
-        stk_missing_set = missing_map.get(stk_cd)
-        if not stk_missing_set:
             continue
             
         batch_to_process = []
@@ -600,4 +659,269 @@ def run_backfill_market_cap(
         })
     finally:
         job_statuses[job_id]["is_running"] = False
+
+
+def run_backfill_daily_data(
+    job_statuses: Dict[str, Any], 
+    test_mode: bool = False,
+    start_date: date = None,
+    end_date: date = None
+):
+    """
+    일봉 데이터 중간 누락 검출 및 핀포인트 백필 실행 함수
+    """
+    job_id = "backfill_daily_data"
+    start_time = datetime.now(KST)
+    
+    # 상태 초기화
+    job_statuses[job_id] = {
+        "is_running": True,
+        "phase": "0/3",
+        "phase_name": "작업 시작 및 초기화",
+        "progress": 0,
+        "start_time": start_time.isoformat(),
+        "last_log": f"일봉 백필 작업 시작 (Test Mode: {test_mode})",
+        "stocks_processed": 0,
+        "total_stocks": 0
+    }
+    logger.info(f"[{job_id}] 작업 시작. (Test Mode: {test_mode})")
+
+    try:
+        # 날짜 자동 산정
+        import os
+        from p1_shared.utils.env_detector import EnvDetector
+        try:
+            detector = EnvDetector()
+            profile = detector.load_env_profile()
+            backfill_days = int(profile.get("kdms_backfill_days") or os.environ.get("KDMS_BACKFILL_DAYS", 30))
+        except Exception:
+            backfill_days = 30
+
+        if start_date is None:
+            start_date = date.today() - timedelta(days=backfill_days)
+        if end_date is None:
+            # 장 종료 후 시점(오후 4시 이후)이면 당일까지, 그렇지 않으면 전일까지
+            now_hour = datetime.now(KST).hour
+            if now_hour >= 16:
+                end_date = date.today()
+            else:
+                end_date = date.today() - timedelta(days=1)
+        
+        logger.info(f"[{job_id}] 백필 대상 기간: {start_date} ~ {end_date}")
+        job_statuses[job_id]["last_log"] = f"대상 기간: {start_date} ~ {end_date}"
+
+        # 리포지토리 및 클라이언트 초기화
+        db = DatabaseManager()
+        from p1_shared.api.kis_api_core import KisApiCore
+        from unittest.mock import MagicMock
+        
+        master_repo = MasterRepo(db.pool)
+        ohlcv_repo = OhlcvRepo(db.pool)
+        factor_repo = FactorRepo(db.pool)
+        market_cap_repo = MarketCapRepo(db.pool)
+        
+        if test_mode:
+            kis_client = MagicMock()
+        else:
+            detector = EnvDetector()
+            profile = detector.load_env_profile()
+            env = detector.detect()
+            is_dev = (env == "dev")
+            appkey = os.environ.get("KIS_APP_KEY") or profile.get("kis_app_key") or ""
+            appsecret = os.environ.get("KIS_APP_SECRET") or profile.get("kis_app_secret") or ""
+            
+            api_core = KisApiCore(
+                app_key=appkey,
+                app_secret=appsecret,
+                account_no=os.environ.get("KIS_ACCOUNT_NO", ""),
+                is_mock=not is_dev
+            )
+            kis_client = KisKrClient(api_core=api_core)
+
+        # Step 1: 대상 종목 목록 조회
+        job_statuses[job_id].update({
+            "phase": "1/3",
+            "phase_name": "대상 종목 선정 및 누락일 감지",
+            "progress": 10,
+            "last_log": "대상 종목 정보 로딩..."
+        })
+        
+        # 전체 활성 종목 대상
+        active_stocks = master_repo.get_all_active_stocks()
+        target_stocks = [s["stk_cd"] for s in active_stocks if s.get("stk_cd")]
+        if test_mode and not target_stocks:
+            target_stocks = ["005930"]
+        elif test_mode:
+            target_stocks = target_stocks[:5]
+            
+        logger.info(f"[{job_id}] 총 {len(target_stocks)}개 활성 종목을 대상으로 일봉 중간 누락 검출 시작")
+
+        # Step 2: 일봉 중간 누락일 검출 (Outer Join 방식)
+        query_missing = """
+            SELECT 
+                tc.dt,
+                s.stk_cd
+            FROM trading_calendar tc
+            CROSS JOIN (
+                SELECT unnest(%s::varchar[]) as stk_cd
+            ) s
+            LEFT JOIN daily_ohlcv d ON d.stk_cd = s.stk_cd AND d.dt = tc.dt
+            WHERE tc.opnd_yn = 'Y' 
+              AND tc.dt BETWEEN %s AND %s
+              AND d.stk_cd IS NULL
+            ORDER BY s.stk_cd, tc.dt;
+        """
+        results = db._execute_query(query_missing, (target_stocks, start_date, end_date), fetch='all')
+        
+        missing_map: Dict[str, List[date]] = {}
+        for row in results:
+            stk = row['stk_cd']
+            if stk not in missing_map:
+                missing_map[stk] = []
+            missing_map[stk].append(row['dt'])
+            
+        if not missing_map:
+            logger.info(f"[{job_id}] 모든 대상 종목의 일봉 데이터가 최신 상태입니다. (누락 없음)")
+            job_statuses[job_id].update({
+                "is_running": False,
+                "progress": 100,
+                "last_status": "success (누락 없음)",
+                "end_time": datetime.now(KST).isoformat(),
+                "last_log": "모든 대상 종목의 일봉 데이터가 최신 상태입니다. (누락 없음)"
+            })
+            return
+
+        total_stocks = len(missing_map)
+        job_statuses[job_id]["total_stocks"] = total_stocks
+        job_statuses[job_id].update({
+            "phase": "2/3",
+            "phase_name": "일봉 수집 및 보정 실행",
+            "progress": 30,
+            "last_log": f"총 {total_stocks}개 종목 누락 데이터 백필 기동 시작..."
+        })
+        
+        # Step 3: 종목별 핀포인트 백필 수집 실행
+        import pandas as pd
+        from collectors.factor_calculator import calculate_factors
+        
+        collected_cnt = 0
+        failed_cnt = 0
+        
+        for idx, (stk_cd, missing_days) in enumerate(missing_map.items()):
+            progress_val = 30 + int((idx / total_stocks) * 60)
+            log_msg = f"[{stk_cd}] 일봉 백필 중 ({idx+1}/{total_stocks})"
+            job_statuses[job_id].update({
+                "progress": progress_val,
+                "stocks_processed": idx + 1,
+                "last_log": log_msg
+            })
+            logger.info(f"[{job_id}] {log_msg}")
+
+            min_dt = min(missing_days)
+            max_dt = max(missing_days)
+            
+            try:
+                # KIS API 호출
+                if test_mode:
+                    # Mock 데이터 적재
+                    mock_records = []
+                    for day in missing_days:
+                        mock_records.append({
+                            "stk_cd": stk_cd,
+                            "dt": day,
+                            "opn_prc": 50000,
+                            "clse_prc": 50500,
+                            "hg_prc": 51000,
+                            "lw_prc": 49900,
+                            "vol": 100000,
+                            "trd_amt": 5000000000
+                        })
+                    ohlcv_repo.upsert_daily_ohlcv(mock_records)
+                    collected_cnt += len(mock_records)
+                else:
+                    # KIS API 범위 조회 (list[dict] 반환)
+                    api_records = kis_client.fetch_daily_ohlcv_range(stk_cd, start_date=min_dt, end_date=max_dt)
+                    if api_records:
+                        filtered_records = []
+                        for rec in api_records:
+                            rec_dt = rec.get("dt")
+                            if isinstance(rec_dt, str):
+                                rec_dt = datetime.strptime(rec_dt, "%Y-%m-%d").date()
+                            
+                            if rec_dt in missing_days:
+                                filtered_records.append({
+                                    "stk_cd": stk_cd,
+                                    "dt": rec_dt,
+                                    "open": rec.get("open"),
+                                    "close": rec.get("close"),
+                                    "high": rec.get("high"),
+                                    "low": rec.get("low"),
+                                    "volume": rec.get("volume"),
+                                    "amt": rec.get("amt"),
+                                    "turn_rt": 0.0
+                                })
+                        
+                        if filtered_records:
+                            ohlcv_repo.upsert_daily_ohlcv(filtered_records)
+                            collected_cnt += len(filtered_records)
+                            
+                            # 수정계수 재빌드 및 물리 수정주가 테이블 동기화
+                            calc_start_dt = min_dt - timedelta(days=45)
+                            try:
+                                raw_list = kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, max_dt, adj_price='1')
+                                adj_list = kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, max_dt, adj_price='0')
+                                
+                                df_raw = pd.DataFrame(raw_list).rename(columns={"close": "raw_close"})
+                                df_adj = pd.DataFrame(adj_list).rename(columns={"close": "adj_close"})
+                                
+                                if not df_raw.empty and not df_adj.empty:
+                                    df = pd.merge(df_raw, df_adj, on="dt", how="inner")
+                                    factors = calculate_factors(df, stk_cd, "KIS")
+                                    if factors:
+                                        factor_repo.upsert_adjustment_factors(factors)
+                            except Exception as fe:
+                                logger.warning(f"[{stk_cd}] 수정계수 역산 실패: {fe}")
+                            
+                            ohlcv_repo.refresh_adjusted_ohlcv_batch(
+                                min_dt - timedelta(days=5),
+                                max_dt,
+                                'KIS'
+                            )
+                            logger.info(f"✅ [{stk_cd}] {min_dt} ~ {max_dt} 범위 {len(filtered_records)}건 백필 및 팩터 소급 갱신 완료")
+            except Exception as e:
+                logger.error(f"[{stk_cd}] 일봉 백필 실패: {e}", exc_info=True)
+                failed_cnt += 1
+
+        # Step 4: 완료 처리
+        job_statuses[job_id].update({
+            "phase": "3/3",
+            "phase_name": "일봉 백필 마무리",
+            "progress": 100,
+            "last_log": "백필 작업 완료 처리 중..."
+        })
+
+        end_time = datetime.now(KST)
+        duration = (end_time - start_time).total_seconds()
+        
+        job_statuses[job_id].update({
+            "is_running": False,
+            "progress": 100,
+            "last_status": "success",
+            "end_time": end_time.isoformat(),
+            "duration": f"{int(duration)}초",
+            "last_log": f"일봉 백필 완료 (성공: {total_stocks - failed_cnt}종목, 실패: {failed_cnt}종목, 수집: {collected_cnt}건)"
+        })
+        logger.info(f"✅ [{job_id}] 일봉 백필 작업 완료 (소요시간: {duration:.2f}초)")
+
+    except Exception as e:
+        logger.critical(f"[{job_id}] 치명적 오류 발생: {e}", exc_info=True)
+        job_statuses[job_id].update({
+            "is_running": False,
+            "last_status": "failure",
+            "error": str(e),
+            "end_time": datetime.now(KST).isoformat()
+        })
+    finally:
+        job_statuses[job_id]["is_running"] = False
+
 

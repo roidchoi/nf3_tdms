@@ -396,6 +396,43 @@ class OhlcvRepo:
             rows = cursor.fetchall()
             return [r[0] for r in rows]
 
+    def get_all_stocks_latest_dates(self) -> dict[str, date]:
+        """모든 종목의 일봉 기준 가장 최근 수집된 날짜를 일괄 조회하여 딕셔너리로 반환합니다."""
+        query = "SELECT stk_cd, MAX(dt) FROM daily_ohlcv GROUP BY stk_cd"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return {r[0]: r[1] for r in rows if r[0] is not None and r[1] is not None}
+
+    def get_all_minute_latest_datetimes(self) -> dict[str, datetime]:
+        """모든 종목의 분봉 기준 가장 최근 수집된 일시를 일괄 조회하여 딕셔너리로 반환합니다."""
+        query = "SELECT stk_cd, MAX(dt_tm) FROM minute_ohlcv GROUP BY stk_cd"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return {r[0]: r[1] for r in rows if r[0] is not None and r[1] is not None}
+
+    def get_all_stocks_latest_adjusted_info(self) -> dict[str, tuple[date, int]]:
+        """
+        모든 종목의 수정종가(daily_ohlcv_adjusted) 기준 가장 최근 날짜와 수정종가를 일괄 조회(윈도우 함수 활용)하여 반환합니다.
+        반환형식: {stk_cd: (last_dt, last_cls_prc)}
+        """
+        query = """
+            WITH ranked AS (
+                SELECT stk_cd, dt, cls_prc,
+                       ROW_NUMBER() OVER (PARTITION BY stk_cd ORDER BY dt DESC) as rn
+                FROM daily_ohlcv_adjusted
+            )
+            SELECT stk_cd, dt, cls_prc 
+            FROM ranked 
+            WHERE rn = 1
+        """
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return {r[0]: (r[1], int(r[2])) for r in rows if r[0] is not None and r[1] is not None and r[2] is not None}
+
+
 
 
 

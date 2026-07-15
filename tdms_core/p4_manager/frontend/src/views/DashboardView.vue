@@ -249,7 +249,7 @@ onUnmounted(() => {
                   <TaskStatusCard 
                     market="kr"
                     taskId="backfill_minute_data"
-                    title="분봉 백필"
+                    title="주간 백필"
                     icon="⏳"
                     :status="statusStore.status.kr.tasks?.backfill_minute_data"
                   />
@@ -287,7 +287,7 @@ onUnmounted(() => {
                 <div class="quality-reports-grid">
                   <div v-for="tId in ['daily_update', 'financial_update', 'backfill_minute_data']" :key="tId" class="quality-report-card">
                     <div class="sub-report-header">
-                      <span class="sub-title"><strong>{{ tId === 'daily_update' ? '📅 일일 업데이트' : tId === 'financial_update' ? '💵 재무 업데이트' : '⏳ 분봉 백필' }}</strong></span>
+                      <span class="sub-title"><strong>{{ tId === 'daily_update' ? '📅 일일 업데이트' : tId === 'financial_update' ? '💵 재무 업데이트' : '⏳ 주간 백필' }}</strong></span>
                       <span class="sub-status" :class="statusStore.status.kr.tasks?.[tId]?.last_status">
                         {{ statusStore.status.kr.tasks?.[tId]?.last_status || '대기' }}
                       </span>

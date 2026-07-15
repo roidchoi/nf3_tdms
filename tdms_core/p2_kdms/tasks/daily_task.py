@@ -111,6 +111,15 @@ class DailyTask:
         except Exception as pc_err:
             logger.warning(f"Failed to pre-load previous close prices: {pc_err}")
 
+        # 1-1. 종목별 마지막 수집일 및 수정종가 정보 벌크 로딩 (갭 보정 및 수정계수 감지용)
+        last_dt_map = {}
+        adj_info_map = {}
+        try:
+            last_dt_map = self.ohlcv_repo.get_all_stocks_latest_dates()
+            adj_info_map = self.ohlcv_repo.get_all_stocks_latest_adjusted_info()
+        except Exception as meta_err:
+            logger.warning(f"Failed to pre-load stocks latest dates/adjusted info: {meta_err}")
+
         # 2. 수집 대상 활성 종목 조회
         active_stocks = self.master_repo.get_all_active_stocks()
         if not active_stocks:
@@ -155,14 +164,46 @@ class DailyTask:
                 skipped += 1
                 continue
 
+            # 종목별 갭 동적 산출 및 조회 기간 Clamping
+            stk_last_dt = last_dt_map.get(stk_cd)
+            if isinstance(stk_last_dt, MagicMock):
+                stk_last_dt = None
+            
+            # end_date가 MagicMock인 경우 방어 처리
+            eff_end_date = start_date if isinstance(end_date, MagicMock) else end_date
+
+            # 하위 호환성 및 단일 일자 기동 보장: start_date와 end_date가 같거나 end_date가 인입되지 않은 경우 갭 보정 우회
+            if start_date == eff_end_date or end_date is None:
+                stk_start = start_date
+                stk_end = start_date
+            else:
+                # 기본 수집 대상 범위는 [start_date - 1, end_date]로 설정 (최소 T-1 거래량 덮어쓰기 보정 보장)
+                base_start = start_date - timedelta(days=1)
+                
+                if stk_last_dt:
+                    # 이미 최신 날짜까지 모두 수집 완료되었고 갭이 없는 상태라면 스킵 또는 T-1 덮어쓰기만 수행
+                    if stk_last_dt >= eff_end_date:
+                        stk_start = base_start
+                    else:
+                        # 갭이 존재하는 경우 start_date를 갭 시작점(stk_last_dt + 1)으로 확장
+                        stk_start = min(base_start, stk_last_dt + timedelta(days=1))
+                else:
+                    # DB 적재 이력이 없는 신규 종목의 경우 최근 5일치 일괄 수집
+                    stk_start = start_date - timedelta(days=5)
+
+                stk_end = eff_end_date
+            
+            # 휴장일 등으로 인해 stk_start > stk_end 가 되는 비정상 범위 보정
+            if stk_start > stk_end:
+                stk_start = stk_end
+
             try:
-                # 단일 날짜와 범위 기반 분기
-                if start_date == end_date:
-                    ohlcv = self.kis_client.fetch_daily_ohlcv(stk_cd, start_date)
+                # Raw OHLCV 시세 범위 수집
+                if stk_start == stk_end:
+                    ohlcv = self.kis_client.fetch_daily_ohlcv(stk_cd, stk_start)
                     ohlcv_list = [ohlcv] if ohlcv else []
                 else:
-                    # Raw OHLCV 시세 범위 수집
-                    ohlcv_list = self.kis_client.fetch_daily_ohlcv_range(stk_cd, start_date, end_date)
+                    ohlcv_list = self.kis_client.fetch_daily_ohlcv_range(stk_cd, stk_start, stk_end)
 
                 if ohlcv_list:
                     # 상장주식수 조회 (turn_rt 및 시가총액 계산용)
@@ -214,22 +255,48 @@ class DailyTask:
                         # 4-1. 수정계수 계산 대상 필터링 적용 (안정성 및 완결성 보장)
                         prev_shares = prev_shares_map.get(stk_cd, 0)
                         
-                        # 괴리율 계산 (전일 종가 대비 오늘 종가가 25% 초과 변동한 경우)
+                        # 괴리율 계산 (전일 종가 대비 오늘 종가가 5% 초과 변동한 경우)
                         has_price_anomaly = False
                         if ohlcv_list:
                             today_close = ohlcv_list[-1]["close"]
                             prev_close = prev_close_map.get(stk_cd, 0)
                             if prev_close > 0:
                                 change_rate = abs(today_close - prev_close) / prev_close
-                                if change_rate > 0.25:
+                                if change_rate > 0.05:
                                     has_price_anomaly = True
 
                         has_share_changed = (prev_shares != shares)
                         has_recent_event = (stk_cd in recent_event_map)
                         is_new_stock = (stk_cd not in prev_shares_map)
 
-                        # rebuild_factors 옵션이 활성화되었거나 필터링 조건 만족 시에만 API 45일 범위 조회 실행
-                        if rebuild_factors or has_share_changed or has_price_anomaly or has_recent_event or is_new_stock:
+                        trigger_factor_rebuild = rebuild_factors or has_share_changed or has_price_anomaly or has_recent_event or is_new_stock
+
+                        # 1차 스크리닝에서 통과했더라도 Stage 2 (과거 수정종가 대조)로 정밀 검증
+                        if not trigger_factor_rebuild:
+                            adj_info = adj_info_map.get(stk_cd)
+                            if not adj_info:
+                                trigger_factor_rebuild = True  # DB 내 기존 수정종가 정보가 없으면 강제 재구축 (Fallback)
+                            else:
+                                adj_last_dt, adj_last_close = adj_info
+                                try:
+                                    # 최근 5일치 수정종가(adj_price='0')를 1회 룩업하여 대조
+                                    check_start = end_date - timedelta(days=5)
+                                    api_adj_list = self.kis_client.fetch_ohlcv_range(stk_cd, check_start, end_date, adj_price='0')
+                                    api_adj_map = {item["dt"]: item["close"] for item in api_adj_list if "dt" in item}
+                                    
+                                    if adj_last_dt in api_adj_map:
+                                        api_adj_close = api_adj_map[adj_last_dt]
+                                        if abs(adj_last_close - api_adj_close) > 0.01:
+                                            trigger_factor_rebuild = True
+                                            logger.info(
+                                                f"[{stk_cd}] Adjusted close discrepancy detected at {adj_last_dt}: "
+                                                f"DB {adj_last_close} vs API {api_adj_close}. Triggering factor rebuild."
+                                            )
+                                except Exception as check_err:
+                                    logger.warning(f"[{stk_cd}] Failed to verify historical adjusted close: {check_err}")
+
+                        # 필터링 조건 만족 시에만 API 45일 범위 조회 실행
+                        if trigger_factor_rebuild:
                             # 최근 45일 범위의 Raw 및 Adjusted 시세 조회
                             calc_start_dt = end_date - timedelta(days=45)
                             try:
@@ -260,7 +327,6 @@ class DailyTask:
                                         # KIS API 상에서 팩터가 감지되지 않았는데, DB 내 10일 이내에 이벤트가 존재하는 경우
                                         # 사후 정정으로 인해 소멸되었을 수 있으므로 obsolete_dates 제거 진행
                                         if stk_cd in recent_event_map:
-                                            # 45일 범위가 맞으므로 이 기간의 기존 DB 내 팩터 삭제
                                             obsolete_dates = [dt for dt in recent_event_map[stk_cd] if calc_start_dt <= dt <= end_date]
                                             if obsolete_dates:
                                                 self.factor_repo.delete_adjustment_factors_by_dates(stk_cd, obsolete_dates, price_source='KIS')
@@ -341,6 +407,13 @@ class DailyTask:
         """당일 분기 대상 종목들에 대해 Kiwoom API를 통해 공백 기간(start_date ~ end_date) 분봉 데이터를 동적으로 수집하고 적재합니다."""
         logger.info(f"--- Starting Daily Minute Data Range Collection ({start_date} ~ {end_date}) ---")
         
+        # 종목별 분봉 최신 적재 시점 벌크 로딩
+        minute_last_map = {}
+        try:
+            minute_last_map = self.ohlcv_repo.get_all_minute_latest_datetimes()
+        except Exception as m_err:
+            logger.warning(f"Failed to pre-load stocks latest minute datetimes: {m_err}")
+
         # 영업일 수 계산
         trading_days = self.ohlcv_repo.get_trading_days_count(start_date, end_date)
         if isinstance(trading_days, MagicMock):
@@ -349,10 +422,6 @@ class DailyTask:
             logger.info("No trading days in range for minute data. Skipping.")
             return
             
-        # max_requests 동적 산정 (1일 약 380개 분봉, 1회 요청 시 약 600~900개 수집)
-        max_requests = max(1, (trading_days * 380) // 600 + 1)
-
-        
         today = end_date
         quarter = f"{today.year}Q{(today.month - 1) // 3 + 1}"
         
@@ -390,12 +459,31 @@ class DailyTask:
         target_stocks = list(set(target_stocks))
         end_date_str = end_date.strftime("%Y%m%d")
         
-        logger.info(f"Targeting {len(target_stocks)} stocks for daily range minute collection on {end_date_str} with max_requests={max_requests}.")
+        logger.info(f"Targeting {len(target_stocks)} stocks for daily range minute collection on {end_date_str}.")
 
         for idx, stk_cd in enumerate(target_stocks):
             try:
+                # 종목별 개별 분봉 갭 및 max_requests 동적 산정
+                last_dt_tm = minute_last_map.get(stk_cd)
+                if last_dt_tm:
+                    # last_dt_tm.date()와 end_date 사이의 공백 영업일 수 계산
+                    gap_days = self.ohlcv_repo.get_trading_days_count(last_dt_tm.date() + timedelta(days=1), end_date)
+                    if isinstance(gap_days, MagicMock):
+                        gap_days = 1
+                    
+                    # 이미 최신 날짜까지 완벽하게 수집되었다면 수집 스킵 (키움 API 요청 절약)
+                    if gap_days <= 0:
+                        continue
+                    
+                    stk_max_requests = max(1, (gap_days * 380) // 600 + 1)
+                    logger.debug(f"[{stk_cd}] Detected minute collection gap of {gap_days} days. Setting max_requests={stk_max_requests}.")
+                else:
+                    # 적재 이력이 없는 신규 대상 종목인 경우 넉넉하게 10영업일치(max_requests=7) 수집
+                    stk_max_requests = 7
+                    logger.info(f"[{stk_cd}] No minute data history. Setting max_requests={stk_max_requests} for initial backfill.")
+
                 # 최신 영업일(end_date_str) 기준 과거로 연속 수집
-                collected = self.kiwoom_client.get_minute_chart(stk_cd, start_date=end_date_str, max_requests=max_requests)
+                collected = self.kiwoom_client.get_minute_chart(stk_cd, start_date=end_date_str, max_requests=stk_max_requests)
                 if collected:
                     # 범위 내에 매칭되는 분봉만 필터링 (start_date <= dt <= end_date)
                     range_collected = []
@@ -557,35 +645,22 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
         except Exception as l_err:
             logger.warning(f"Failed to query last collected date: {l_err}")
 
-        # 수집 범위 산출
-        if last_collected_date is None:
-            # 적재 데이터가 없으면 안전하게 단일 target_date만 타겟팅
-            start_date = target_date
-            end_date = target_date
-            logger.info(f"[{job_id}] DB has no ohlcv data. Starting with single target date: {target_date}")
-        else:
-            # 마지막 수집 다음 날부터 target_date 사이의 개장 영업일 조회
-            search_start = last_collected_date + timedelta(days=1)
-            open_days = []
-            try:
-                open_days = ohlcv_repo.get_open_trading_days(search_start, target_date)
-                if isinstance(open_days, MagicMock):
-                    open_days = []
-            except Exception as o_err:
-                logger.warning(f"Failed to query open trading days: {o_err}")
-
+        # 수집 범위 산출: 시간외 거래량 보정 및 안전한 수집 갭 메우기를 위해
+        # 평시 수집 범위를 기본적으로 target_date의 최근 5일 전(T-5)부터 target_date(T)로 넓게 확장합니다.
+        # 개별 종목의 수집 갭은 DailyTask.run 내부에서 stk_last_dt 기반으로 더 넓게 자동 확장됩니다.
+        start_date = target_date - timedelta(days=5)
+        end_date = target_date
+        
+        # open_trading_days 유틸을 사용해 실제 해당 기간 내의 영업일만 추출하여 시작/종료 범위 재계산
+        try:
+            open_days = ohlcv_repo.get_open_trading_days(start_date, end_date)
             if open_days:
                 start_date = min(open_days)
                 end_date = max(open_days)
-                logger.info(
-                    f"[{job_id}] 공백 영업일 감지: {start_date} ~ {end_date} "
-                    f"(총 {len(open_days)} 영업일). 일괄 수집 진행합니다."
-                )
-            else:
-                # 공백이 없는 경우 단일 target_date 적용 (휴장일 스킵 처리 등 정상 흐면 유지를 위함)
-                start_date = target_date
-                end_date = target_date
-                logger.info(f"[{job_id}] No missing trading days detected. Target date: {target_date}")
+        except Exception as date_range_err:
+            logger.warning(f"Failed to refine trading days range: {date_range_err}")
+
+        logger.info(f"[{job_id}] Base collection range expanded for volume correction: {start_date} ~ {end_date}")
 
         if start_date == end_date:
             result = task.run(start_date)

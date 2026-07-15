@@ -18,6 +18,22 @@ const isTestMode = ref(true)
 
 // 상태 색상 및 쉐도우 (HSL)
 const themeColor = computed(() => {
+  if (props.taskId === 'backfill_minute_data') {
+    const minRun = statusStore.status.kr.tasks?.backfill_minute_data?.is_running
+    const dailyRun = statusStore.status.kr.tasks?.backfill_daily_data?.is_running
+    const capRun = statusStore.status.kr.tasks?.backfill_market_cap?.is_running
+    
+    if (minRun || dailyRun || capRun) return 'var(--color-indigo)' // 실행 중
+    
+    const minStat = statusStore.status.kr.tasks?.backfill_minute_data?.last_status
+    const dailyStat = statusStore.status.kr.tasks?.backfill_daily_data?.last_status
+    const capStat = statusStore.status.kr.tasks?.backfill_market_cap?.last_status
+    
+    if (minStat === 'failed' || dailyStat === 'failed' || capStat === 'failed') return 'var(--color-rose)'
+    if (minStat === 'success' || dailyStat === 'success' || capStat === 'success') return 'var(--color-emerald)'
+    return 'var(--color-slate)'
+  }
+
   if (props.status?.is_running) return 'var(--color-indigo)'   // 실행 중
   if (props.status?.last_status === 'success') return 'var(--color-emerald)' // 완료
   if (props.status?.last_status === 'failed') return 'var(--color-rose)'    // 에러
@@ -25,6 +41,21 @@ const themeColor = computed(() => {
 })
 
 const statusText = computed(() => {
+  if (props.taskId === 'backfill_minute_data') {
+    const minRun = statusStore.status.kr.tasks?.backfill_minute_data?.is_running
+    const dailyRun = statusStore.status.kr.tasks?.backfill_daily_data?.is_running
+    const capRun = statusStore.status.kr.tasks?.backfill_market_cap?.is_running
+    
+    if (minRun || dailyRun || capRun) return '실행 중...'
+    
+    const minStat = statusStore.status.kr.tasks?.backfill_minute_data?.last_status
+    const dailyStat = statusStore.status.kr.tasks?.backfill_daily_data?.last_status
+    const capStat = statusStore.status.kr.tasks?.backfill_market_cap?.last_status
+    
+    if (minStat === 'success' && dailyStat === 'success' && capStat === 'success') return '완료됨'
+    return '대기 중'
+  }
+
   if (props.status?.is_running) return '실행 중...'
   if (props.status?.last_status === 'success') return '완료됨'
   if (props.status?.last_status === 'failed') return '오류 발생'
@@ -78,6 +109,22 @@ const isWarningActive = computed(() => {
   return false
 })
 
+const latestRunTimeText = computed(() => {
+  if (props.taskId === 'backfill_minute_data') {
+    const times = [
+      statusStore.status.kr.tasks?.backfill_minute_data?.last_run_time,
+      statusStore.status.kr.tasks?.backfill_daily_data?.last_run_time,
+      statusStore.status.kr.tasks?.backfill_market_cap?.last_run_time
+    ].filter(Boolean).map(t => new Date(t!).getTime())
+    
+    if (times.length > 0) {
+      return new Date(Math.max(...times)).toLocaleString()
+    }
+    return '-'
+  }
+  return props.status?.last_run_time ? new Date(props.status.last_run_time).toLocaleString() : '-'
+})
+
 const handleRun = async () => {
   let message = `[${props.title}] 작업을 실행하시겠습니까?\n\n`
   
@@ -106,6 +153,60 @@ const handleRun = async () => {
     alert(`태스크 실행 실패: ${error?.response?.data?.detail || error.message}`)
   }
 }
+
+const handleRunCustom = async (subTaskId: string) => {
+  let subTitle = ''
+  if (subTaskId === 'backfill_minute_data') subTitle = '분봉 백필'
+  else if (subTaskId === 'backfill_daily_data') subTitle = '일봉 백필'
+  else if (subTaskId === 'backfill_market_cap') subTitle = '시가총액 백필'
+
+  let message = `[${subTitle}] 작업을 실행하시겠습니까?\n\n`
+  message += `▶ 실행 모드: ⚠️ 운영 모드 (실제 데이터 변경)\n`
+  
+  if (isKoreanMarketOpen()) {
+    message += `\n🚨 [경고] 현재 한국 주식시장 장중 거래 시간입니다!\n운영 모드 실행 시 실시간 DB 데이터 오염 위험이 매우 높습니다.\n정말 진행하시겠습니까?`
+  }
+
+  if (!confirm(message)) return
+
+  try {
+    await statusStore.runTask(props.market, subTaskId, false)
+    alert(`${subTitle} 수동 실행 요청 완료`)
+  } catch (error: any) {
+    alert(`태스크 실행 실패: ${error?.response?.data?.detail || error.message}`)
+  }
+}
+
+const latestBackfillStatusText = computed(() => {
+  const minTask = statusStore.status.kr.tasks?.backfill_minute_data
+  const dailyTask = statusStore.status.kr.tasks?.backfill_daily_data
+  const capTask = statusStore.status.kr.tasks?.backfill_market_cap
+
+  const tasks = [
+    { name: '분봉', task: minTask },
+    { name: '일봉', task: dailyTask },
+    { name: '시총', task: capTask }
+  ]
+
+  const validTasks: Array<{ name: string; status: string; time: number }> = []
+
+  for (const t of tasks) {
+    if (t.task && t.task.last_run_time) {
+      validTasks.push({
+        name: t.name,
+        status: t.task.last_status || 'none',
+        time: new Date(t.task.last_run_time).getTime()
+      })
+    }
+  }
+
+  if (validTasks.length === 0) {
+    return '-'
+  }
+
+  validTasks.sort((a, b) => b.time - a.time)
+  return `${validTasks[0].name}-${validTasks[0].status}`
+})
 </script>
 
 <template>
@@ -121,40 +222,71 @@ const handleRun = async () => {
     </div>
 
     <div class="card-body">
-      <div class="status-summary">
+      <div class="status-summary" v-if="taskId !== 'backfill_minute_data'">
         <span class="label">마지막 상태</span>
         <span class="value" :style="{ color: themeColor }">{{ status?.last_status || '-' }}</span>
+      </div>
+      <div class="status-summary" v-else>
+        <span class="label">마지막 상태</span>
+        <span class="value" :style="{ color: themeColor }">{{ latestBackfillStatusText }}</span>
       </div>
 
       <div class="status-summary">
         <span class="label">마지막 실행 시간</span>
-        <span class="value font-mono">{{ status?.last_run_time ? new Date(status.last_run_time).toLocaleString() : '-' }}</span>
+        <span class="value font-mono">{{ latestRunTimeText }}</span>
       </div>
 
       <!-- 태스크 기동 시 흘러가는 바 애니메이션 -->
-      <div class="loading-bar-container" v-if="status?.is_running">
+      <div class="loading-bar-container" v-if="taskId === 'backfill_minute_data' ? (statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running) : status?.is_running">
         <div class="loading-bar-fill"></div>
       </div>
     </div>
 
     <div class="card-footer">
-      <!-- 한국(kr) 전용 테스트 모드 Switch UI -->
-      <div class="switch-container" v-if="market === 'kr'">
-        <span class="switch-label">테스트 모드</span>
-        <label class="switch-btn">
-          <input type="checkbox" v-model="isTestMode" :disabled="status?.is_running">
-          <span class="slider"></span>
-        </label>
-      </div>
+      <template v-if="taskId === 'backfill_minute_data'">
+        <div class="btn-group-horizontal">
+          <button 
+            class="run-btn mini" 
+            @click="handleRunCustom('backfill_minute_data')" 
+            :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+          >
+            {{ statusStore.status.kr.tasks?.backfill_minute_data?.is_running ? '실행 중' : '분봉' }}
+          </button>
+          <button 
+            class="run-btn mini" 
+            @click="handleRunCustom('backfill_daily_data')" 
+            :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+          >
+            {{ statusStore.status.kr.tasks?.backfill_daily_data?.is_running ? '실행 중' : '일봉' }}
+          </button>
+          <button 
+            class="run-btn mini" 
+            @click="handleRunCustom('backfill_market_cap')" 
+            :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+          >
+            {{ statusStore.status.kr.tasks?.backfill_market_cap?.is_running ? '실행 중' : '시총' }}
+          </button>
+        </div>
+      </template>
+      <template v-else>
+        <!-- 한국(kr) 전용 테스트 모드 Switch UI -->
+        <div class="switch-container" v-if="market === 'kr'">
+          <span class="switch-label">테스트 모드</span>
+          <label class="switch-btn">
+            <input type="checkbox" v-model="isTestMode" :disabled="status?.is_running">
+            <span class="slider"></span>
+          </label>
+        </div>
 
-      <button 
-        class="run-btn" 
-        @click="handleRun" 
-        :disabled="status?.is_running"
-        :class="{ running: status?.is_running }"
-      >
-        {{ status?.is_running ? '실행 중' : '즉시 실행' }}
-      </button>
+        <button 
+          class="run-btn" 
+          @click="handleRun" 
+          :disabled="status?.is_running"
+          :class="{ running: status?.is_running }"
+        >
+          {{ status?.is_running ? '실행 중' : '즉시 실행' }}
+        </button>
+      </template>
     </div>
   </div>
 </template>
@@ -367,4 +499,28 @@ input:disabled + .slider {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.btn-group-horizontal {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.btn-group-horizontal .run-btn.mini {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+  text-align: center;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-group-horizontal .run-btn.mini:hover:not(:disabled) {
+  background: var(--color-indigo);
+  border-color: var(--color-indigo);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
 </style>
+
