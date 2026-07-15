@@ -104,6 +104,7 @@
 | `dec-006_fallback_listed_shares_mechanism.md` | 상장주식수 누락: API 0 유입 시 DB 최근 데이터 Fallback 대체 | — |
 | `dec-007_financial_update_optimization.md` | KDMS 재무 업데이트 성능 최적화 전략 | — |
 | `dec-008_scheduler_reload_and_logging.md` | 스케줄러 동적 리로드 및 진행률 로깅 개선 [NEW] | — |
+| `dec-009_kdms_backfill_optimization.md` | KDMS 백필 누락 감지 및 API 호출 한도 계산 고도화 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 
@@ -189,6 +190,7 @@
 | `codebase_map.md` | 17개 파일의 물리구조, 새로 구성된 Vue SPA 프론트엔드 폴더 구조 및 테스트 현황 | T-009 |
 | `environment.md` | tdms_p4_env Conda/Node.js 런타임 환경, 주요 패키지(fastapi, vue3, vitest, websockets) 버전, Nginx 프록시 해결책 및 TS5101/TS6133 빌드 오류 대안 기록 | T-009 |
 | `decisions.md` | Nginx 동적 리졸브(P4DEC-001), 백그라운드 캐싱 폴링/장애 격리(P4DEC-002), 데이터 갭 정규화 및 API 동적 예외 격리(P4DEC-003), 서버 백업 물리 차단 안전장치(P4DEC-004) 적용, 볼륨 바인딩(P4DEC-005), 시장 격리 백업/복구(P4DEC-006), IP 자가탐색(P4DEC-007), 크론 요일 편집/재로드 대우(P4DEC-008) 결정 추가, 가치평가 날짜 기본값 및 검색 조건 옵션 개편(P4DEC-009) 추가 | T-009 |
+| `decisions/p4dec-011_backfill_dashboard_refactoring.md` | 대시보드 주간 백필 카드 UI 및 다중 백필 제어 개선 [NEW] | — |
 
 ### interfaces/ (인터페이스 명세)
 
