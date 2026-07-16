@@ -353,7 +353,9 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
             "end_time": datetime.now(KST).isoformat()
         })
     finally:
-        job_statuses[job_id]["is_running"] = False
+        status_dict = job_statuses.get(job_id, {})
+        status_dict["is_running"] = False
+        job_statuses[job_id] = status_dict
 
 
 def _compare_financial_data(api_data: dict, db_data: dict, columns: List[str], logger: logging.Logger) -> bool:

@@ -21,6 +21,7 @@
 | `architecture.md` | 시스템 아키텍처 (템플릿) | — |
 | `decisions.md` | 공통 의사결정 (템플릿) | — |
 | `environment.md` | 공통 환경 (템플릿) | — |
+| `new_feature_guide.md` | 신규 기능 추가 시 시행착오 방지 개발 가이드 (Perfect Isolation, KIS 엑셀 스펙 파싱, 도커 빌드 정책, UI 검증 프로세스 등) | 2026-07-16 |
 
 ---
 
@@ -87,6 +88,7 @@
 |---|---|---|---|
 | `ohlcv_repo.md` | OhlcvRepo | **39** | 일봉/수정주가(On-the-fly+물리)/분봉 CRUD, 팩터역산용 DF |
 | `financial_repo.md` | FinancialRepo | **38** | PIT 재무제표/비율 INSERT + DISTINCT ON 버전 선택 |
+| `investor_trade_repo.md` | InvestorTradeRepo | — | 일별 투자자 매매동향(수급) 벌크 UPSERT 및 기간별 조회 기능 제공 |
 | `schema_kdms_db.md` | kdms_db | — | kdms_timescaledb 내 12개 테이블 컬럼 타입, PK, 인덱스, hypertable 3종 상세 스키마 |
 | `data_api_endpoints.md` | routers/data.py | — | /api/data/* 전체 엔드포인트 명세 |
 | `fastapi_lifespan.md` | main.py lifespan | — | DB풀, StartupValidator, APScheduler 크론 등록 순서 |

@@ -109,6 +109,19 @@ const isWarningActive = computed(() => {
   return false
 })
 
+const formatDate24h = (dateStr: string | number | Date) => {
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return '-'
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  const Y = d.getFullYear()
+  const M = pad(d.getMonth() + 1)
+  const D = pad(d.getDate())
+  const h = pad(d.getHours())
+  const m = pad(d.getMinutes())
+  const s = pad(d.getSeconds())
+  return `${Y}-${M}-${D} ${h}:${m}:${s}`
+}
+
 const latestRunTimeText = computed(() => {
   if (props.taskId === 'backfill_minute_data') {
     const times = [
@@ -118,11 +131,11 @@ const latestRunTimeText = computed(() => {
     ].filter(Boolean).map(t => new Date(t!).getTime())
     
     if (times.length > 0) {
-      return new Date(Math.max(...times)).toLocaleString()
+      return formatDate24h(Math.max(...times))
     }
     return '-'
   }
-  return props.status?.last_run_time ? new Date(props.status.last_run_time).toLocaleString() : '-'
+  return props.status?.last_run_time ? formatDate24h(props.status.last_run_time) : '-'
 })
 
 const handleRun = async () => {
@@ -223,16 +236,16 @@ const latestBackfillStatusText = computed(() => {
 
     <div class="card-body">
       <div class="status-summary" v-if="taskId !== 'backfill_minute_data'">
-        <span class="label">마지막 상태</span>
+        <span class="label">최종 상태</span>
         <span class="value" :style="{ color: themeColor }">{{ status?.last_status || '-' }}</span>
       </div>
       <div class="status-summary" v-else>
-        <span class="label">마지막 상태</span>
+        <span class="label">최종 상태</span>
         <span class="value" :style="{ color: themeColor }">{{ latestBackfillStatusText }}</span>
       </div>
 
       <div class="status-summary">
-        <span class="label">마지막 실행 시간</span>
+        <span class="label">최종 실행</span>
         <span class="value font-mono">{{ latestRunTimeText }}</span>
       </div>
 
@@ -374,6 +387,7 @@ const latestBackfillStatusText = computed(() => {
 .value {
   color: #f8fafc;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .font-mono {

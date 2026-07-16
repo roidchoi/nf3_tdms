@@ -29,13 +29,14 @@ class DailyTask:
     일일 데이터 수집 및 수정계수/수정주가 갱신 작업을 총괄하는 태스크 조정자.
     """
 
-    def __init__(self, kis_client, ohlcv_repo, master_repo, factor_repo=None, market_cap_repo=None, kiwoom_client=None) -> None:
+    def __init__(self, kis_client, ohlcv_repo, master_repo, factor_repo=None, market_cap_repo=None, kiwoom_client=None, investor_trade_repo=None) -> None:
         self.kis_client = kis_client
         self.ohlcv_repo = ohlcv_repo
         self.master_repo = master_repo
         self.factor_repo = factor_repo
         self.market_cap_repo = market_cap_repo
         self.kiwoom_client = kiwoom_client
+        self.investor_trade_repo = investor_trade_repo
 
     def run(self, target_date: date, end_date: date | None = None, rebuild_factors: bool = False) -> Dict[str, Any]:
         """
@@ -401,6 +402,64 @@ class DailyTask:
             except Exception as she:
                 logger.error(f"Failed to perform self-healing auto-delist for blacklisted stocks: {she}")
 
+        # 9. 투자자 매매동향(일별) 수집 및 적재
+        if self.investor_trade_repo is not None:
+            try:
+                logger.info("Starting daily investor trade collection...")
+                try:
+                    open_days = self.ohlcv_repo.get_open_trading_days(start_date, end_date)
+                    if isinstance(open_days, MagicMock):
+                        open_days = []
+                except Exception as od_err:
+                    logger.error(f"Failed to fetch open trading days for daily investor trade: {od_err}")
+                    open_days = []
+
+                if not open_days:
+                    open_days = [start_date]
+
+                for d in open_days:
+                    try:
+                        targets = self.investor_trade_repo.get_active_symbols_for_date(d)
+                    except Exception as tg_err:
+                        logger.error(f"Failed to fetch active symbols for date {d}: {tg_err}")
+                        continue
+
+                    if not targets:
+                        logger.info(f"No investor trade target symbols found for date {d}")
+                        continue
+
+                    logger.info(f"Collecting investor trade daily for {len(targets)} symbols on {d}")
+                    loop_start_time = time.time()
+                    total_targets = len(targets)
+                    for idx, stk_cd in enumerate(targets):
+                        if idx % 50 == 0 or idx == total_targets - 1:
+                            elapsed = time.time() - loop_start_time
+                            if elapsed == 0:
+                                elapsed = 1e-6
+                            items_per_sec = (idx + 1) / elapsed
+                            remaining = total_targets - (idx + 1)
+                            eta_seconds = remaining / items_per_sec if items_per_sec > 0 else 0
+                            eta_str = time.strftime('%H:%M:%S', time.gmtime(eta_seconds))
+                            progress_pct = (idx + 1) / total_targets * 100.0
+                            
+                            logger.info(
+                                f"[KDMS 일일 수급 수집] Progress: {progress_pct:.1f}% ({idx+1}/{total_targets}) | "
+                                f"Speed: {items_per_sec:.1f} it/s | Elapsed: {elapsed:.0f}s | ETA: {eta_str} | "
+                                f"Current: {stk_cd}"
+                            )
+                        try:
+                            records = self.kis_client.fetch_investor_trade_daily(stk_cd, start_date=d, end_date=d)
+                            if records:
+                                day_records = [r for r in records if r.get("dt") == d]
+                                if day_records:
+                                    self.investor_trade_repo.upsert_daily_investor_trade(day_records)
+                                    collected += len(day_records)
+                        except Exception as e:
+                            logger.error(f"Failed to collect investor trade for {stk_cd} on {d}: {e}")
+                            failed += 1
+            except Exception as ite:
+                logger.error(f"Failed in daily investor trade collection process: {ite}")
+
         return {"collected": collected, "failed": failed, "skipped": skipped}
 
     def _collect_daily_minute_data_range(self, start_date: date, end_date: date) -> None:
@@ -583,13 +642,17 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             "last_log": "일일 수집 태스크 실행 중..."
         })
 
+        from repositories.investor_trade_repo import InvestorTradeRepo
+        investor_trade_repo = InvestorTradeRepo(pool)
+
         task = DailyTask(
             kis_client=kis_client,
             ohlcv_repo=ohlcv_repo,
             master_repo=master_repo,
             factor_repo=factor_repo,
             market_cap_repo=market_cap_repo,
-            kiwoom_client=kiwoom_client
+            kiwoom_client=kiwoom_client,
+            investor_trade_repo=investor_trade_repo
         )
         
         # 17:00 KST 기준으로 수집 종료일(target_date) 결정
@@ -703,4 +766,6 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             "end_time": datetime.now(KST).isoformat()
         })
     finally:
-        job_statuses[job_id]["is_running"] = False
+        status_dict = job_statuses.get(job_id, {})
+        status_dict["is_running"] = False
+        job_statuses[job_id] = status_dict

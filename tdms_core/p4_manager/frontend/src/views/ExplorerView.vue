@@ -92,7 +92,8 @@ const showDateFilter = computed(() => {
     'daily_ohlcv', 'daily_market_cap', 'minute_ohlcv',
     'system_milestones', 'trading_calendar',
     'us_daily_price', 'us_daily_valuation',
-    'us_ticker_history', 'us_collection_blacklist'
+    'us_ticker_history', 'us_collection_blacklist',
+    'daily_investor_trade'
   ].includes(store.selectedTable)
 })
 

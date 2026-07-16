@@ -25,7 +25,7 @@ def test_get_preview_metadata_success():
     data = response.json()
     assert "kr" in data
     assert "us" in data
-    assert len(data["kr"]) == 10
+    assert len(data["kr"]) == 11
     assert data["kr"][0]["table"] == "stock_info"
     assert data["us"][0]["table"] == "us_ticker_master"
 

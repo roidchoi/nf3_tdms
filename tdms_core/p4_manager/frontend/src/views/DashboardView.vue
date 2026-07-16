@@ -139,19 +139,21 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="freshness-details" v-if="statusStore.status.kr.freshness">
-              <div class="metric">
+              <div class="metric-row">
                 <span class="m-label">최종 수집일</span>
-                <span class="m-value">{{ statusStore.status.kr.freshness.latest_trading_date || '-' }}</span>
+                <span class="m-value font-mono">{{ statusStore.status.kr.freshness.latest_trading_date || '-' }}</span>
               </div>
-              <div class="metric">
-                <span class="m-label">수집 완료율</span>
-                <span class="m-value">{{ (statusStore.status.kr.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
-              </div>
-              <div class="metric">
-                <span class="m-label">신선도 상태</span>
-                <span class="status-badge" :style="{ backgroundColor: statusStore.status.kr.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
-                  {{ statusStore.status.kr.freshness.status }}
-                </span>
+              <div class="metric-group-row">
+                <div class="metric-col">
+                  <span class="m-label">수집 완료율</span>
+                  <span class="m-value">{{ (statusStore.status.kr.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+                </div>
+                <div class="metric-col align-end">
+                  <span class="m-label">신선도 상태</span>
+                  <span class="status-badge" :style="{ backgroundColor: statusStore.status.kr.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
+                    {{ statusStore.status.kr.freshness.status }}
+                  </span>
+                </div>
               </div>
             </div>
             <div class="offline-placeholder" v-else>
@@ -172,19 +174,21 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="freshness-details" v-if="statusStore.status.us.freshness">
-              <div class="metric">
+              <div class="metric-row">
                 <span class="m-label">최종 수집일</span>
-                <span class="m-value">{{ statusStore.status.us.freshness.latest_trading_date || '-' }}</span>
+                <span class="m-value font-mono">{{ statusStore.status.us.freshness.latest_trading_date || '-' }}</span>
               </div>
-              <div class="metric">
-                <span class="m-label">수집 완료율</span>
-                <span class="m-value">{{ (statusStore.status.us.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
-              </div>
-              <div class="metric">
-                <span class="m-label">신선도 상태</span>
-                <span class="status-badge" :style="{ backgroundColor: statusStore.status.us.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
-                  {{ statusStore.status.us.freshness.status }}
-                </span>
+              <div class="metric-group-row">
+                <div class="metric-col">
+                  <span class="m-label">수집 완료율</span>
+                  <span class="m-value">{{ (statusStore.status.us.freshness.daily_coverage_ratio * 100).toFixed(1) }}%</span>
+                </div>
+                <div class="metric-col align-end">
+                  <span class="m-label">신선도 상태</span>
+                  <span class="status-badge" :style="{ backgroundColor: statusStore.status.us.freshness.status === 'GREEN' ? 'var(--color-emerald)' : 'var(--color-amber)' }">
+                    {{ statusStore.status.us.freshness.status }}
+                  </span>
+                </div>
               </div>
             </div>
             <div class="offline-placeholder" v-else>
@@ -404,7 +408,7 @@ onUnmounted(() => {
   padding: 2.5rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 2.5rem;
+  gap: 1rem;
 }
 
 .header-main-row {
@@ -479,7 +483,7 @@ onUnmounted(() => {
 
 /* 헬스 보드 사이드바 */
 .split-status-sidebar {
-  width: 290px;
+  width: 320px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -520,6 +524,7 @@ onUnmounted(() => {
   gap: 0.5rem;
   font-weight: 700;
   font-size: 1.1rem;
+  white-space: nowrap;
 }
 
 .status-indicator {
@@ -562,19 +567,36 @@ onUnmounted(() => {
 }
 
 .freshness-details {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   background: rgba(15, 23, 42, 0.3);
   padding: 1rem;
   border-radius: 12px;
 }
 
-.metric {
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.5rem;
+}
+
+.metric-group-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metric-col {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  align-items: center;
+}
+
+.metric-col.align-end {
+  align-items: flex-end;
 }
 
 .m-label {
@@ -867,7 +889,7 @@ onUnmounted(() => {
   display: flex;
   gap: 2rem;
   align-items: stretch;
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
   width: 100%;
 }
 
@@ -950,7 +972,7 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.15);
   border-radius: 16px;
   min-height: 280px;
-  padding: 1rem;
+  padding: 1rem 0.5rem 0.25rem 0.5rem;
 }
 
 .panel-section-title {

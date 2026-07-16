@@ -14,9 +14,9 @@
 
 | 항목 | 내용 |
 |---|---|
-| 총 테이블 수 | 12개 |
+| 총 테이블 수 | 13개 |
 | TimescaleDB 하이퍼테이블 | 3개 (daily_ohlcv, daily_ohlcv_adjusted, minute_ohlcv) |
-| 일반 테이블 | 9개 |
+| 일반 테이블 | 10개 |
 
 ---
 
@@ -409,6 +409,85 @@ CREATE TABLE system_milestones (
 
 ---
 
+### 13. `daily_investor_trade` — 일별 투자자 매매동향
+
+> 종목별/일별 투자 주체들의 매수, 매도, 순매수 수량 및 거래대금 (102개 컬럼).
+
+```sql
+CREATE TABLE daily_investor_trade (
+    dt                    DATE          NOT NULL, -- stck_bsop_date (주식 영업 일자)
+    stk_cd                VARCHAR(6)    NOT NULL, -- stk_cd (종목코드)
+    stck_clpr             INTEGER,                -- stck_clpr (주식 종가)
+    prdy_vrss             INTEGER,                -- prdy_vrss (전일 대비)
+    prdy_vrss_sign        VARCHAR(1),             -- prdy_vrss_sign (전일 대비 부호)
+    prdy_ctrt             NUMERIC(10,2),          -- prdy_ctrt (전일 대비율)
+    acml_vol              BIGINT,                 -- acml_vol (누적 거래량)
+    acml_tr_pbmn          BIGINT,                 -- acml_tr_pbmn (누적 거래대금)
+    stck_oprc             INTEGER,                -- stck_oprc (시가)
+    stck_hgpr             INTEGER,                -- stck_hgpr (고가)
+    stck_lwpr             INTEGER,                -- stck_lwpr (저가)
+    
+    -- 1. 개인 (prsn)
+    prsn_seln_vol         BIGINT, prsn_shnu_vol         BIGINT, prsn_ntby_qty         BIGINT,
+    prsn_seln_tr_pbmn     BIGINT, prsn_shnu_tr_pbmn     BIGINT, prsn_ntby_tr_pbmn     BIGINT,
+    -- 2. 외국인 (frgn)
+    frgn_seln_vol         BIGINT, frgn_shnu_vol         BIGINT, frgn_ntby_qty         BIGINT,
+    frgn_seln_tr_pbmn     BIGINT, frgn_shnu_tr_pbmn     BIGINT, frgn_ntby_tr_pbmn     BIGINT,
+    -- 3. 기관계 (orgn)
+    orgn_seln_vol         BIGINT, orgn_shnu_vol         BIGINT, orgn_ntby_qty         BIGINT,
+    orgn_seln_tr_pbmn     BIGINT, orgn_shnu_tr_pbmn     BIGINT, orgn_ntby_tr_pbmn     BIGINT,
+    -- 4. 금융투자/증권 (scrt)
+    scrt_seln_vol         BIGINT, scrt_shnu_vol         BIGINT, scrt_ntby_qty         BIGINT,
+    scrt_seln_tr_pbmn     BIGINT, scrt_shnu_tr_pbmn     BIGINT, scrt_ntby_tr_pbmn     BIGINT,
+    -- 5. 보험 (insu)
+    insu_seln_vol         BIGINT, insu_shnu_vol         BIGINT, insu_ntby_qty         BIGINT,
+    insu_seln_tr_pbmn     BIGINT, insu_shnu_tr_pbmn     BIGINT, insu_ntby_tr_pbmn     BIGINT,
+    -- 6. 투신 (fund)
+    fund_seln_vol         BIGINT, fund_shnu_vol         BIGINT, fund_ntby_qty         BIGINT,
+    fund_seln_tr_pbmn     BIGINT, fund_shnu_tr_pbmn     BIGINT, fund_ntby_tr_pbmn     BIGINT,
+    -- 7. 은행 (bank)
+    bank_seln_vol         BIGINT, bank_shnu_vol         BIGINT, bank_ntby_qty         BIGINT,
+    bank_seln_tr_pbmn     BIGINT, bank_shnu_tr_pbmn     BIGINT, bank_ntby_tr_pbmn     BIGINT,
+    -- 8. 기타금융 (ivtr)
+    ivtr_seln_vol         BIGINT, ivtr_shnu_vol         BIGINT, ivtr_ntby_qty         BIGINT,
+    ivtr_seln_tr_pbmn     BIGINT, ivtr_shnu_tr_pbmn     BIGINT, ivtr_ntby_tr_pbmn     BIGINT,
+    -- 9. 종금 (mrbn)
+    mrbn_seln_vol         BIGINT, mrbn_shnu_vol         BIGINT, mrbn_ntby_qty         BIGINT,
+    mrbn_seln_tr_pbmn     BIGINT, mrbn_shnu_tr_pbmn     BIGINT, mrbn_ntby_tr_pbmn     BIGINT,
+    -- 10. 사모펀드 (pe_fund)
+    pe_fund_seln_vol      BIGINT, pe_fund_shnu_vol      BIGINT, pe_fund_ntby_vol      BIGINT,
+    pe_fund_seln_tr_pbmn  BIGINT, pe_fund_shnu_tr_pbmn  BIGINT, pe_fund_ntby_tr_pbmn  BIGINT,
+    -- 11. 기타 (etc)
+    etc_seln_vol          BIGINT, etc_shnu_vol          BIGINT, etc_ntby_qty          BIGINT,
+    etc_seln_tr_pbmn      BIGINT, etc_shnu_tr_pbmn      BIGINT, etc_ntby_tr_pbmn      BIGINT,
+    -- 12. 기타법인 (etc_corp)
+    etc_corp_seln_vol     BIGINT, etc_corp_shnu_vol     BIGINT, etc_corp_ntby_vol     BIGINT,
+    etc_corp_seln_tr_pbmn BIGINT, etc_corp_shnu_tr_pbmn BIGINT, etc_corp_ntby_tr_pbmn BIGINT,
+    -- 13. 기타단체/기관 (etc_orgt)
+    etc_orgt_seln_vol     BIGINT, etc_orgt_shnu_vol     BIGINT, etc_orgt_ntby_vol     BIGINT,
+    etc_orgt_seln_tr_pbmn BIGINT, etc_orgt_shnu_tr_pbmn BIGINT, etc_orgt_ntby_tr_pbmn BIGINT,
+    
+    -- 14. 등록외국인 (frgn_reg)
+    frgn_reg_askp_qty     BIGINT, frgn_reg_bidp_qty     BIGINT, frgn_reg_ntby_qty     BIGINT,
+    frgn_reg_askp_pbmn    BIGINT, frgn_reg_bidp_pbmn    BIGINT, frgn_reg_ntby_pbmn    BIGINT,
+    -- 15. 비등록외국인 (frgn_nreg)
+    frgn_nreg_askp_qty    BIGINT, frgn_nreg_bidp_qty    BIGINT, frgn_nreg_ntby_qty    BIGINT,
+    frgn_nreg_askp_pbmn   BIGINT, frgn_nreg_bidp_pbmn   BIGINT, frgn_nreg_ntby_pbmn   BIGINT,
+    
+    created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (dt, stk_cd)
+);
+```
+
+**인덱스:**
+
+| 인덱스명 | 컬럼 | 종류 |
+|---|---|---|
+| `daily_investor_trade_pkey` | `(dt, stk_cd)` | PRIMARY KEY, btree |
+| `idx_daily_investor_trade_stk_cd_dt` | `(stk_cd, dt DESC)` | btree |
+
+---
+
 ## 테이블 간 관계 요약
 
 ```
@@ -420,7 +499,8 @@ stock_info (stk_cd)
     ├── price_adjustment_factors (stk_cd, event_dt, price_source) [UPSERT]
     ├── financial_statements (stk_cd, stac_yymm, div_cls_code) [INSERT, 버전 누적]
     ├── financial_ratios     (stk_cd, stac_yymm, div_cls_code) [INSERT, 버전 누적]
-    └── minute_ohlcv         (stk_cd, dt_tm)    [UPSERT]
+    ├── minute_ohlcv         (stk_cd, dt_tm)    [UPSERT]
+    └── daily_investor_trade (stk_cd, dt)       [UPSERT]
 
 minute_target_history (quarter, market, symbol)  ← TargetSelector
 trading_calendar (dt)                            ← daily_ohlcv에서 동기화
@@ -458,4 +538,10 @@ SELECT stac_yymm, retrieved_at, thtr_ntin
 FROM financial_statements
 WHERE stk_cd = '005930' AND div_cls_code = '1'
 ORDER BY stac_yymm DESC, retrieved_at DESC;
+
+# 일별 투자자 매매동향 최근 10건 조회 (삼성전자)
+SELECT dt, prsn_ntby_qty, frgn_ntby_qty, orgn_ntby_qty
+FROM daily_investor_trade
+WHERE stk_cd = '005930'
+ORDER BY dt DESC LIMIT 10;
 ```

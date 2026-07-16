@@ -357,6 +357,7 @@ ALLOWED_TABLES_KR = {
     "system_milestones",
     "trading_calendar",
     "minute_target_history",
+    "daily_investor_trade",
 }
 
 ALLOWED_TABLES_US = {
@@ -389,7 +390,8 @@ def get_preview_metadata():
             { "table": "price_adjustment_factors", "name": "수정주가 팩터" },
             { "table": "system_milestones", "name": "수집 마일스톤 이력" },
             { "table": "trading_calendar", "name": "영업일 달력" },
-            { "table": "minute_target_history", "name": "수집 대상 이력" }
+            { "table": "minute_target_history", "name": "수집 대상 이력" },
+            { "table": "daily_investor_trade", "name": "종목별 투자자매매동향" }
         ],
         "us": [
             { "table": "us_ticker_master", "name": "미국 티커 마스터" },

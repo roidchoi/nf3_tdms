@@ -144,7 +144,7 @@ export const useExplorerStore = defineStore('explorer', () => {
     if (selectedMarket.value === 'kr') {
       if (table === 'stock_info') {
         marketFilter.value = ''
-      } else if (table === 'daily_ohlcv' || table === 'daily_market_cap') {
+      } else if (table === 'daily_ohlcv' || table === 'daily_market_cap' || table === 'daily_investor_trade') {
         stkCd.value = '005930'
         startDate.value = oneMonthAgoStr
         endDate.value = todayStr

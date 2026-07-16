@@ -63,14 +63,15 @@ def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = 
 # 수동 기동 가능한 태스크 맵 정의
 from tasks.daily_task import run_daily_update
 from tasks.financial_task import run_financial_update
-from tasks.backfill_task import run_backfill_minute_data, run_backfill_daily_data
+from tasks.backfill_task import run_backfill_minute_data, run_backfill_daily_data, run_backfill_investor_trade
 
 task_map = {
     "daily_update": run_daily_update,
     "financial_update": run_financial_update,
     "backfill_minute_data": run_backfill_minute_data,
     "backfill_daily_data": run_backfill_daily_data,
-    "backfill_market_cap": trigger_backfill_market_cap
+    "backfill_market_cap": trigger_backfill_market_cap,
+    "backfill_investor_trade": run_backfill_investor_trade
 }
 
 VALID_TASK_IDS = list(task_map.keys())
@@ -122,7 +123,7 @@ async def run_task(
     try:
         # 비동기적으로 스케줄러에 단발성 작업 추가 (KST timezone-aware 미래 시점으로 즉시 실행 보장)
         current_time = datetime.now(ZoneInfo("Asia/Seoul")) + timedelta(seconds=5)
-        if task_id in ["backfill_market_cap", "backfill_minute_data", "backfill_daily_data"]:
+        if task_id in ["backfill_market_cap", "backfill_minute_data", "backfill_daily_data", "backfill_investor_trade"]:
             scheduler.add_job(
                 func=lambda: task_func(
                     job_statuses=job_statuses,
