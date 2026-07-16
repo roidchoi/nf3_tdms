@@ -263,7 +263,8 @@ class DailyTask:
                             prev_close = prev_close_map.get(stk_cd, 0)
                             if prev_close > 0:
                                 change_rate = abs(today_close - prev_close) / prev_close
-                                if change_rate > 0.05:
+                                # 최적화 필터 괴리율 임계값을 5% -> 1%로 하향 조정하여 ETF 등의 미세한 권리락/분배락 누락 방지
+                                if change_rate > 0.01:
                                     has_price_anomaly = True
 
                         has_share_changed = (prev_shares != shares)

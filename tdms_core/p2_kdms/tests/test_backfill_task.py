@@ -203,7 +203,9 @@ def test_backfill_daily_data_detects_middle_gap():
     # 5/19 (누락일), 5/20 (정상일) 대조 쿼리 결과 모킹
     db_mock._execute_query.side_effect = [
         # 1. query_missing 쿼리 결과: 5/19 누락 감지
-        [{"dt": date(2026, 5, 19), "stk_cd": "005930"}]
+        [{"dt": date(2026, 5, 19), "stk_cd": "005930"}],
+        # 2. query_missing_factors 쿼리 결과: 팩터 누락 없음
+        []
     ]
     
     job_statuses = {}

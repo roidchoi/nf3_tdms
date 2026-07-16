@@ -131,6 +131,89 @@ def compare_table_generic(dev_conn, srv_conn, table_name, pk_cols, compare_cols,
     else:
         logger.info(f"✅ [{table_name}] 적재 데이터 값이 서버 PC와 100% 완벽히 일치합니다.")
 
+def compare_financial_table(dev_conn, srv_conn, table_name, pk_cols, compare_cols, mode="deep", tolerance=0.01):
+    logger.info(f"--- 테이블 비교 (최신 수집본 1:1 대조): {table_name} ---")
+    
+    pk_no_time = [c for c in pk_cols if c != "retrieved_at"]
+    partition_by = ", ".join(pk_no_time)
+    select_cols = ", ".join(list(set(pk_cols + compare_cols)))
+    
+    query = f"""
+        WITH ranked AS (
+            SELECT {select_cols},
+                   ROW_NUMBER() OVER (PARTITION BY {partition_by} ORDER BY retrieved_at DESC) as rn
+            FROM {table_name}
+        )
+        SELECT {select_cols}
+        FROM ranked
+        WHERE rn = 1
+    """
+    
+    with dev_conn.cursor() as dev_cur, srv_conn.cursor() as srv_cur:
+        dev_cur.execute(query)
+        dev_rows = dev_cur.fetchall()
+        
+        srv_cur.execute(query)
+        srv_rows = srv_cur.fetchall()
+        
+    logger.info(f"[{table_name}] 최종본 건수 - 개발 PC: {len(dev_rows):,}건 | 서버 PC: {len(srv_rows):,}건")
+    
+    if mode == "fast":
+        if len(dev_rows) == len(srv_rows):
+            logger.info(f"✅ [{table_name}] 행 수가 일치합니다.")
+        else:
+            logger.warning(f"⚠️ [{table_name}] 행 수가 불일치합니다. (차이: {abs(len(dev_rows) - len(srv_rows)):,}건)")
+        return
+        
+    def get_pk_key(row):
+        return tuple(str(row[c]) for c in pk_no_time)
+        
+    dev_map = {get_pk_key(r): r for r in dev_rows}
+    
+    missing_rows = []
+    for r in srv_rows:
+        key = get_pk_key(r)
+        if key not in dev_map:
+            missing_rows.append(r)
+            
+    if missing_rows:
+        logger.warning(f"⚠️ [{table_name}] 개발 PC에 누락된 데이터가 존재합니다. (총 {len(missing_rows)}건 중 샘플 10건 표시):")
+        for r in missing_rows[:10]:
+            pk_info = ", ".join([f"{c}={r[c]}" for c in pk_no_time])
+            logger.warning(f"  - 누락 PK: {pk_info}")
+    else:
+        logger.info(f"✅ [{table_name}] 개발 PC에 누락된 데이터가 없습니다.")
+        
+    mismatches = 0
+    for r in srv_rows:
+        key = get_pk_key(r)
+        if key in dev_map:
+            dev_row = dev_map[key]
+            row_mismatch = False
+            mismatch_details = []
+            
+            for col in compare_cols:
+                v1, v2 = dev_row[col], r[col]
+                if isinstance(v1, (date, datetime)): v1 = str(v1)
+                if isinstance(v2, (date, datetime)): v2 = str(v2)
+                
+                if not is_approx_equal(v1, v2, tolerance):
+                    row_mismatch = True
+                    mismatch_details.append(f"{col}: 개발={v1}, 서버={v2}")
+                    
+            if row_mismatch:
+                mismatches += 1
+                if mismatches <= 10:
+                    pk_info = ", ".join([f"{c}={r[c]}" for c in pk_no_time])
+                    logger.error(f"❌ [{table_name}] 수치 불일치 발견! PK: {pk_info}")
+                    for detail in mismatch_details:
+                        logger.error(f"  - {detail}")
+                        
+    if mismatches > 0:
+        logger.error(f"❌ [{table_name}] 정합성 오류: 총 {mismatches}건의 수치 불일치가 검출되었습니다.")
+    else:
+        logger.info(f"✅ [{table_name}] 적재 데이터 값이 서버 PC와 100% 완벽히 일치합니다.")
+
 def compare_kdms_minute_ohlcv(dev_conn, srv_conn, start_dt: str, end_dt: str, mode="deep"):
     logger.info("--- 테이블 비교: minute_ohlcv (분봉) ---")
     
@@ -249,8 +332,11 @@ def run_kdms_validation(dev_conn, srv_conn, start_dt, end_dt, mode, target_table
             
     # 일반 테이블 비교 구동
     for t_name, pk, cmp_cols, date_c in tables_to_run:
-        compare_table_generic(dev_conn, srv_conn, t_name, pk, cmp_cols, date_col=date_c, 
-                              start_dt=start_dt, end_dt=end_dt, mode=mode)
+        if t_name in ["financial_statements", "financial_ratios"]:
+            compare_financial_table(dev_conn, srv_conn, t_name, pk, cmp_cols, mode=mode)
+        else:
+            compare_table_generic(dev_conn, srv_conn, t_name, pk, cmp_cols, date_col=date_c, 
+                                  start_dt=start_dt, end_dt=end_dt, mode=mode)
         print()
         
     # minute_ohlcv 테이블은 별도 처리

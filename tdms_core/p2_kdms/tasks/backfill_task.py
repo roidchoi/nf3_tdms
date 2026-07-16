@@ -784,6 +784,31 @@ def run_backfill_daily_data(
                 missing_map[stk] = []
             missing_map[stk].append(row['dt'])
             
+        # Step 2-2: 수정 비율(price_adjustment_factors) 누락 검출 및 백필 대상 추가 (전일 대비 변동 1% 이상 & 팩터 누락 기준)
+        query_missing_factors = """
+            SELECT d1.stk_cd, d1.dt
+            FROM daily_ohlcv d1
+            JOIN daily_ohlcv d2 ON d2.stk_cd = d1.stk_cd AND d2.dt = (
+                SELECT max(dt) FROM daily_ohlcv WHERE stk_cd = d1.stk_cd AND dt < d1.dt
+            )
+            LEFT JOIN price_adjustment_factors f ON f.stk_cd = d1.stk_cd AND f.event_dt = d1.dt
+            WHERE d1.dt BETWEEN %s AND %s
+              AND d2.cls_prc > 0
+              AND abs(d1.cls_prc - d2.cls_prc)::float / d2.cls_prc > 0.01
+              AND f.stk_cd IS NULL
+              AND d1.stk_cd = ANY(%s::varchar[]);
+        """
+        factor_results = db._execute_query(query_missing_factors, (start_date, end_date, target_stocks), fetch='all')
+        if factor_results:
+            logger.info(f"[{job_id}] 수정 비율(price_adjustment_factors) 누락 건 감지: {len(factor_results)}건. 백필 대상에 병합합니다.")
+            for row in factor_results:
+                stk = row['stk_cd']
+                dt_val = row['dt']
+                if stk not in missing_map:
+                    missing_map[stk] = []
+                if dt_val not in missing_map[stk]:
+                    missing_map[stk].append(dt_val)
+            
         if not missing_map:
             logger.info(f"[{job_id}] 모든 대상 종목의 일봉 데이터가 최신 상태입니다. (누락 없음)")
             job_statuses[job_id].update({
