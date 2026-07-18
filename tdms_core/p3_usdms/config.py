@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     # DSN 및 환경변수
     TDMS_ENV: str = "dev"
     SEC_USER_AGENT: str = ""
+    LOG_DIR: str = "logs"
+    LOG_LEVEL: str = "INFO"
     
     # DB (USDMS 전용)
     DEV_USDMS_DB_HOST: str = "127.0.0.1"
@@ -31,12 +33,18 @@ class Settings(BaseSettings):
     # 일일 루틴 및 주간 관리 스케줄 (중앙화 적용)
     SCHEDULE_USDMS_DAILY_ROUTINE: str = "wed,sat:07:30"
     SCHEDULE_USDMS_WEEKLY_MAINTENANCE: str = "sat:09:00"
+    SCHEDULE_USDMS_FINANCIAL_ROUTINE: str = "wed,sat:15:00"
 
     def __init__(self, **values):
         super().__init__(**values)
         # 필수 필드 유효성 검증
         if not self.SEC_USER_AGENT:
             raise ValueError("SEC_USER_AGENT 환경변수가 누락되었습니다")
+
+        # 도커 컨테이너 환경일 경우 마운트 폴더 경로를 강제하여 환경변수 덮어쓰기 문제 방지
+        import os
+        if os.path.exists('/.dockerenv'):
+            self.LOG_DIR = "/app/logs"
 
 
 # 싱글톤 설정 게터

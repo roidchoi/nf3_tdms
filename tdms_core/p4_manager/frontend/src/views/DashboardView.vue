@@ -31,6 +31,14 @@ onUnmounted(() => {
     clearInterval(pollInterval)
   }
 })
+
+const formatDuration = (sec: number | undefined): string => {
+  if (sec === undefined || sec === null || isNaN(sec)) return '-'
+  if (sec >= 60) {
+    return `${(sec / 60).toFixed(1)}분`
+  }
+  return `${sec.toFixed(1)}초`
+}
 </script>
 
 <template>
@@ -275,6 +283,13 @@ onUnmounted(() => {
                   />
                   <TaskStatusCard 
                     market="us"
+                    taskId="us_financial"
+                    title="US Financial"
+                    icon="💵"
+                    :status="statusStore.status.us.tasks?.us_financial"
+                  />
+                  <TaskStatusCard 
+                    market="us"
                     taskId="weekly_backfill"
                     title="Weekly Backfill"
                     icon="⏳"
@@ -317,38 +332,110 @@ onUnmounted(() => {
               <div class="report-group-card full-width-card">
                 <h3>🇺🇸 미국 주식 (USDMS) 수집 품질 요약</h3>
                 <div class="quality-reports-grid">
-                  <div v-for="tId in ['daily_routine', 'weekly_backfill']" :key="tId" class="quality-report-card">
+                  <div v-for="tId in ['daily_routine', 'us_financial', 'weekly_backfill']" :key="tId" class="quality-report-card">
                     <div class="sub-report-header">
-                      <span class="sub-title"><strong>{{ tId === 'daily_routine' ? '🇺🇸 Daily Routine' : '⏳ Weekly Backfill' }}</strong></span>
+                      <span class="sub-title"><strong>{{ tId === 'daily_routine' ? '🇺🇸 Daily Routine' : tId === 'us_financial' ? '💵 US Financial' : '⏳ Weekly Backfill' }}</strong></span>
                       <span class="sub-status" :class="statusStore.status.us.tasks?.[tId]?.last_status?.toLowerCase()">
                         {{ statusStore.status.us.tasks?.[tId]?.last_status || '대기' }}
                       </span>
                     </div>
                     <div class="sub-report-body" v-if="statusStore.status.us.tasks?.[tId]?.details">
-                      <div class="report-grid-mini">
-                        <div><span>수집수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.collected_count || 0 }}건</strong></div>
-                        <div><span>성공수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.success_count || 0 }}건</strong></div>
-                        <div><span>실패수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.failed_count || 0 }}건</strong></div>
-                        <div><span>소요시간:</span> <strong>{{ statusStore.status.us.tasks[tId].details.duration || '-' }}</strong></div>
-                      </div>
-                      
-                      <!-- Enrichment 품질 보고 정보가 있는 경우 -->
-                      <div class="enrichment-info" v-if="statusStore.status.us.tasks[tId].details.enrichment">
-                        <span class="section-sub-label">📈 수집 및 통합 품질 (Enrichment)</span>
-                        <div class="report-grid-mini nested">
-                          <div><span>모수 티커수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.enrichment.total_tickers || 0 }}</strong></div>
-                          <div><span>정상 수집수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.enrichment.success_count || 0 }}</strong></div>
-                          <div><span>통합 완료율:</span> <strong style="color: #34d399">{{ ((statusStore.status.us.tasks[tId].details.enrichment.success_ratio || 0) * 100).toFixed(1) }}%</strong></div>
+                      <!-- US Financial 전용 리포트 화면 -->
+                      <div v-if="tId === 'us_financial'">
+                        <div class="report-row-full" style="display: flex; gap: 8px; font-size: 0.85rem; padding: 4px 8px; background: rgba(15, 23, 42, 0.2); border-radius: 6px; color: #94a3b8; width: 100%;">
+                          <span style="color: #64748b;">총 소요시간:</span>
+                          <strong style="color: #f8fafc;">{{ formatDuration(statusStore.status.us.tasks[tId].details.total_duration_seconds) }}</strong>
+                        </div>
+                        <div class="enrichment-info" v-if="statusStore.status.us.tasks[tId].details.steps && statusStore.status.us.tasks[tId].details.steps.length">
+                          <span class="section-sub-label">📋 단계별 수집 및 계산 상세 결과</span>
+                          <div class="steps-list font-mono">
+                            <div v-for="(step, idx) in statusStore.status.us.tasks[tId].details.steps" :key="idx" class="step-item-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 4px 0;">
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span class="s-name" style="font-weight: 600; color: #e2e8f0;">{{ step.step }}</span>
+                                <span class="s-desc" style="font-size: 0.75rem; color: #94a3b8;">
+                                  <template v-if="step.step === 'Financial Parser'">
+                                    수집 성공: {{ step.details?.success_count || 0 }} / {{ step.details?.processed_count || 0 }} CIK
+                                  </template>
+                                  <template v-else-if="step.step === 'Metric & Valuation Calculation'">
+                                    재무비율: {{ step.details?.metric_target_count || 0 }}건 | 가치평가: {{ step.details?.valuation_target_count || 0 }}건
+                                  </template>
+                                  <template v-else-if="step.step === 'Health Check & Isolation'">
+                                    격리 데이터: {{ step.details?.anomalies_found || 0 }}건
+                                  </template>
+                                  <template v-else-if="step.details?.processed_count !== undefined">
+                                    처리 수: {{ step.details.processed_count }}
+                                  </template>
+                                </span>
+                              </div>
+                              <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="s-duration" style="font-size: 0.8rem; color: #64748b;">({{ formatDuration(step.duration_seconds) }})</span>
+                                <span class="s-status" v-if="step.status !== 'SUCCESS'" :style="{ color: '#f87171', fontWeight: 'bold' }">[{{ step.status }}]</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                      
+                      <!-- Daily Routine 전용 리포트 화면 -->
+                      <div v-else-if="tId === 'daily_routine'">
+                        <div class="report-row-full" style="display: flex; gap: 8px; font-size: 0.85rem; padding: 4px 8px; background: rgba(15, 23, 42, 0.2); border-radius: 6px; color: #94a3b8; width: 100%;">
+                          <span style="color: #64748b;">총 소요시간:</span>
+                          <strong style="color: #f8fafc;">{{ formatDuration(statusStore.status.us.tasks[tId].details.total_duration_seconds) }}</strong>
+                        </div>
+                        <div class="enrichment-info" v-if="statusStore.status.us.tasks[tId].details.steps && statusStore.status.us.tasks[tId].details.steps.length">
+                          <span class="section-sub-label">📋 단계별 수집 및 계산 상세 결과</span>
+                          <div class="steps-list font-mono">
+                            <div v-for="(step, idx) in statusStore.status.us.tasks[tId].details.steps" :key="idx" class="step-item-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 4px 0;">
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span class="s-name" style="font-weight: 600; color: #e2e8f0;">{{ step.step }}</span>
+                                <span class="s-desc" style="font-size: 0.75rem; color: #94a3b8;">
+                                  <template v-if="step.step === 'Master Sync'">
+                                    신규 상장: {{ step.details?.new_listings || 0 }} | 상폐: {{ step.details?.delistings || 0 }} | 티커 변경: {{ step.details?.ticker_changes || 0 }}
+                                  </template>
+                                  <template v-else-if="step.step === 'Market Data Loader'">
+                                    시세 수집: {{ step.details?.processed_count || 0 }} CIK (기간: {{ step.details?.lookback_days || 0 }}일)
+                                  </template>
+                                  <template v-else-if="step.step === 'Health Check & Isolation'">
+                                    이상치 검출: {{ step.details?.anomalies_found || 0 }}건
+                                  </template>
+                                </span>
+                              </div>
+                              <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="s-duration" style="font-size: 0.8rem; color: #64748b;">({{ formatDuration(step.duration_seconds) }})</span>
+                                <span class="s-status" v-if="step.status !== 'SUCCESS'" :style="{ color: '#f87171', fontWeight: 'bold' }">[{{ step.status }}]</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- 기존 weekly_backfill 리포트 화면 -->
+                      <div v-else>
+                        <div class="report-grid-mini">
+                          <div><span>수집수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.collected_count || 0 }}건</strong></div>
+                          <div><span>성공수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.success_count || 0 }}건</strong></div>
+                          <div><span>실패수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.failed_count || 0 }}건</strong></div>
+                          <div><span>소요시간:</span> <strong>{{ statusStore.status.us.tasks[tId].details.duration || '-' }}</strong></div>
+                        </div>
+                        
+                        <!-- Enrichment 품질 보고 정보가 있는 경우 -->
+                        <div class="enrichment-info" v-if="statusStore.status.us.tasks[tId].details.enrichment">
+                          <span class="section-sub-label">📈 수집 및 통합 품질 (Enrichment)</span>
+                          <div class="report-grid-mini nested">
+                            <div><span>모수 티커수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.enrichment.total_tickers || 0 }}</strong></div>
+                            <div><span>정상 수집수:</span> <strong>{{ statusStore.status.us.tasks[tId].details.enrichment.success_count || 0 }}</strong></div>
+                            <div><span>통합 완료율:</span> <strong style="color: #34d399">{{ ((statusStore.status.us.tasks[tId].details.enrichment.success_ratio || 0) * 100).toFixed(1) }}%</strong></div>
+                          </div>
+                        </div>
 
-                      <!-- 자가 치유(Self-healing) 보고 정보가 있는 경우 -->
-                      <div class="self-healing-info" v-if="statusStore.status.us.tasks[tId].details.self_healing">
-                        <span class="section-sub-label">🛡️ 블랙리스트 자가 치유 (Self-Healing)</span>
-                        <div class="report-grid-mini nested">
-                          <div><span>쿨다운 해제:</span> <strong>{{ statusStore.status.us.tasks[tId].details.self_healing.released_count || 0 }}건</strong></div>
-                          <div><span>누진 재차단:</span> <strong>{{ statusStore.status.us.tasks[tId].details.self_healing.re_blocked_count || 0 }}건</strong></div>
-                          <div><span>영구 차단:</span> <strong style="color: #f87171">{{ statusStore.status.us.tasks[tId].details.self_healing.permanently_blocked_count || 0 }}건</strong></div>
+                        <!-- 자가 치유(Self-healing) 보고 정보가 있는 경우 -->
+                        <div class="self-healing-info" v-if="statusStore.status.us.tasks[tId].details.self_healing">
+                          <span class="section-sub-label">🛡️ 블랙리스트 자가 치유 (Self-Healing)</span>
+                          <div class="report-grid-mini nested">
+                            <div><span>쿨다운 해제:</span> <strong>{{ statusStore.status.us.tasks[tId].details.self_healing.released_count || 0 }}건</strong></div>
+                            <div><span>누진 재차단:</span> <strong>{{ statusStore.status.us.tasks[tId].details.self_healing.re_blocked_count || 0 }}건</strong></div>
+                            <div><span>영구 차단:</span> <strong style="color: #f87171">{{ statusStore.status.us.tasks[tId].details.self_healing.permanently_blocked_count || 0 }}건</strong></div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1032,5 +1119,22 @@ onUnmounted(() => {
     flex-wrap: wrap;
     gap: 0.25rem;
   }
+}
+
+.steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(15, 23, 42, 0.3);
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.step-item-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding-bottom: 2px;
 }
 </style>

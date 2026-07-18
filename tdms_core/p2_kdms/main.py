@@ -129,7 +129,7 @@ async def lifespan(app: FastAPI):
     # 로컬 파일 로깅 설정 (실시간이 아닐 때도 로그가 파일에 남아 모니터링 보드 진입 시 복구 가능하게 지원)
     import sys
     import os
-    logs_dir = "logs"
+    logs_dir = settings.log_dir
     os.makedirs(logs_dir, exist_ok=True)
     is_test = os.environ.get("TDMS_ENV") == "test" or "pytest" in sys.modules
     log_filename = "daily_update_test.log" if is_test else "daily_update.log"
@@ -262,7 +262,8 @@ async def websocket_endpoint(websocket: WebSocket):
     
     # 1. 파일에서 이전 로그 기록이 있으면 마지막 100라인 전송하여 모니터링 보드 진입 시 복구되도록 지원 (tail -f 유사 구현)
     import os
-    logs_dir = "logs"
+    from config import settings
+    logs_dir = settings.log_dir
     log_file_path = os.path.join(logs_dir, "daily_update.log")
     if os.path.exists(log_file_path):
         try:

@@ -76,14 +76,15 @@ class DailyRoutine:
                 cur.execute(query, (current, opnd_yn))
                 current += timedelta(days=1)
 
-    async def run(self, test_limit: int = None, target_date: date = None, target_group: int = None) -> Dict[str, Any]:
+    async def run(self, test_limit: int = None, target_date: date = None) -> Dict[str, Any]:
         """
         Step 1~5 일일 자동화 파이프라인 전체를 오케스트레이션합니다.
         각 스텝은 예외 차단을 통해 부분 성공(Partial Success)을 보장합니다.
         """
         # 0. 동적 FileHandler 바인딩 (실시간 웹소켓 로그 스트리밍용)
         import sys
-        logs_dir = "logs"
+        from p3_usdms.config import get_settings
+        logs_dir = get_settings().LOG_DIR
         os.makedirs(logs_dir, exist_ok=True)
         # 테스트 환경인 경우 테스트 로그 파일로 경로 격리하여 프로덕션 로그 오염 방지
         is_test = os.environ.get("TDMS_ENV") == "test" or "pytest" in sys.modules
@@ -153,35 +154,11 @@ class DailyRoutine:
             # 수집 대상 CIK 추출 및 블랙리스트 제외 (가격 수집용 전체 대상)
             all_targets = self.master_repo.get_collect_targets()
             all_ciks = [t['cik'] for t in all_targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
+            
             if test_limit:
                 all_ciks_for_price = all_ciks[:test_limit]
             else:
                 all_ciks_for_price = all_ciks
-
-            # 재무정보(SEC Filing) 및 가치평가 연산 대상에만 2분할 MOD 2 샤딩 적용
-            if target_group is None:
-                current_weekday = datetime.now(KST).weekday()
-                if current_weekday in (2, 3, 4):
-                    target_group = 0
-                else:
-                    target_group = 1
-
-            import hashlib
-            if target_group in (0, 1):
-                sharded_targets = []
-                for t in all_targets:
-                    cik_str = t['cik']
-                    h_val = int(hashlib.md5(cik_str.encode()).hexdigest(), 16) % 2
-                    if h_val == target_group:
-                        sharded_targets.append(t)
-                logger.info(f"Target Group Filter (Financial & Calculators): Selected Group {target_group} ({len(sharded_targets)}/{len(all_targets)} targets).")
-                sharded_ciks = [t['cik'] for t in sharded_targets if not self.blacklist_mgr.is_blacklisted(t['cik'])]
-            else:
-                logger.info(f"Target Group Filter (Financial & Calculators): Disabled (target_group={target_group}). Processing all {len(all_targets)} targets.")
-                sharded_ciks = all_ciks.copy()
-
-            if test_limit:
-                sharded_ciks = sharded_ciks[:test_limit]
 
             # DB 내 최신 가격 적재일 기준 동적 lookback_days 계산
             db_max_date = None
@@ -203,13 +180,8 @@ class DailyRoutine:
                 lookback_days = 30
                 logger.info(f"No max price date found. Using default lookback: {lookback_days} days")
 
-            lookback_start_date = (target_date - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
-
             # ----------------------------------------------------
             # Step 2: Market Data Update (OHLCV & Factors)
-            # ----------------------------------------------------
-            # ----------------------------------------------------
-            # Step 2: Market Data Update (OHLCV & Factors) - 가격 정보는 전체 수집
             # ----------------------------------------------------
             step_start = datetime.now(KST)
             logger.info(f"[Step 2] Fetching Market Prices and Factors for {len(all_ciks_for_price)} companies (Lookback: {lookback_days} days)...")
@@ -231,72 +203,12 @@ class DailyRoutine:
                 })
 
             # ----------------------------------------------------
-            # Step 3: SEC Filing Index & Financial Parser - 재무정보는 분할 수집
+            # Step 5: Health Check & Isolation (Price Anomalies)
             # ----------------------------------------------------
             step_start = datetime.now(KST)
-            logger.info(f"[Step 3] SEC Filing Financial Parsing for {len(sharded_ciks)} companies...")
+            logger.info("[Step 5] Performing Price Ingestion Health Checks & Data Isolation...")
             try:
-                # financial_parser.run은 동기 함수임
-                await asyncio.to_thread(self.fin_parser.run, ciks=sharded_ciks)
-                report["steps"].append({
-                    "step": "Financial Parser",
-                    "status": "SUCCESS",
-                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
-                    "details": {"processed_count": len(sharded_ciks)}
-                })
-            except Exception as e:
-                logger.error(f"[Step 3] Financial Parser failed: {e}", exc_info=True)
-                report["steps"].append({
-                    "step": "Financial Parser",
-                    "status": "FAILED",
-                    "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
-                    "error": str(e)
-                })
-
-            # ----------------------------------------------------
-            # Step 3.5 & 4: Metric & Valuation Calculators - 가치평가는 분할 적용
-            # ----------------------------------------------------
-            step_start = datetime.now(KST)
-            logger.info(f"[Step 3.5 & 4] Calculating Financial Metrics & Valuations for {len(sharded_ciks)} companies...")
-            try:
-                # CIK별 최신 가치평가 날짜 사전 벌크 적재 캐시 구축 (1회 쿼리)
-                latest_val_dates_cache = {}
-                if self.val_calc and hasattr(self.val_calc.repo, "get_all_latest_valuation_dates"):
-                    try:
-                        latest_val_dates_cache = self.val_calc.repo.get_all_latest_valuation_dates(sharded_ciks)
-                        logger.info(f"Loaded {len(latest_val_dates_cache)} latest valuation dates into memory cache.")
-                    except Exception as cache_err:
-                        logger.warning(f"Failed to load latest valuation dates bulk cache: {cache_err}")
-
-                # 일일 루틴 시에는 self_healing=False로 설정하여 매번 갭 탐색 SQL(3,000회) 방지
-                calc_success, calc_fail = await asyncio.to_thread(
-                    self._run_calculations, 
-                    sharded_ciks, 
-                    latest_val_dates_cache=latest_val_dates_cache, 
-                    self_healing=False
-                )
-            except Exception as e:
-                logger.error(f"[Step 3.5 & 4] Calculation loop failed: {e}", exc_info=True)
-                calc_success, calc_fail = 0, len(sharded_ciks)
-
-            report["steps"].append({
-                "step": "Metric & Valuation Calculation",
-                "status": "SUCCESS" if calc_fail == 0 else "PARTIAL_SUCCESS",
-                "duration_seconds": (datetime.now(KST) - step_start).total_seconds(),
-                "details": {
-                    "total_target": len(sharded_ciks),
-                    "success_count": calc_success,
-                    "fail_count": calc_fail
-                }
-            })
-
-            # ----------------------------------------------------
-            # Step 5: Health Check & Isolation (Anomalies)
-            # ----------------------------------------------------
-            step_start = datetime.now(KST)
-            logger.info("[Step 5] Performing Ingestion Health Checks & Data Isolation...")
-            try:
-                anomalies = await asyncio.to_thread(self._detect_anomalies_and_quarantine, target_date)
+                anomalies = await asyncio.to_thread(self._detect_price_anomalies, target_date)
                 report["steps"].append({
                     "step": "Health Check & Isolation",
                     "status": "SUCCESS",
@@ -427,32 +339,20 @@ class DailyRoutine:
         logger.info(f"Weekly Backfill routine completed successfully: {report['details']}")
         return report
 
-    def _detect_anomalies_and_quarantine(self, target_date: date) -> List[Dict[str, Any]]:
+    def _detect_price_anomalies(self, target_date: date) -> List[Dict[str, Any]]:
         """
-        수집 기준일(target_date)에 적재된 가격 및 가치평가 데이터를 분석하여 오염 데이터를 식별하고 격리(삭제/롤백)합니다.
+        수집 기준일(target_date)에 적재된 시세 데이터를 분석하여 오염 데이터를 식별하고 격리(삭제/롤백)합니다.
         """
         anomalies = []
 
-        # 1. 시세 데이터 오염 검사 (target_date vs target_date 전일 가격 merge 비교)
-        # PRICE_SPIKE (50% 초과 변동)
         price_query = """
             SELECT t.cik, t.latest_ticker, p_today.cls_prc as today_prc, p_yesterday.cls_prc as yesterday_prc
             FROM us_ticker_master t
             JOIN us_daily_price p_today ON t.cik = p_today.cik AND p_today.dt = %s
             JOIN us_daily_price p_yesterday ON t.cik = p_yesterday.cik AND p_yesterday.dt = %s - INTERVAL '1 day'
         """
-        
-        # 2. Valuation 데이터 오염 검사 (target_date vs target_date 전일 PE 비교)
-        # VALUATION_JUMP (2배 초과 혹은 0.5배 미만)
-        val_query = """
-            SELECT t.cik, t.latest_ticker, v_today.pe as today_pe, v_yesterday.pe as yesterday_pe
-            FROM us_ticker_master t
-            JOIN us_daily_valuation v_today ON t.cik = v_today.cik AND v_today.dt = %s
-            JOIN us_daily_valuation v_yesterday ON t.cik = v_yesterday.cik AND v_yesterday.dt = %s - INTERVAL '1 day'
-        """
 
         with self.db.get_cursor() as cur:
-            # 1. 가격 검사
             cur.execute(price_query, (target_date, target_date))
             price_rows = cur.fetchall()
             for r in price_rows:
@@ -481,7 +381,39 @@ class DailyRoutine:
                             "detail": f"Price changed from {yesterday_prc} to {today_prc} ({((ratio-1)*100):.1f}%)"
                         })
 
-            # 2. Valuation 검사
+        if anomalies:
+            logger.warning(f"Price check detected {len(anomalies)} anomalies! Isolating records...")
+            with self.db.get_cursor() as cur:
+                for anomaly in anomalies:
+                    cik = anomaly["cik"]
+                    logger.warning(f"Isolating price data for CIK {cik} due to {anomaly['type']}")
+                    
+                    # 1. 시세 삭제
+                    cur.execute("DELETE FROM us_daily_price WHERE cik = %s AND dt = %s", (cik, target_date))
+                    
+                    # 데이터 이상 유발 사유로 실패 카운팅 및 지속 시 블랙리스트 자동 편입
+                    self.blacklist_mgr.record_failure(
+                        cik=cik,
+                        reason_code="PARSE_ERROR_CRITICAL",
+                        detail=f"HealthCheck isolated: {anomaly['type']} - {anomaly['detail']}"
+                    )
+
+        return anomalies
+
+    def _detect_valuation_anomalies(self, target_date: date) -> List[Dict[str, Any]]:
+        """
+        수집 기준일(target_date)에 적재된 가치평가 데이터를 분석하여 오염 데이터를 식별하고 격리(삭제/롤백)합니다.
+        """
+        anomalies = []
+
+        val_query = """
+            SELECT t.cik, t.latest_ticker, v_today.pe as today_pe, v_yesterday.pe as yesterday_pe
+            FROM us_ticker_master t
+            JOIN us_daily_valuation v_today ON t.cik = v_today.cik AND v_today.dt = %s
+            JOIN us_daily_valuation v_yesterday ON t.cik = v_yesterday.cik AND v_yesterday.dt = %s - INTERVAL '1 day'
+        """
+
+        with self.db.get_cursor() as cur:
             cur.execute(val_query, (target_date, target_date))
             val_rows = cur.fetchall()
             for r in val_rows:
@@ -502,17 +434,14 @@ class DailyRoutine:
                             "detail": f"PE changed from {yesterday_pe} to {today_pe} ({ratio:.2f}x)"
                         })
 
-        # 오염 종목 격리(Quarantine) 수행 - 당일 레코드를 완전히 삭제하여 API 노출 차단
         if anomalies:
-            logger.warning(f"Ingestion health check detected {len(anomalies)} anomalies! Isolating records...")
+            logger.warning(f"Valuation check detected {len(anomalies)} anomalies! Isolating records...")
             with self.db.get_cursor() as cur:
                 for anomaly in anomalies:
                     cik = anomaly["cik"]
-                    logger.warning(f"Isolating data for CIK {cik} due to {anomaly['type']}")
+                    logger.warning(f"Isolating valuation data for CIK {cik} due to {anomaly['type']}")
                     
-                    # 1. 시세 삭제
-                    cur.execute("DELETE FROM us_daily_price WHERE cik = %s AND dt = %s", (cik, target_date))
-                    # 2. 가치평가 삭제
+                    # 1. 가치평가 삭제
                     cur.execute("DELETE FROM us_daily_valuation WHERE cik = %s AND dt = %s", (cik, target_date))
                     
                     # 데이터 이상 유발 사유로 실패 카운팅 및 지속 시 블랙리스트 자동 편입
@@ -524,11 +453,10 @@ class DailyRoutine:
 
         return anomalies
 
-        return anomalies
-
     def _save_report(self, report: Dict[str, Any]) -> None:
         """실행 리포트를 logs 폴더에 JSON 파일로 저장합니다."""
-        log_dir = "logs"
+        from p3_usdms.config import get_settings
+        log_dir = get_settings().LOG_DIR
         os.makedirs(log_dir, exist_ok=True)
         
         filename = f"{report['routine']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -540,3 +468,4 @@ class DailyRoutine:
             logger.info(f"Routine execution report saved: {filepath}")
         except Exception as e:
             logger.error(f"Failed to write execution report file: {e}")
+

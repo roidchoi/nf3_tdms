@@ -117,7 +117,12 @@ class StatusService:
                         job_id = "daily_routine"
                     elif fname.startswith("weekly_backfill"):
                         job_id = "weekly_backfill"
+                    elif fname.startswith("us_financial") or fname.startswith("financial_routine"):
+                        job_id = "us_financial"
                         
+                if job_id == "financial_collection_job" or job_id == "financial_routine":
+                    job_id = "us_financial"
+                    
                 if not job_id:
                     continue
                 if job_id in tasks_data:

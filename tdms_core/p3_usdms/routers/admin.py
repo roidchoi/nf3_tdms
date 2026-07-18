@@ -58,6 +58,17 @@ async def _async_run_weekly():
     finally:
         set_running_task(None)
 
+async def _async_run_us_financial():
+    set_running_task("us_financial")
+    try:
+        from p3_usdms.tasks.us_financial_routine import UsFinancialRoutine
+        routine = UsFinancialRoutine()
+        await routine.run()
+    except Exception as e:
+        logger.error(f"Background UsFinancialRoutine run encountered error: {e}")
+    finally:
+        set_running_task(None)
+
 # =================================================================
 # 1. 태스크 수동 실행 API
 # =================================================================
@@ -74,6 +85,19 @@ async def run_daily_routine(background_tasks: BackgroundTasks):
         )
     background_tasks.add_task(_async_run_routine)
     return {"status": "SUBMITTED", "message": "Daily routine has been triggered in the background."}
+
+@router.post("/tasks/us_financial/run")
+async def run_us_financial(background_tasks: BackgroundTasks):
+    """
+    US 재무 수집 루틴을 백그라운드로 수동 기동합니다.
+    """
+    if is_routine_running():
+        raise HTTPException(
+            status_code=409,
+            detail="Another background routine is already running."
+        )
+    background_tasks.add_task(_async_run_us_financial)
+    return {"status": "SUBMITTED", "message": "US Financial routine has been triggered in the background."}
 
 @router.post("/tasks/weekly_backfill/run")
 async def run_weekly_backfill(background_tasks: BackgroundTasks):
@@ -99,11 +123,12 @@ def get_tasks_status() -> List[Dict[str, Any]]:
     역순으로 조회하여 최근 10건의 실행 이력 리포트 리스트를 반환하되,
     현재 메모리 상에서 실행 중인 태스크 상태를 오버라이딩하여 반영합니다.
     """
-    logs_dir = "logs"
+    from p3_usdms.config import get_settings
+    logs_dir = get_settings().LOG_DIR
     log_files = []
     if os.path.exists(logs_dir):
         for f in os.listdir(logs_dir):
-            if f.endswith(".json") and (f.startswith("daily_routine_") or f.startswith("weekly_backfill_")):
+            if f.endswith(".json") and (f.startswith("daily_routine_") or f.startswith("weekly_backfill_") or f.startswith("us_financial_")):
                 log_files.append(f)
             
     # 파일명 역순 정렬 (타임스탬프 기반 최신순)
@@ -120,7 +145,7 @@ def get_tasks_status() -> List[Dict[str, Any]]:
         except Exception as e:
             logger.warning(f"Failed to read/parse report file {f}: {e}")
             reports.append({
-                "routine": "daily_routine" if "daily_routine" in f else "weekly_backfill",
+                "routine": "daily_routine" if "daily_routine" in f else "weekly_backfill" if "weekly_backfill" in f else "us_financial",
                 "file_name": f,
                 "status": "ERROR",
                 "error": str(e),
@@ -140,6 +165,8 @@ def get_tasks_status() -> List[Dict[str, Any]]:
                     routine_name = "daily_routine"
                 elif fname.startswith("weekly_backfill"):
                     routine_name = "weekly_backfill"
+                elif fname.startswith("us_financial"):
+                    routine_name = "us_financial"
             
             if routine_name == running:
                 report["is_running"] = True
@@ -157,9 +184,9 @@ def get_tasks_status() -> List[Dict[str, Any]]:
             }
             reports.insert(0, new_report)
             
-    # 3단계: 리포트 목록에 daily_routine 및 weekly_backfill에 대한 기본 placeholder가 없는 경우 주입
+    # 3단계: 리포트 목록에 daily_routine 및 weekly_backfill, us_financial에 대한 기본 placeholder가 없는 경우 주입
     routines_found = {r.get("routine") for r in reports if r.get("routine")}
-    for r_type in ["daily_routine", "weekly_backfill"]:
+    for r_type in ["daily_routine", "us_financial", "weekly_backfill"]:
         if r_type not in routines_found:
             reports.append({
                 "routine": r_type,
@@ -218,7 +245,8 @@ def update_schedule(
         
     var_map = {
         "daily_collection_job": "SCHEDULE_USDMS_DAILY_ROUTINE",
-        "weekly_maintenance_job": "SCHEDULE_USDMS_WEEKLY_MAINTENANCE"
+        "weekly_maintenance_job": "SCHEDULE_USDMS_WEEKLY_MAINTENANCE",
+        "financial_collection_job": "SCHEDULE_USDMS_FINANCIAL_ROUTINE"
     }
     
     var_name = var_map.get(job_id)
@@ -281,7 +309,8 @@ def reload_schedules(request: Request) -> Dict[str, Any]:
         # 2. 각 작업의 설정 키 갱신
         var_map = {
             "daily_collection_job": ("SCHEDULE_USDMS_DAILY_ROUTINE", "tue-sat"),
-            "weekly_maintenance_job": ("SCHEDULE_USDMS_WEEKLY_MAINTENANCE", "sat")
+            "weekly_maintenance_job": ("SCHEDULE_USDMS_WEEKLY_MAINTENANCE", "sat"),
+            "financial_collection_job": ("SCHEDULE_USDMS_FINANCIAL_ROUTINE", "wed,sat")
         }
         
         updated_jobs = []
@@ -353,7 +382,8 @@ async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = Query(N
     """
     await websocket.accept()
     
-    logs_dir = "logs"
+    from p3_usdms.config import get_settings
+    logs_dir = get_settings().LOG_DIR
     target_log_path = None
     
     if log_file:
@@ -362,12 +392,8 @@ async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = Query(N
         if os.path.exists(safe_path):
             target_log_path = safe_path
     else:
-        # logs/ 디렉토리 내에서 가장 최신의 daily_routine_*.log 또는 daily_routine.log 파일 탐색 (테스트용 _test.log 파일 제외)
-        if os.path.exists(logs_dir):
-            log_files = [f for f in os.listdir(logs_dir) if f.endswith(".log") and not f.endswith("_test.log")]
-            if log_files:
-                log_files.sort(reverse=True)
-                target_log_path = os.path.join(logs_dir, log_files[0])
+        # daily_routine과 us_financial 모두 daily_routine.log에 로그가 쌓이므로 이를 기본 타겟으로 설정합니다.
+        target_log_path = os.path.join(logs_dir, "daily_routine.log")
                 
     if not target_log_path or not os.path.exists(target_log_path):
         # 방어적 조치: 파일이 없다면 logs/daily_routine.log 경로를 기본 경로로 삼고 빈 파일을 만듭니다.

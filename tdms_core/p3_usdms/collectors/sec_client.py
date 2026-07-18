@@ -33,15 +33,15 @@ class SECClient:
             "Host": "data.sec.gov"
         }
         self.last_request_time = 0
-        self.rate_limit_delay = 0.15  # ~6.6 requests per second (Limit is 10)
+        self.rate_limit_delay = 0.25  # ~4 requests per second (Limit is 10) - Safer rate limit padding
         
         self.session = requests.Session()
         from requests.adapters import HTTPAdapter
         from urllib3.util.retry import Retry
         
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
+            total=5,  # Max retries increased to 5
+            backoff_factor=2,  # Wait longer between retries (2, 4, 8, 16s...)
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["HEAD", "GET", "OPTIONS"]
         )

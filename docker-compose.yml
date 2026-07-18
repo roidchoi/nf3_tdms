@@ -115,6 +115,8 @@ services:
         condition: service_healthy
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
+      - PYTHONUNBUFFERED=1
+      - LOG_DIR=/app/logs
     volumes:
       - ./backups:/app/backups
       - ./.env:/app/.env
@@ -135,6 +137,8 @@ services:
         condition: service_healthy
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
+      - PYTHONUNBUFFERED=1
+      - LOG_DIR=/app/logs
     volumes:
       - ./backups:/app/backups
       - ./.env:/app/.env
@@ -157,6 +161,7 @@ services:
         condition: service_started
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
+      - PYTHONUNBUFFERED=1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/app/data

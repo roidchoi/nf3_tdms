@@ -1,7 +1,7 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-07-09
+> **마지막 업데이트**: 2026-07-19
 > **총 등록 파일**: 60개
 
 
@@ -107,6 +107,7 @@
 | `dec-007_financial_update_optimization.md` | KDMS 재무 업데이트 성능 최적화 전략 | — |
 | `dec-008_scheduler_reload_and_logging.md` | 스케줄러 동적 리로드 및 진행률 로깅 개선 [NEW] | — |
 | `dec-009_kdms_backfill_optimization.md` | KDMS 백필 누락 감지 및 API 호출 한도 계산 고도화 [NEW] | — |
+| `dec-010_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 
@@ -130,8 +131,8 @@
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | 2026-06-05 |
-| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | 2026-06-05 |
+| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | 2026-07-17 |
+| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | 2026-07-17 |
 | `interfaces/schema_usdms_db.md` | usdms_db TimescaleDB 스키마 구성, 인덱스 및 관계 명세 | 2026-06-08 |
 
 ### interfaces/ (미국 시장 마스터 수집 핵심 인터페이스)
@@ -144,8 +145,9 @@
 | `master_repo.md` | MasterRepo | 마스터, 이력 DB CRUD 및 Dynamic Targeting Rules SQL 적용 |
 | `blacklist_repo.md` | BlacklistRepo | us_collection_blacklist 테이블 연동 CRUD 처리 |
 | `blacklist_manager.md` | BlacklistManager | 실패 에러 분석 및 일시적/영구적 에러 분기, 쿨다운 관리 매니저 |
-| `daily_routine.md` | DailyRoutine | 5단계 일일 루틴 자동화, 동적 lookback 계산 및 이상치 롤백/격리 |
-| `financial_parser.md` | FinancialParser | SEC XBRL facts 수집/정제 및 discrete 분기 재무 데이터 도출 파이프라인 |
+| `daily_routine.md` | DailyRoutine | 4단계 일일 시세 수집 자동화 및 이상치 롤백/격리 (시세 전용 경량화, 샤딩 제거) |
+| `us_financial_routine.md` | UsFinancialRoutine | 5일 index 스캔 기반 재무 공시 수집 및 핀포인트 비율/일별 가치 연산 스케줄러 [NEW] |
+| `financial_parser.md` | FinancialParser | SEC XBRL facts 수집/정제, discrete 분기 재무 데이터 도출 및 실질 적재(ingested_ciks) 반환 |
 | `financial_repo.md` | FinancialRepo | us_financial_facts, us_standard_financials, us_share_history 테이블 CRUD/Upsert |
 | `xbrl_mapper.md` | XBRLMapper | US-GAAP 원시 태그의 분석용 표준 회계 필드 우선순위 매핑 및 정규화 |
 | `valuation_repo.md` | ValuationRepo | 일별 가격, 주식수 이력, 표준재무 조회 및 daily_valuation/financial_metrics 일괄 Upsert |
@@ -165,7 +167,9 @@
 | `decisions.md#USDMS_DEC-005` | 수/토요일 시분할 일정에 따른 미국 휴장일 전체 스킵 로직 제거 및 캘린더 싱크 보존 | — |
 | `decisions.md#USDMS_DEC-006` | 2분할 MOD 2 해시 샤딩 기반 가치평가 연산 최적화 [NEW] | — |
 | `decisions.md#USDMS_DEC-007` | USDMS 스케줄러 동적 리로드 및 진행률 로깅 개선 [NEW] | — |
-| `decisions/dec-008_blacklist_progressive_cooldown.md` | 수집 오류 누적 횟수 기반 점진적 쿨다운 및 5회차 영구 제외 의사결정 [NEW] | — |
+| `dec-008_blacklist_progressive_cooldown.md` | 수집 오류 누적 횟수 기반 점진적 쿨다운 및 5회차 영구 제외 의사결정 [NEW] | — |
+| `dec-009_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 [NEW] | — |
+| `dec-011_us_financial_routine_pinpoint_pipeline.md` | 시세/재무 수집 이원화, 수집 대상 종목 필터링 및 핀포인트 연산 도입 의사결정 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 
@@ -177,6 +181,7 @@
 | `usdms-err-004_financial_tag_and_date_filtering_null_metrics.md` | 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 (해결 및 백필 완료) | High |
 | `usdms-err-005_apscheduler_misfire_grace_time_skipped.md` | APScheduler misfire_grace_time 미지정으로 인한 스케줄러 트리거 누락 | High |
 | `usdms-err-006_test_isolation_failure_blacklist_aapl.md` | 테스트 기동 시 실 DB 블랙리스트 오염으로 인한 AAPL 수집 중단 장애 | Critical |
+| `usdms-err-007_container_log_vol_loss_and_permission_denied.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 볼륨 유실 및 권한 차단 에러 [NEW] | High |
 
 ---
 
@@ -247,6 +252,7 @@
 - [USDMS-ERR-004] 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 → `p3_usdms_wiki/errors/usdms-err-004_financial_tag_and_date_filtering_null_metrics.md`
 - [USDMS-ERR-005] APScheduler misfire_grace_time 미지정으로 인한 스케줄러 트리거 누락 → `p3_usdms_wiki/errors/usdms-err-005_apscheduler_misfire_grace_time_skipped.md`
 - [USDMS-ERR-006] 테스트 기동 시 실 DB 오염으로 인한 AAPL 수집 중단 장애 → `p3_usdms_wiki/errors/usdms-err-006_test_isolation_failure_blacklist_aapl.md` [NEW]
+- [USDMS-ERR-007] 도커 내 환경변수 오버라이드로 인한 로그 유실 및 소유권 거부 → `p3_usdms_wiki/errors/usdms-err-007_container_log_vol_loss_and_permission_denied.md` [NEW]
 - [P4-ERR-002] 대용량 DB 볼륨 tar 백업 권한 장애 → `p4_manager_wiki/errors/p4err-002_real_db_volume_tar_permission.md`
 - [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
 - [P4-ERR-004] WSL2 에이전트 브라우저 실행 및 포워딩 장애 → `p4_manager_wiki/errors/p4err-004_wsl2_agent_browser_forwarding.md`

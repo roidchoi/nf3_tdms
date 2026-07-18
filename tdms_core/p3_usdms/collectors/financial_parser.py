@@ -39,7 +39,7 @@ class FinancialParser:
         logger.info(f"Gap Recovery: Processing {len(target_ciks)} CIKs...")
         self.run(sorted(list(target_ciks)))
 
-    def run(self, ciks: List[str]) -> None:
+    def run(self, ciks: List[str]) -> tuple[int, List[str]]:
         """
         Process list of CIKs with detailed logger.info progress and Speed/ETA tracking.
         """
@@ -49,6 +49,7 @@ class FinancialParser:
         total = len(ciks)
         loop_start_time = time.time()
         success_count = 0
+        ingested_ciks = []
         
         for idx, cik in enumerate(ciks):
             if idx % 10 == 0 or idx == total - 1:
@@ -68,16 +69,19 @@ class FinancialParser:
                 )
             
             try:
-                self.process_company(cik)
+                ingested = self.process_company(cik)
                 success_count += 1
+                if ingested:
+                    ingested_ciks.append(cik)
                 # Rate Limiting
                 time.sleep(0.5) 
             except Exception as e:
                 logger.error(f"Failed to process CIK {cik}: {e}")
 
-        logger.info(f"Financial Ingestion Complete. Success: {success_count}/{total}")
+        logger.info(f"Financial Ingestion Complete. Success: {success_count}/{total} | Ingested: {len(ingested_ciks)}")
+        return success_count, ingested_ciks
 
-    def process_company(self, cik: str) -> None:
+    def process_company(self, cik: str) -> bool:
         """
         1. SEC API를 통한 raw company facts 데이터 fetch
         2. dei 파트 내 주식수 정보 추출 및 us_share_history 저장
@@ -88,7 +92,7 @@ class FinancialParser:
         facts_json = self.sec_client.get_company_facts(cik)
         if facts_json is None:
             logger.info(f"CIK {cik} facts data not modified (304). Skipping parse/load.")
-            return
+            return False
         
         # 1. Process Shares Outstanding (DEI)
         dei_data = facts_json.get('facts', {}).get('dei', {})
@@ -98,7 +102,7 @@ class FinancialParser:
         us_gaap_data = facts_json.get('facts', {}).get('us-gaap', {})
         if not us_gaap_data:
             logger.warning(f"No us-gaap data for CIK {cik}")
-            return
+            return False
 
         # 2. Flatten & Normalize
         raw_facts = []
@@ -137,6 +141,8 @@ class FinancialParser:
         # 5. Upsert Standard Financials
         if std_financials:
             self.repo.upsert_standard_financials(std_financials)
+            return True
+        return False
 
     def _standardize_financials_v2(self, cik: str, raw_facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

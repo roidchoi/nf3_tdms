@@ -32,11 +32,18 @@ class Settings(BaseSettings):
     db_pool_min: int = 5
     db_pool_max: int = 20
     log_level: str = "INFO"
+    log_dir: str = "logs"
 
     # 공통 스케줄링 일정
     schedule_kdms_daily_update: str = "17:10"
     schedule_kdms_financial_update: str = "sat:14:00"
     schedule_kdms_backfill_minute: str = "sat:16:00"
+
+    def __init__(self, **values):
+        super().__init__(**values)
+        import os
+        if os.path.exists('/.dockerenv'):
+            self.log_dir = "/app/logs"
 
 # 기본적으로는 .env 파일 시도 (없어도 에러는 안남 - 기본값 사용)
 settings = Settings(_env_file=".env")
