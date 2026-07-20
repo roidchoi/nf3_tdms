@@ -349,6 +349,7 @@ async def release_us_blacklist(cik: str):
 ALLOWED_TABLES_KR = {
     "stock_info",
     "daily_ohlcv",
+    "daily_ohlcv_adjusted",
     "daily_market_cap",
     "minute_ohlcv",
     "financial_statements",
@@ -383,6 +384,7 @@ def get_preview_metadata():
         "kr": [
             { "table": "stock_info", "name": "종목 마스터 정보" },
             { "table": "daily_ohlcv", "name": "일봉 시세" },
+            { "table": "daily_ohlcv_adjusted", "name": "수정 일봉 시세(물리)" },
             { "table": "daily_market_cap", "name": "일별 시가총액" },
             { "table": "minute_ohlcv", "name": "분봉 시세" },
             { "table": "financial_statements", "name": "PIT 재무제표" },

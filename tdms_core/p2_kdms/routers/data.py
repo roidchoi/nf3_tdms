@@ -429,7 +429,7 @@ def post_screening(
 
 
 ALLOWED_TABLES = {
-    "daily_ohlcv", "daily_market_cap", "minute_ohlcv",
+    "daily_ohlcv", "daily_ohlcv_adjusted", "daily_market_cap", "minute_ohlcv",
     "financial_statements", "financial_ratios", "price_adjustment_factors",
     "stock_info", "system_milestones", "trading_calendar", "minute_target_history",
     "daily_investor_trade"
@@ -437,6 +437,7 @@ ALLOWED_TABLES = {
 
 TABLE_DATE_COLUMNS = {
     "daily_ohlcv": "dt",
+    "daily_ohlcv_adjusted": "dt",
     "minute_ohlcv": "dt_tm",
     "daily_market_cap": "dt",
     "price_adjustment_factors": "event_dt",
@@ -455,6 +456,9 @@ TABLE_FILTER_COLUMNS = {
         "market": "market_type"
     },
     "daily_ohlcv": {
+        "stk_cd": "stk_cd"
+    },
+    "daily_ohlcv_adjusted": {
         "stk_cd": "stk_cd"
     },
     "daily_market_cap": {

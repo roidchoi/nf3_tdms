@@ -90,7 +90,8 @@ async def run_task(
     task_id: str,
     request: Optional[TaskRunRequest] = None,
     start_date: Optional[str] = Query(None, description="백필 시작 날짜 (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="백필 종료 날짜 (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="백필 종료 날짜 (YYYY-MM-DD)"),
+    verify_date: Optional[str] = Query(None, description="수정주가 3자 검증 기준일 (YYYY-MM-DD 또는 정수 일수)")
 ):
     """
     태스크를 스케줄러의 백그라운드 스레드 풀에서 즉시 1회 실행합니다. (Non-Blocking)
@@ -124,13 +125,26 @@ async def run_task(
         # 비동기적으로 스케줄러에 단발성 작업 추가 (KST timezone-aware 미래 시점으로 즉시 실행 보장)
         current_time = datetime.now(ZoneInfo("Asia/Seoul")) + timedelta(seconds=5)
         if task_id in ["backfill_market_cap", "backfill_minute_data", "backfill_daily_data", "backfill_investor_trade"]:
+            # 클로저 바인딩 꼬임 방지를 위한 래퍼 함수 정의
+            def run_job(t_mode, p_start, p_end, v_date):
+                if task_id == "backfill_daily_data":
+                    return task_func(
+                        job_statuses=job_statuses,
+                        test_mode=t_mode,
+                        start_date=p_start,
+                        end_date=p_end,
+                        verify_date=v_date
+                    )
+                else:
+                    return task_func(
+                        job_statuses=job_statuses,
+                        test_mode=t_mode,
+                        start_date=p_start,
+                        end_date=p_end
+                    )
+            
             scheduler.add_job(
-                func=lambda: task_func(
-                    job_statuses=job_statuses,
-                    test_mode=test_mode,
-                    start_date=parsed_start,
-                    end_date=parsed_end
-                ),
+                func=lambda: run_job(test_mode, parsed_start, parsed_end, verify_date),
                 trigger="date",
                 run_date=current_time,
                 misfire_grace_time=900,

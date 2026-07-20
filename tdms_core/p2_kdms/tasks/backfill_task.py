@@ -669,7 +669,8 @@ def run_backfill_daily_data(
     job_statuses: Dict[str, Any], 
     test_mode: bool = False,
     start_date: date = None,
-    end_date: date = None
+    end_date: date = None,
+    verify_date: date | int | str | None = None
 ):
     """
     일봉 데이터 중간 누락 검출 및 핀포인트 백필 실행 함수
@@ -784,30 +785,159 @@ def run_backfill_daily_data(
                 missing_map[stk] = []
             missing_map[stk].append(row['dt'])
             
-        # Step 2-2: 수정 비율(price_adjustment_factors) 누락 검출 및 백필 대상 추가 (전일 대비 변동 1% 이상 & 팩터 누락 기준)
-        query_missing_factors = """
-            SELECT d1.stk_cd, d1.dt
-            FROM daily_ohlcv d1
-            JOIN daily_ohlcv d2 ON d2.stk_cd = d1.stk_cd AND d2.dt = (
-                SELECT max(dt) FROM daily_ohlcv WHERE stk_cd = d1.stk_cd AND dt < d1.dt
-            )
-            LEFT JOIN price_adjustment_factors f ON f.stk_cd = d1.stk_cd AND f.event_dt = d1.dt
-            WHERE d1.dt BETWEEN %s AND %s
-              AND d2.cls_prc > 0
-              AND abs(d1.cls_prc - d2.cls_prc)::float / d2.cls_prc > 0.01
-              AND f.stk_cd IS NULL
-              AND d1.stk_cd = ANY(%s::varchar[]);
-        """
-        factor_results = db._execute_query(query_missing_factors, (start_date, end_date, target_stocks), fetch='all')
-        if factor_results:
-            logger.info(f"[{job_id}] 수정 비율(price_adjustment_factors) 누락 건 감지: {len(factor_results)}건. 백필 대상에 병합합니다.")
-            for row in factor_results:
-                stk = row['stk_cd']
-                dt_val = row['dt']
-                if stk not in missing_map:
-                    missing_map[stk] = []
-                if dt_val not in missing_map[stk]:
-                    missing_map[stk].append(dt_val)
+        # Step 2-2: 수정 비율(price_adjustment_factors) 및 수정주가 3자 정합성 전수 대조 검증 및 자가 치유(Self-healing)
+        discrepancy_stocks = []
+        if target_stocks:
+            # 1. 3자 대조 검증일 산출 (verify_date에 따른 유연한 파싱 적용, 기본값 1년전)
+            if verify_date is not None:
+                if isinstance(verify_date, str):
+                    try:
+                        target_back_date = datetime.strptime(verify_date, "%Y-%m-%d").date()
+                    except ValueError:
+                        try:
+                            days_back = int(verify_date)
+                            target_back_date = start_date - timedelta(days=days_back)
+                        except ValueError:
+                            target_back_date = start_date - timedelta(days=365)
+                elif isinstance(verify_date, int):
+                    target_back_date = start_date - timedelta(days=verify_date)
+                elif isinstance(verify_date, date):
+                    target_back_date = verify_date
+                else:
+                    target_back_date = start_date - timedelta(days=365)
+            else:
+                target_back_date = start_date - timedelta(days=365)
+
+            dt_res = db._execute_query("""
+                SELECT max(dt) as dt FROM trading_calendar 
+                WHERE opnd_yn = 'Y' AND dt <= %s
+            """, (target_back_date,), fetch='all')
+            check_dt_global = dt_res[0]['dt'] if dt_res and dt_res[0]['dt'] else target_back_date
+            
+            # 2. 각 종목별 최초 거래일 조회
+            first_dates_res = db._execute_query("""
+                SELECT stk_cd, min(dt) as first_dt 
+                FROM daily_ohlcv 
+                WHERE stk_cd = ANY(%s::varchar[])
+                GROUP BY stk_cd
+            """, (target_stocks,), fetch='all')
+            first_dates = {r['stk_cd']: r['first_dt'] for r in first_dates_res if r['stk_cd'] and r['first_dt']}
+            
+            # 3. 종목별 개별 동적 검증일(check_dt) 산출
+            stock_check_dates = {}
+            for stk in target_stocks:
+                first_dt = first_dates.get(stk)
+                if not first_dt:
+                    continue
+                if first_dt <= check_dt_global:
+                    stock_check_dates[stk] = check_dt_global
+                else:
+                    stock_check_dates[stk] = first_dt
+            
+            # 4. 로컬 DB 3자 대조 대상 데이터 벌크 조회 (VALUES 조인 활용)
+            values_list = []
+            for stk, dt_val in stock_check_dates.items():
+                values_list.append(f"('{stk}', '{dt_val.isoformat()}'::date)")
+            
+            if values_list:
+                values_str = ", ".join(values_list)
+                query_local_values = f"""
+                    WITH target_dates(stk_cd, check_dt) AS (
+                        VALUES {values_str}
+                    ),
+                    raw_adj_base AS (
+                        SELECT 
+                            t.stk_cd,
+                            t.check_dt,
+                            d.cls_prc as raw_close,
+                            adj.cls_prc as db_adj_close
+                        FROM target_dates t
+                        JOIN daily_ohlcv d ON d.stk_cd = t.stk_cd AND d.dt = t.check_dt
+                        LEFT JOIN daily_ohlcv_adjusted adj ON adj.stk_cd = t.stk_cd AND adj.dt = t.check_dt
+                    ),
+                    cum_factors AS (
+                        SELECT 
+                            f.stk_cd,
+                            EXP(SUM(LN(f.price_ratio))) as cum_factor
+                        FROM price_adjustment_factors f
+                        JOIN target_dates t ON f.stk_cd = t.stk_cd
+                        WHERE f.event_dt > t.check_dt AND f.price_source = 'KIS' AND f.price_ratio > 0
+                        GROUP BY f.stk_cd
+                    )
+                    SELECT 
+                        b.stk_cd,
+                        b.check_dt,
+                        b.raw_close,
+                        b.db_adj_close,
+                        COALESCE(c.cum_factor, 1.0) as cum_factor
+                    FROM raw_adj_base b
+                    LEFT JOIN cum_factors c ON c.stk_cd = b.stk_cd;
+                """
+                local_data_res = db._execute_query(query_local_values, fetch='all')
+                
+                logger.info(f"[{job_id}] 총 {len(local_data_res)}개 종목 대상 3자 정합성 검증 시작 (Rate limit 제어 적용)")
+                
+                for row in local_data_res:
+                    stk_cd = row['stk_cd']
+                    check_dt = row['check_dt']
+                    raw_close = row['raw_close']
+                    db_adj_close = float(row['db_adj_close']) if row['db_adj_close'] is not None else None
+                    cum_factor = float(row['cum_factor'])
+                    
+                    # 값 C: 로컬 팩터 적용 역산 수정주가
+                    calc_adj_close = round(raw_close * cum_factor)
+                    
+                    # 1단계: 로컬 DB 내부 불일치 확인 (값 B != 값 C)
+                    # 절대 오차 1.0원 이상이면서 동시에 상대 오차 0.5% 이상일 때만 실제 정합성 오류로 감지
+                    is_local_discrepancy = False
+                    if db_adj_close is None:
+                        is_local_discrepancy = True
+                    else:
+                        local_diff = abs(db_adj_close - calc_adj_close)
+                        if local_diff >= 1.0 and (local_diff / db_adj_close) >= 0.005:
+                            is_local_discrepancy = True
+                            
+                    if is_local_discrepancy:
+                        logger.warning(f"[{stk_cd}] 로컬 DB 불일치 감지 (물리 수정주가: {db_adj_close}, 계산 수정주가: {calc_adj_close}). 백필 대상 추가.")
+                        discrepancy_stocks.append((stk_cd, check_dt))
+                        continue
+                    
+                    # 2단계: 외부 KIS API 수정주가(값 A) 대조
+                    if test_mode:
+                        kis_adj_close = db_adj_close
+                    else:
+                        import time
+                        time.sleep(0.06)
+                        try:
+                            api_res = kis_client.fetch_ohlcv_range(stk_cd, start_date=check_dt, end_date=check_dt, adj_price='0')
+                            if api_res:
+                                kis_adj_close = api_res[0].get("close")
+                            else:
+                                kis_adj_close = None
+                        except Exception as api_err:
+                            logger.warning(f"[{stk_cd}] KIS API 조회 중 오류 발생 (스킵): {api_err}")
+                            continue
+                            
+                    if kis_adj_close is not None:
+                        kis_adj_close = float(kis_adj_close)
+                        # 3자 정합성 대조 판정 (절대오차 1.0원 이상 & 상대오차 0.5% 이상)
+                        diff_db_kis = abs(db_adj_close - kis_adj_close)
+                        diff_calc_kis = abs(calc_adj_close - kis_adj_close)
+                        
+                        is_db_err = diff_db_kis >= 1.0 and (diff_db_kis / db_adj_close) >= 0.005
+                        is_calc_err = diff_calc_kis >= 1.0 and (diff_calc_kis / kis_adj_close) >= 0.005
+                        
+                        if is_db_err or is_calc_err:
+                            logger.warning(f"[{stk_cd}] 3자 불일치 감지 (KIS API: {kis_adj_close}, 물리: {db_adj_close}, 계산: {calc_adj_close}). 백필 대상 추가.")
+                            discrepancy_stocks.append((stk_cd, check_dt))
+            
+            if discrepancy_stocks:
+                logger.info(f"[{job_id}] 수정 팩터 3자 불일치(결손/오염) 종목 감지: {len(discrepancy_stocks)}건. 백필 대상에 병합합니다.")
+                for stk, dt_val in discrepancy_stocks:
+                    if stk not in missing_map:
+                        missing_map[stk] = []
+                    if dt_val not in missing_map[stk]:
+                        missing_map[stk].append(dt_val)
             
         if not missing_map:
             logger.info(f"[{job_id}] 모든 대상 종목의 일봉 데이터가 최신 상태입니다. (누락 없음)")
@@ -910,6 +1040,33 @@ def run_backfill_daily_data(
                                         factor_repo.upsert_adjustment_factors(factors)
                             except Exception as fe:
                                 logger.warning(f"[{stk_cd}] 수정계수 역산 실패: {fe}")
+                            
+                            # KIS 오피셜 수정주가 다이렉트 보정 동기화 (정답 강제 주입)
+                            try:
+                                api_adj_records = kis_client.fetch_daily_ohlcv_range(stk_cd, start_date=min_dt, end_date=max_dt, adj_price="0")
+                                if api_adj_records:
+                                    filtered_adj_records = []
+                                    for rec in api_adj_records:
+                                        rec_dt = rec.get("dt")
+                                        if isinstance(rec_dt, str):
+                                            rec_dt = datetime.strptime(rec_dt, "%Y-%m-%d").date()
+                                        if rec_dt in missing_days:
+                                            filtered_adj_records.append({
+                                                "stk_cd": stk_cd,
+                                                "dt": rec_dt,
+                                                "open_prc": rec.get("open"),
+                                                "high_prc": rec.get("high"),
+                                                "low_prc": rec.get("low"),
+                                                "cls_prc": rec.get("close"),
+                                                "vol": rec.get("volume"),
+                                                "amt": rec.get("amt"),
+                                                "turn_rt": 0.0
+                                            })
+                                    if filtered_adj_records:
+                                        db.upsert_ohlcv_data('daily_ohlcv_adjusted', filtered_adj_records)
+                                        logger.info(f"✨ [{stk_cd}] KIS 오피셜 수정주가 물리 테이블 직접 동기화 완료 ({len(filtered_adj_records)}건)")
+                            except Exception as adj_sync_err:
+                                logger.warning(f"[{stk_cd}] KIS 오피셜 수정주가 동기화 중 오류 발생: {adj_sync_err}")
                             
                             ohlcv_repo.refresh_adjusted_ohlcv_batch(
                                 min_dt - timedelta(days=5),
