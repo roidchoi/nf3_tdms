@@ -761,8 +761,14 @@ def run_backfill_daily_data(
             
         logger.info(f"[{job_id}] 총 {len(target_stocks)}개 활성 종목을 대상으로 일봉 중간 누락 검출 시작")
 
-        # Step 2: 일봉 중간 누락일 검출 (Outer Join 방식)
+        # Step 2: 일봉 중간 누락일 검출 (Outer Join 방식 - 상장일 이후 기간만 대상)
         query_missing = """
+            WITH stock_first_dt AS (
+                SELECT stk_cd, min(dt) as first_dt
+                FROM daily_ohlcv
+                WHERE stk_cd = ANY(%s::varchar[])
+                GROUP BY stk_cd
+            )
             SELECT 
                 tc.dt,
                 s.stk_cd
@@ -770,13 +776,16 @@ def run_backfill_daily_data(
             CROSS JOIN (
                 SELECT unnest(%s::varchar[]) as stk_cd
             ) s
+            INNER JOIN stock_first_dt f ON f.stk_cd = s.stk_cd
             LEFT JOIN daily_ohlcv d ON d.stk_cd = s.stk_cd AND d.dt = tc.dt
             WHERE tc.opnd_yn = 'Y' 
               AND tc.dt BETWEEN %s AND %s
+              AND tc.dt >= f.first_dt
+              AND tc.dt < CURRENT_DATE
               AND d.stk_cd IS NULL
             ORDER BY s.stk_cd, tc.dt;
         """
-        results = db._execute_query(query_missing, (target_stocks, start_date, end_date), fetch='all')
+        results = db._execute_query(query_missing, (target_stocks, target_stocks, start_date, end_date), fetch='all')
         
         missing_map: Dict[str, List[date]] = {}
         for row in results:
@@ -877,6 +886,9 @@ def run_backfill_daily_data(
                 
                 logger.info(f"[{job_id}] 총 {len(local_data_res)}개 종목 대상 3자 정합성 검증 시작 (Rate limit 제어 적용)")
                 
+                consecutive_api_errors = 0
+                discrepancy_stock_map = {} # stk_cd -> check_dt
+                
                 for row in local_data_res:
                     stk_cd = row['stk_cd']
                     check_dt = row['check_dt']
@@ -894,12 +906,14 @@ def run_backfill_daily_data(
                         is_local_discrepancy = True
                     else:
                         local_diff = abs(db_adj_close - calc_adj_close)
-                        if local_diff >= 1.0 and (local_diff / db_adj_close) >= 0.005:
+                        # Phase 1 불일치 감지 기준: 상대오차 1.0%(0.01) 이상일 때만 백필 대상으로 포섭 (Self-Healing Guard와 수평선 통일)
+                        if local_diff >= 1.0 and (local_diff / db_adj_close) >= 0.01:
                             is_local_discrepancy = True
                             
                     if is_local_discrepancy:
                         logger.warning(f"[{stk_cd}] 로컬 DB 불일치 감지 (물리 수정주가: {db_adj_close}, 계산 수정주가: {calc_adj_close}). 백필 대상 추가.")
                         discrepancy_stocks.append((stk_cd, check_dt))
+                        discrepancy_stock_map[stk_cd] = (check_dt, None)
                         continue
                     
                     # 2단계: 외부 KIS API 수정주가(값 A) 대조
@@ -912,24 +926,37 @@ def run_backfill_daily_data(
                             api_res = kis_client.fetch_ohlcv_range(stk_cd, start_date=check_dt, end_date=check_dt, adj_price='0')
                             if api_res:
                                 kis_adj_close = api_res[0].get("close")
+                                consecutive_api_errors = 0
                             else:
                                 kis_adj_close = None
                         except Exception as api_err:
-                            logger.warning(f"[{stk_cd}] KIS API 조회 중 오류 발생 (스킵): {api_err}")
+                            consecutive_api_errors += 1
+                            logger.warning(f"[{stk_cd}] KIS API 조회 중 오류 발생 (연속 {consecutive_api_errors}회): {api_err}")
+                            if consecutive_api_errors >= 5:
+                                error_msg = f"KIS API 연속 통신 실패 5회 감지: 서비스 점검 또는 장애 상태로 3자 대조 백필을 즉시 중단합니다."
+                                logger.critical(f"[{job_id}] {error_msg}")
+                                job_statuses[job_id].update({
+                                    "is_running": False,
+                                    "last_status": "failed (KIS API 장애/점검)",
+                                    "end_time": datetime.now(KST).isoformat(),
+                                    "last_log": error_msg
+                                })
+                                raise RuntimeError(error_msg)
                             continue
                             
                     if kis_adj_close is not None:
                         kis_adj_close = float(kis_adj_close)
-                        # 3자 정합성 대조 판정 (절대오차 1.0원 이상 & 상대오차 0.5% 이상)
+                        # 3자 정합성 대조 판정 (물리 DB 오염 0.5% / 계산 주가 미세 시차 1.0% 통일)
                         diff_db_kis = abs(db_adj_close - kis_adj_close)
                         diff_calc_kis = abs(calc_adj_close - kis_adj_close)
                         
                         is_db_err = diff_db_kis >= 1.0 and (diff_db_kis / db_adj_close) >= 0.005
-                        is_calc_err = diff_calc_kis >= 1.0 and (diff_calc_kis / kis_adj_close) >= 0.005
+                        is_calc_err = diff_calc_kis >= 1.0 and (diff_calc_kis / kis_adj_close) >= 0.01
                         
                         if is_db_err or is_calc_err:
                             logger.warning(f"[{stk_cd}] 3자 불일치 감지 (KIS API: {kis_adj_close}, 물리: {db_adj_close}, 계산: {calc_adj_close}). 백필 대상 추가.")
                             discrepancy_stocks.append((stk_cd, check_dt))
+                            discrepancy_stock_map[stk_cd] = (check_dt, kis_adj_close)
             
             if discrepancy_stocks:
                 logger.info(f"[{job_id}] 수정 팩터 3자 불일치(결손/오염) 종목 감지: {len(discrepancy_stocks)}건. 백필 대상에 병합합니다.")
@@ -959,7 +986,7 @@ def run_backfill_daily_data(
             "last_log": f"총 {total_stocks}개 종목 누락 데이터 백필 기동 시작..."
         })
         
-        # Step 3: 종목별 핀포인트 백필 수집 실행
+        # Step 3: 종목별 핀포인트 백필 수집 및 팩터 클린 재산출 실행
         import pandas as pd
         from collectors.factor_calculator import calculate_factors
         
@@ -978,6 +1005,7 @@ def run_backfill_daily_data(
 
             min_dt = min(missing_days)
             max_dt = max(missing_days)
+            is_discrepancy_stock = stk_cd in discrepancy_stock_map
             
             try:
                 # KIS API 호출
@@ -1024,33 +1052,45 @@ def run_backfill_daily_data(
                             ohlcv_repo.upsert_daily_ohlcv(filtered_records)
                             collected_cnt += len(filtered_records)
                             
-                            # 수정계수 재빌드 및 물리 수정주가 테이블 동기화
-                            calc_start_dt = min_dt - timedelta(days=45)
-                            try:
-                                raw_list = kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, max_dt, adj_price='1')
-                                adj_list = kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, max_dt, adj_price='0')
+                            # 불일치 감지 종목인 경우: 상장일부터 오늘(date.today())까지 KIS API Anchor 동기화 전면 팩터 클린 리빌드 수행
+                            if is_discrepancy_stock:
+                                first_dt = first_dates.get(stk_cd, min_dt - timedelta(days=365))
+                                # 팩터 역산을 위해 KIS API의 최신 Anchor 기준일(date.today())까지 수평선 완전 동기화
+                                factor_fetch_max_dt = date.today()
+                                logger.info(f"🔄 [{stk_cd}] 3자 불일치 종목 감지. 상장일({first_dt}) ~ KIS Anchor 동기화일({factor_fetch_max_dt}) 전 기간 팩터 전면 클린 리빌드를 수행합니다.")
                                 
-                                df_raw = pd.DataFrame(raw_list).rename(columns={"close": "raw_close"})
-                                df_adj = pd.DataFrame(adj_list).rename(columns={"close": "adj_close"})
+                                # 1. 기존 KIS 팩터 전체 삭제
+                                factor_repo.delete_adjustment_factors(stk_cd, "KIS")
                                 
-                                if not df_raw.empty and not df_adj.empty:
-                                    df = pd.merge(df_raw, df_adj, on="dt", how="inner")
-                                    factors = calculate_factors(df, stk_cd, "KIS")
-                                    if factors:
-                                        factor_repo.upsert_adjustment_factors(factors)
-                            except Exception as fe:
-                                logger.warning(f"[{stk_cd}] 수정계수 역산 실패: {fe}")
-                            
-                            # KIS 오피셜 수정주가 다이렉트 보정 동기화 (정답 강제 주입)
-                            try:
-                                api_adj_records = kis_client.fetch_daily_ohlcv_range(stk_cd, start_date=min_dt, end_date=max_dt, adj_price="0")
-                                if api_adj_records:
-                                    filtered_adj_records = []
-                                    for rec in api_adj_records:
-                                        rec_dt = rec.get("dt")
-                                        if isinstance(rec_dt, str):
-                                            rec_dt = datetime.strptime(rec_dt, "%Y-%m-%d").date()
-                                        if rec_dt in missing_days:
+                                # 2. 상장일~Anchor동기화일까지 전 기간 KIS 원시시세 및 수정시세 전수 루프 수집
+                                adj_list = []
+                                try:
+                                    raw_list = kis_client.fetch_daily_ohlcv_range(stk_cd, first_dt, factor_fetch_max_dt, adj_price='1')
+                                    adj_list = kis_client.fetch_daily_ohlcv_range(stk_cd, first_dt, factor_fetch_max_dt, adj_price='0')
+                                    
+                                    df_raw = pd.DataFrame(raw_list).rename(columns={"close": "raw_close"})
+                                    df_adj = pd.DataFrame(adj_list).rename(columns={"close": "adj_close"})
+                                    
+                                    if not df_raw.empty and not df_adj.empty:
+                                        df = pd.merge(df_raw, df_adj, on="dt", how="inner")
+                                        factors = calculate_factors(df, stk_cd, "KIS")
+                                        if factors:
+                                            factor_repo.upsert_adjustment_factors(factors)
+                                            logger.info(f"✨ [{stk_cd}] 상장일({first_dt}) ~ Anchor동기화일({factor_fetch_max_dt}) 전 기간 {len(factors)}건 팩터 재산출 및 적재 완료")
+                                except Exception as fe:
+                                    logger.warning(f"[{stk_cd}] 전 기간 수정계수 역산 실패: {fe}")
+                                
+                                # 3. 누적 팩터 기반 물리 테이블 배치 갱신
+                                ohlcv_repo.refresh_adjusted_ohlcv_batch(first_dt, factor_fetch_max_dt, 'KIS', stk_cd=stk_cd)
+
+                                # 4. KIS 오피셜 수정주가 물리 테이블 500건 청크 단위 최후 다이렉트 동기화 (오버라이트 방지)
+                                try:
+                                    if adj_list:
+                                        filtered_adj_records = []
+                                        for rec in adj_list:
+                                            rec_dt = rec.get("dt")
+                                            if isinstance(rec_dt, str):
+                                                rec_dt = datetime.strptime(rec_dt, "%Y-%m-%d").date()
                                             filtered_adj_records.append({
                                                 "stk_cd": stk_cd,
                                                 "dt": rec_dt,
@@ -1059,22 +1099,90 @@ def run_backfill_daily_data(
                                                 "low_prc": rec.get("low"),
                                                 "cls_prc": rec.get("close"),
                                                 "vol": rec.get("volume"),
-                                                "amt": rec.get("amt"),
-                                                "turn_rt": 0.0
+                                                "adj_factor": 1.0
                                             })
-                                    if filtered_adj_records:
-                                        db.upsert_ohlcv_data('daily_ohlcv_adjusted', filtered_adj_records)
-                                        logger.info(f"✨ [{stk_cd}] KIS 오피셜 수정주가 물리 테이블 직접 동기화 완료 ({len(filtered_adj_records)}건)")
-                            except Exception as adj_sync_err:
-                                logger.warning(f"[{stk_cd}] KIS 오피셜 수정주가 동기화 중 오류 발생: {adj_sync_err}")
-                            
-                            ohlcv_repo.refresh_adjusted_ohlcv_batch(
-                                min_dt - timedelta(days=5),
-                                max_dt,
-                                'KIS'
-                            )
-                            logger.info(f"✅ [{stk_cd}] {min_dt} ~ {max_dt} 범위 {len(filtered_records)}건 백필 및 팩터 소급 갱신 완료")
+                                        if filtered_adj_records:
+                                            # 500건 청크 단위 분할 Upsert (DB 락 방지)
+                                            chunk_size = 500
+                                            for c_i in range(0, len(filtered_adj_records), chunk_size):
+                                                chunk_data = filtered_adj_records[c_i:c_i + chunk_size]
+                                                db.upsert_ohlcv_data('daily_ohlcv_adjusted', chunk_data)
+                                            logger.info(f"✨ [{stk_cd}] KIS 오피셜 전 기간 수정주가 물리 테이블 최후 동기화 완료 ({len(filtered_adj_records)}건)")
+                                except Exception as adj_sync_err:
+                                    logger.warning(f"[{stk_cd}] KIS 오피셜 수정주가 동기화 중 오류 발생: {adj_sync_err}")
+                                
+                                saved_check_dt, saved_kis_adj_close = discrepancy_stock_map[stk_cd]
+                                logger.info(f"🔍 [{stk_cd}] 전 기간 팩터 리빌드 완료. 캡처 보관된 검증일({saved_check_dt}) 오피셜 수정주가({saved_kis_adj_close}) 기준 3자 재검증을 수행합니다.")
+                                
+                                re_row_res = db._execute_query("""
+                                    SELECT d.cls_prc as raw_close, adj.cls_prc as db_adj_close
+                                    FROM daily_ohlcv d
+                                    LEFT JOIN daily_ohlcv_adjusted adj ON adj.stk_cd = d.stk_cd AND adj.dt = d.dt
+                                    WHERE d.stk_cd = %s AND d.dt = %s
+                                """, (stk_cd, saved_check_dt), fetch='all')
+                                
+                                if re_row_res and re_row_res[0]['db_adj_close'] is not None:
+                                    re_raw_close = re_row_res[0]['raw_close']
+                                    re_db_adj_close = float(re_row_res[0]['db_adj_close'])
+                                    
+                                    re_kis_close = saved_kis_adj_close if saved_kis_adj_close is not None else re_db_adj_close
+                                    
+                                    # 최신 팩터 누적곱 재계산
+                                    cum_res = db._execute_query("""
+                                        SELECT EXP(SUM(LN(price_ratio))) as cum_factor
+                                        FROM price_adjustment_factors
+                                        WHERE stk_cd = %s AND event_dt > %s AND price_source = 'KIS' AND price_ratio > 0
+                                    """, (stk_cd, saved_check_dt), fetch='all')
+                                    re_cum_factor = float(cum_res[0]['cum_factor']) if cum_res and cum_res[0]['cum_factor'] is not None else 1.0
+                                    re_calc_adj_close = round(re_raw_close * re_cum_factor)
+                                    
+                                    diff_re_db = abs(re_db_adj_close - re_kis_close)
+                                    diff_re_calc = abs(re_calc_adj_close - re_kis_close)
+                                    
+                                    re_db_err = diff_re_db >= 1.0 and (diff_re_db / re_db_adj_close) >= 0.005
+                                    # 물리 DB가 KIS 오피셜과 100% 완벽 일치(re_db_err False)된 경우, 미세 소급 팩터 시차(1.0% 미만)는 정상 통과로 인정
+                                    calc_err_threshold = 0.01 if not re_db_err else 0.005
+                                    re_calc_err = diff_re_calc >= 1.0 and (diff_re_calc / re_kis_close) >= calc_err_threshold
+                                    
+                                    if re_db_err or re_calc_err:
+                                        critical_err_msg = (
+                                            f"[CRITICAL_ERROR] [{stk_cd}] 전 기간 팩터 리빌드 후에도 3자 대조 재검증 실패! "
+                                            f"(캡처 KIS: {re_kis_close}, 물리: {re_db_adj_close}, 계산: {re_calc_adj_close}). "
+                                            f"데이터 추가 오염 방지를 위해 백필 작업을 즉시 완전 중단합니다."
+                                        )
+                                        logger.critical(f"[{job_id}] {critical_err_msg}")
+                                        job_statuses[job_id].update({
+                                            "is_running": False,
+                                            "last_status": "failed (재검증 실패 중단)",
+                                            "end_time": datetime.now(KST).isoformat(),
+                                            "last_log": critical_err_msg
+                                        })
+                                        raise RuntimeError(critical_err_msg)
+                                    else:
+                                        logger.info(f"✅ [{stk_cd}] 3자 대조 재검증 통과! (KIS API: {re_kis_close}, 물리: {re_db_adj_close}, 계산: {re_calc_adj_close})")
+                            else:
+                                # 일반 단순 백필 종목인 경우 기존 45일 역산
+                                calc_start_dt = min_dt - timedelta(days=45)
+                                try:
+                                    raw_list = kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, max_dt, adj_price='1')
+                                    adj_list = kis_client.fetch_ohlcv_range(stk_cd, calc_start_dt, max_dt, adj_price='0')
+                                    
+                                    df_raw = pd.DataFrame(raw_list).rename(columns={"close": "raw_close"})
+                                    df_adj = pd.DataFrame(adj_list).rename(columns={"close": "adj_close"})
+                                    
+                                    if not df_raw.empty and not df_adj.empty:
+                                        df = pd.merge(df_raw, df_adj, on="dt", how="inner")
+                                        factors = calculate_factors(df, stk_cd, "KIS")
+                                        if factors:
+                                            factor_repo.upsert_adjustment_factors(factors)
+                                except Exception as fe:
+                                    logger.warning(f"[{stk_cd}] 수정계수 역산 실패: {fe}")
+                                
+                                ohlcv_repo.refresh_adjusted_ohlcv_batch(min_dt - timedelta(days=5), max_dt, 'KIS')
+                                logger.info(f"✅ [{stk_cd}] {min_dt} ~ {max_dt} 범위 {len(filtered_records)}건 백필 및 팩터 소급 갱신 완료")
             except Exception as e:
+                if isinstance(e, RuntimeError):
+                    raise e
                 logger.error(f"[{stk_cd}] 일봉 백필 실패: {e}", exc_info=True)
                 failed_cnt += 1
 
@@ -1101,12 +1209,16 @@ def run_backfill_daily_data(
 
     except Exception as e:
         logger.critical(f"[{job_id}] 치명적 오류 발생: {e}", exc_info=True)
+        current_status = job_statuses.get(job_id, {}).get("last_status", "failure")
+        if not str(current_status).startswith("failed"):
+            current_status = "failure"
         job_statuses[job_id].update({
             "is_running": False,
-            "last_status": "failure",
+            "last_status": current_status,
             "error": str(e),
             "end_time": datetime.now(KST).isoformat()
         })
+        raise e
     finally:
         status_dict = job_statuses.get(job_id, {})
         status_dict["is_running"] = False

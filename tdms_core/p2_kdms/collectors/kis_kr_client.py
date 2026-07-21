@@ -6,7 +6,7 @@ import io
 import os
 import re
 import tempfile
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 class KisKrClient:
     """
@@ -65,76 +65,75 @@ class KisKrClient:
     def fetch_daily_ohlcv_range(self, stk_cd: str, start_date: date, end_date: date, adj_price: str = "1") -> list[dict]:
         """
         특정 종목의 지정 범위(start_date ~ end_date) 일봉 데이터를 수집.
+        KIS API 100건 호출 한도를 극복하기 위해 루프 페이징(Loop Paging)을 수행합니다.
         """
         path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-        
-        # T-002 스펙: end_date=target_date, adj_price 적용 (1: Raw 주가, 0: 수정 주가)
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_INPUT_ISCD": stk_cd,
-            "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
-            "FID_INPUT_DATE_2": end_date.strftime("%Y%m%d"),
-            "FID_PERIOD_DIV_CODE": "D",
-            "FID_ORG_ADJ_PRC": adj_price
-        }
-        
-        try:
-            res = self.api_core.get(path, adj_price=adj_price, **params)
-        except Exception as e:
-            raise e
+        current_end = end_date
+        all_records = []
+        seen_dts = set()
+
+        while current_end >= start_date:
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": stk_cd,
+                "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
+                "FID_INPUT_DATE_2": current_end.strftime("%Y%m%d"),
+                "FID_PERIOD_DIV_CODE": "D",
+                "FID_ORG_ADJ_PRC": adj_price
+            }
             
-        output2 = res.get("output2", [])
-        records = []
-        for row in output2:
-            dt_str = row.get("stck_bsop_date")
-            if dt_str:
-                dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
-                if start_date <= dt_val <= end_date:
-                    records.append({
-                        "stk_cd": stk_cd,
-                        "dt": dt_val,
-                        "open": int(row["stck_oprc"]),
-                        "high": int(row["stck_hgpr"]),
-                        "low": int(row["stck_lwpr"]),
-                        "close": int(row["stck_clpr"]),
-                        "volume": int(row["acml_vol"]),
-                        "amt": int(row.get("acml_tr_pbmn", 0) or 0),
-                        "turn_rt": 0.0
-                    })
-        return records
+            try:
+                res = self.api_core.get(path, adj_price=adj_price, **params)
+            except Exception as e:
+                logger.error(f"[{stk_cd}] KIS 일봉 페이징 수집 실패 (범위: {start_date}~{current_end}): {e}")
+                break
+
+            output2 = res.get("output2", [])
+            if not output2:
+                break
+                
+            fetched_count = 0
+            min_date_in_batch = None
+            
+            for row in output2:
+                dt_str = row.get("stck_bsop_date")
+                if dt_str:
+                    dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
+                    if start_date <= dt_val <= end_date:
+                        if min_date_in_batch is None or dt_val < min_date_in_batch:
+                            min_date_in_batch = dt_val
+                        
+                        if dt_val not in seen_dts:
+                            seen_dts.add(dt_val)
+                            fetched_count += 1
+                            all_records.append({
+                                "stk_cd": stk_cd,
+                                "dt": dt_val,
+                                "open": int(row["stck_oprc"]),
+                                "high": int(row["stck_hgpr"]),
+                                "low": int(row["stck_lwpr"]),
+                                "close": int(row["stck_clpr"]),
+                                "volume": int(row["acml_vol"]),
+                                "amt": int(row.get("acml_tr_pbmn", 0) or 0),
+                                "turn_rt": 0.0
+                            })
+
+            if not min_date_in_batch or min_date_in_batch <= start_date or fetched_count == 0:
+                break
+                
+            current_end = min_date_in_batch - timedelta(days=1)
+
+        # 날짜 오름차순 정렬 반환
+        all_records.sort(key=lambda x: x["dt"])
+        return all_records
 
 
     def fetch_ohlcv_range(self, stk_cd: str, start_date: date, end_date: date, adj_price: str = '1') -> list[dict]:
         """
-        특정 종목의 지정 범위 시세 데이터를 수집합니다.
+        특정 종목의 지정 범위 시세 데이터를 수집합니다 (루프 페이징 적용).
         """
-        path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_INPUT_ISCD": stk_cd,
-            "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
-            "FID_INPUT_DATE_2": end_date.strftime("%Y%m%d"),
-            "FID_PERIOD_DIV_CODE": "D",
-            "FID_ORG_ADJ_PRC": adj_price
-        }
-        
-        try:
-            res = self.api_core.get(path, adj_price=adj_price, **params)
-        except Exception as e:
-            raise e
-            
-        output2 = res.get("output2", [])
-        records = []
-        for row in output2:
-            dt_str = row.get("stck_bsop_date")
-            if dt_str:
-                dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
-                if start_date <= dt_val <= end_date:
-                    records.append({
-                        "dt": dt_val,
-                        "close": float(row["stck_clpr"])
-                    })
-        return records
+        records = self.fetch_daily_ohlcv_range(stk_cd, start_date, end_date, adj_price=adj_price)
+        return [{"dt": r["dt"], "close": float(r["close"])} for r in records]
 
 
     def fetch_stock_master(self) -> list[dict]:

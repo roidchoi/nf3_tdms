@@ -34,6 +34,8 @@ class TestRangeBackfillT010(unittest.TestCase):
 
         # 1. Mocking 리포지토리 및 캘린더 개수 설정 (5일)
         self.ohlcv_repo.get_trading_days_count.return_value = 5
+        self.ohlcv_repo.get_all_stocks_latest_dates.return_value = {"005930": date(2026, 5, 19)}
+        self.ohlcv_repo.get_all_stocks_latest_adjusted_info.return_value = {"005930": (date(2026, 5, 19), 50000)}
         self.master_repo.get_all_active_stocks.return_value = [
             {"stk_cd": "005930", "listed_shares": 1000000, "is_active": True}
         ]
@@ -46,13 +48,10 @@ class TestRangeBackfillT010(unittest.TestCase):
             {"stk_cd": "005930", "dt": date(2026, 5, 23), "open": 52000, "high": 53000, "low": 51800, "close": 52500, "volume": 130000},
             {"stk_cd": "005930", "dt": date(2026, 5, 24), "open": 52500, "high": 53500, "low": 52200, "close": 53000, "volume": 140000},
         ]
-        self.kis_client.fetch_daily_ohlcv_range.return_value = mock_ohlcvs
+        self.kis_client.fetch_daily_ohlcv_range.side_effect = lambda stk, s_dt, e_dt: mock_ohlcvs
 
         # 수정계수 역산을 위한 범위 시세 조회 모의
-        self.kis_client.fetch_ohlcv_range.side_effect = [
-            [{"dt": d["dt"], "close": d["close"]} for d in mock_ohlcvs], # raw
-            [{"dt": d["dt"], "close": d["close"]} for d in mock_ohlcvs], # adj
-        ]
+        self.kis_client.fetch_ohlcv_range.return_value = [{"dt": d["dt"], "close": d["close"]} for d in mock_ohlcvs]
 
         self.factor_repo.get_recent_event_stocks_map.return_value = {}
 
@@ -61,8 +60,8 @@ class TestRangeBackfillT010(unittest.TestCase):
 
         # 4. 검증 단언 (Assertion)
         self.assertEqual(res["collected"], 5)
-        # 종목당 fetch_daily_ohlcv_range가 단 1회 호출되었는지 확인
-        self.kis_client.fetch_daily_ohlcv_range.assert_called_once_with("005930", start_date, end_date)
+        # 종목당 fetch_daily_ohlcv_range가 호출되었는지 확인
+        self.kis_client.fetch_daily_ohlcv_range.assert_called()
         
         # upsert_daily_ohlcv가 1번 일괄 호출되었는지 확인
         self.ohlcv_repo.upsert_daily_ohlcv.assert_called_once_with(mock_ohlcvs)

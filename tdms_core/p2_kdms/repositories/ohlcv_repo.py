@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Optional
 from p1_shared.db.connection import DbConnectionPool
 
 class OhlcvRepo:
@@ -121,7 +122,7 @@ class OhlcvRepo:
         with self.pool.get_cursor() as cursor:
             cursor.execute(query, (stk_cd, target_date, reason))
 
-    def refresh_adjusted_ohlcv_batch(self, start_date: date, end_date: date, price_source: str = 'KIS') -> int:
+    def refresh_adjusted_ohlcv_batch(self, start_date: date, end_date: date, price_source: str = 'KIS', stk_cd: Optional[str] = None) -> int:
         """
         수정계수를 기반으로 누적곱 계산을 처리하는 SQL CTE를 활용해
         daily_ohlcv_adjusted 물리 테이블을 일괄 갱신합니다.
@@ -130,14 +131,16 @@ class OhlcvRepo:
             start_date: 갱신 시작일
             end_date: 갱신 종료일
             price_source: 수정계수 출처
+            stk_cd: 특정 종목코드 (지정 시 해당 종목만 핀포인트 갱신)
         Returns:
             int: 갱신(UPSERT) 처리된 행 수
         """
-        query = """
+        stk_filter = "AND stk_cd = %s" if stk_cd else ""
+        query = f"""
             WITH raw_data AS (
                 SELECT dt, stk_cd, open_prc as open, high_prc as high, low_prc as low, cls_prc as close, vol as volume
                 FROM daily_ohlcv
-                WHERE dt BETWEEN %s AND %s
+                WHERE dt BETWEEN %s AND %s {stk_filter}
             ),
             calculated_factors AS (
                 SELECT 
@@ -153,6 +156,7 @@ class OhlcvRepo:
                          FROM price_adjustment_factors f 
                          WHERE f.stk_cd = r.stk_cd 
                            AND f.price_source = %s 
+                           AND f.price_ratio > 0
                            AND f.event_dt > r.dt), 
                         1.0
                     ) as cum_price_factor,
@@ -161,6 +165,7 @@ class OhlcvRepo:
                          FROM price_adjustment_factors f 
                          WHERE f.stk_cd = r.stk_cd 
                            AND f.price_source = %s 
+                           AND f.volume_ratio > 0
                            AND f.event_dt > r.dt), 
                         1.0
                     ) as cum_volume_factor
@@ -187,8 +192,13 @@ class OhlcvRepo:
                 adj_factor = EXCLUDED.adj_factor,
                 updated_at = CURRENT_TIMESTAMP
         """
+        params = [start_date, end_date]
+        if stk_cd:
+            params.append(stk_cd)
+        params.extend([price_source, price_source])
+
         with self.pool.get_cursor() as cursor:
-            cursor.execute(query, (start_date, end_date, price_source, price_source))
+            cursor.execute(query, tuple(params))
             return cursor.rowcount
 
     def get_daily_ohlcv(self, stk_cd: str, start_date: date, end_date: date) -> list[dict]:

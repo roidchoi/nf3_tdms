@@ -21,21 +21,29 @@ def calculate_factors(df: pd.DataFrame, stk_cd: str, price_source: str) -> List[
     # 날짜 순 정렬 보장
     df = df.sort_values('dt').reset_index(drop=True)
 
-    # 0으로 나누기 방지
-    df['ratio'] = np.where(df['raw_close'] == 0, 0.0, df['adj_close'] / df['raw_close'])
+    # [보완 1] 음수 시세 정제: raw_close나 adj_close가 0 이하인 경우 유효가격(abs)으로 보정
+    df['raw_close_clean'] = df['raw_close'].apply(lambda x: abs(x) if x != 0 else 0.0)
+    df['adj_close_clean'] = df['adj_close'].apply(lambda x: abs(x) if x != 0 else 0.0)
+
+    # 0으로 나누기 및 음수 비율 방지
+    df['ratio'] = np.where(
+        (df['raw_close_clean'] <= 0) | (df['adj_close_clean'] <= 0),
+        0.0,
+        df['adj_close_clean'] / df['raw_close_clean']
+    )
     df['prev_ratio'] = df['ratio'].shift(1)
 
     # 수정비율 곱셈 승수 계산: price_ratio = prev_ratio / ratio (50:1 액면분할 시 0.02/1.0 = 0.02)
-    # 0으로 나누기 방지: prev_ratio 또는 ratio가 0이면 1.0으로 매핑
+    # 0으로 나누기 방지 및 음수 방어: prev_ratio 또는 ratio가 0 이하이면 1.0으로 매핑
     df['price_ratio'] = np.where(
-        (df['prev_ratio'] == 0.0) | (df['ratio'] == 0.0),
+        (df['prev_ratio'] <= 0.0) | (df['ratio'] <= 0.0),
         1.0,
         df['prev_ratio'] / df['ratio']
     )
     df['price_ratio'] = df['price_ratio'].fillna(1.0)
 
-    # 임계값: 1% (0.01) 초과 변동 시 수정계수 변동 이벤트로 간주
-    threshold = 0.01
+    # 임계값: 0.3% (0.003) 초과 변동 시 수정계수 변동 이벤트로 간주 (3자 대조 기준 0.5% 미만 소액 팩터 누락 방어)
+    threshold = 0.003
     
     # 첫 행은 prev_ratio가 없으므로 제외하고, 임계값을 초과하는 행 필터링
     event_mask = (abs(df['price_ratio'] - 1.0) > threshold) & (df.index > 0)
@@ -45,8 +53,15 @@ def calculate_factors(df: pd.DataFrame, stk_cd: str, price_source: str) -> List[
     
     for index, row in event_df.iterrows():
         price_ratio = row['price_ratio']
+        
+        # [보완 2] 팩터 불변성 검증: price_ratio가 0 이하인 비정상 수치 엄격 배제
+        if price_ratio <= 0.0:
+            continue
+            
         # volume_ratio는 price_ratio의 역수
-        volume_ratio = 1.0 / price_ratio if price_ratio != 0.0 else 1.0
+        volume_ratio = 1.0 / price_ratio
+        if volume_ratio <= 0.0:
+            continue
         
         # 이전 행 데이터 획득
         prev_row = df.loc[index - 1]

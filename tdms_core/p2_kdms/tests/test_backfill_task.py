@@ -250,10 +250,8 @@ def test_backfill_daily_data_detects_middle_gap():
         # 일봉 백필 구동
         run_backfill_daily_data(job_statuses, test_mode=False, start_date=date(2026, 5, 19), end_date=date(2026, 5, 20))
         
-        # 1. KIS API가 5/19 ~ 5/19 범위로 핀포인트 호출되었는지 검증 (원시시세 및 수정시세 다이렉트 동기화)
-        assert mock_kis.fetch_daily_ohlcv_range.call_count == 2
-        mock_kis.fetch_daily_ohlcv_range.assert_any_call("005930", start_date=date(2026, 5, 19), end_date=date(2026, 5, 19))
-        mock_kis.fetch_daily_ohlcv_range.assert_any_call("005930", start_date=date(2026, 5, 19), end_date=date(2026, 5, 19), adj_price="0")
+        # 1. KIS API가 5/19 ~ 5/19 범위로 핀포인트 호출되었는지 검증
+        mock_kis.fetch_daily_ohlcv_range.assert_called_once_with("005930", start_date=date(2026, 5, 19), end_date=date(2026, 5, 19))
         
         # 2. upsert_daily_ohlcv 가 호출되어 적재되었는지 검증
         ohlcv_repo_mock.upsert_daily_ohlcv.assert_called_once()
@@ -279,7 +277,7 @@ def test_backfill_daily_data_detects_3way_discrepancy():
     """
     [목적] 일봉 백필 시 일봉 중간 누락은 없으나, 
     3자 대조 검증에서 외부 KIS API 가격과 로컬 DB 가격의 불일치가 감지되는 경우,
-    해당 종목을 백필 및 수정계수 재역산 대상으로 자동 포함하여 자가 치유하는지 검증.
+    기존 팩터 전체 삭제 -> 상장일부터 전 기간 팩터 클린 리빌드 -> 보정 후 3자 재검증 수행을 검증.
     """
     from tasks.backfill_task import run_backfill_daily_data
     
@@ -290,16 +288,14 @@ def test_backfill_daily_data_detects_3way_discrepancy():
     
     master_repo_mock.get_all_active_stocks.return_value = [{"stk_cd": "005930"}]
     
-    # 쿼리 응답 4단계 모킹
+    # 쿼리 응답 단계 모킹 (1. missing query, 2. check_dt_global, 3. first_dt, 4. 3-way check, 5. re-verification db_adj_close, 6. re-verification cum_factor)
     db_mock._execute_query.side_effect = [
-        # 1. query_missing: 누락일 없음
-        [],
-        # 2. 글로벌 기준 영업일 조회 결과
-        [{"dt": date(2025, 5, 19)}],
-        # 3. 각 종목별 최초 거래일 조회 결과
-        [{"stk_cd": "005930", "first_dt": date(2020, 1, 2)}],
-        # 4. 로컬 DB 3자 대조 데이터 벌크 조회 결과
-        [{"stk_cd": "005930", "check_dt": date(2025, 5, 19), "raw_close": 50000, "db_adj_close": 50000, "cum_factor": 1.0}]
+        [], # 1. query_missing: 누락일 없음
+        [{"dt": date(2025, 5, 19)}], # 2. 글로벌 기준 영업일 조회 결과
+        [{"stk_cd": "005930", "first_dt": date(2020, 1, 2)}], # 3. 최초 거래일 조회
+        [{"stk_cd": "005930", "check_dt": date(2025, 5, 19), "raw_close": 50000, "db_adj_close": 50000, "cum_factor": 1.0}], # 4. 로컬 DB 3자 대조 데이터
+        [{"raw_close": 50000, "db_adj_close": 45000}], # 5. 3자 재검증용 DB 조회 (보정 완료된 45000)
+        [{"cum_factor": 0.9}] # 6. 3자 재검증용 누적 팩터 (45000/50000 = 0.9 -> 계산 45000)
     ]
     
     job_statuses = {}
@@ -309,52 +305,127 @@ def test_backfill_daily_data_detects_3way_discrepancy():
          patch("tasks.backfill_task.OhlcvRepo", return_value=ohlcv_repo_mock), \
          patch("tasks.backfill_task.FactorRepo", return_value=factor_repo_mock), \
          patch("tasks.backfill_task.KisKrClient") as mock_kis_cls, \
-         patch("collectors.factor_calculator.calculate_factors", return_value=[{"stk_cd": "005930", "ratio": 1.0}]) as mock_calc:
+         patch("collectors.factor_calculator.calculate_factors", return_value=[{"stk_cd": "005930", "ratio": 0.9}]) as mock_calc:
         
         mock_kis = mock_kis_cls.return_value
-        # KIS API 수정주가 fetch_daily_ohlcv_range (백필용)
+        # KIS API 수정주가 fetch_daily_ohlcv_range (백필 및 동기화용)
         mock_kis.fetch_daily_ohlcv_range.return_value = [
             {
                 "dt": date(2025, 5, 19),
                 "open": 50000,
-                "close": 50500,
+                "close": 45000,
                 "high": 51000,
-                "low": 49900,
+                "low": 44900,
                 "volume": 100000,
                 "amt": 5000000000
             }
         ]
         
-        # fetch_ohlcv_range 모킹 (3자 대조 시 불일치 발생하도록 45000 반환)
+        # fetch_ohlcv_range 모킹 (1차 대조 시 KIS: 45000 -> 3자 불일치 발생 / 재검증 시 KIS: 45000 -> 재검증 성공!)
         def mock_fetch_ohlcv_range(stk, start_date, end_date, adj_price='1'):
-            if start_date == date(2025, 5, 19):
-                # KIS API에서 45000 고시 (로컬 DB 50000과 불일치 발생!)
-                return [{"dt": date(2025, 5, 19), "close": 45000.0}]
-            else:
-                return [
-                    {"dt": date(2026, 5, 18), "close": 49000.0},
-                    {"dt": date(2026, 5, 19), "close": 50000.0}
-                ]
+            return [{"dt": date(2025, 5, 19), "close": 45000.0}]
+            
         mock_kis.fetch_ohlcv_range.side_effect = mock_fetch_ohlcv_range
         
-        # 일봉 백필 구동 (누락일은 없으나 3자 대조 불일치로 백필 및 팩터 복구가 개시되어야 함)
+        # 일봉 백필 구동 (누락일은 없으나 3자 대조 불일치로 전 기간 팩터 리빌드 및 재검증 실행)
         run_backfill_daily_data(job_statuses, test_mode=False, start_date=date(2026, 5, 19), end_date=date(2026, 5, 20))
         
-        # 3자 불일치가 발생한 2025-05-19 영업일에 대해 핀포인트 백필을 호출했는지 검증 (원시시세 및 수정시세 다이렉트 동기화)
-        assert mock_kis.fetch_daily_ohlcv_range.call_count == 2
-        mock_kis.fetch_daily_ohlcv_range.assert_any_call("005930", start_date=date(2025, 5, 19), end_date=date(2025, 5, 19))
-        mock_kis.fetch_daily_ohlcv_range.assert_any_call("005930", start_date=date(2025, 5, 19), end_date=date(2025, 5, 19), adj_price="0")
+        # 기존 팩터 전체 삭제(delete_adjustment_factors) 호출 검증
+        factor_repo_mock.delete_adjustment_factors.assert_called_once_with("005930", "KIS")
         
-        # 일봉 데이터 upsert_daily_ohlcv 호출 검증
-        ohlcv_repo_mock.upsert_daily_ohlcv.assert_called_once()
-        
-        # 수정계수 재역산 및 물리 수정주가 동기화 호출 검증
+        # 전 기간 팩터 재산출 및 물리 수정주가 동기화 호출 검증
         mock_calc.assert_called_once()
         factor_repo_mock.upsert_adjustment_factors.assert_called_once()
-        ohlcv_repo_mock.refresh_adjusted_ohlcv_batch.assert_called_once()
         
         # 완료 상태 검증
         assert job_statuses["backfill_daily_data"]["last_status"] == "success"
+
+
+def test_backfill_daily_data_aborts_on_reverification_failure():
+    """
+    [목적] 전 기간 팩터 삭제 및 클린 리빌드 후에도 3자 대조 재검증이 실패하는 경우,
+    데이터 오염 방지를 위해 RuntimeError 예외를 발생시키며 즉시 작업을 완전 중단하는지 검증.
+    """
+    from tasks.backfill_task import run_backfill_daily_data
+    import pytest
+    
+    db_mock = MagicMock()
+    master_repo_mock = MagicMock()
+    ohlcv_repo_mock = MagicMock()
+    factor_repo_mock = MagicMock()
+    
+    master_repo_mock.get_all_active_stocks.return_value = [{"stk_cd": "005930"}]
+    
+    # 쿼리 응답 단계 모킹
+    db_mock._execute_query.side_effect = [
+        [],
+        [{"dt": date(2025, 5, 19)}],
+        [{"stk_cd": "005930", "first_dt": date(2020, 1, 2)}],
+        [{"stk_cd": "005930", "check_dt": date(2025, 5, 19), "raw_close": 50000, "db_adj_close": 50000, "cum_factor": 1.0}],
+        [{"raw_close": 50000, "db_adj_close": 50000}], # 재검증 시에도 물리 DB가 여전히 50000으로 불일치 유지
+        [{"cum_factor": 1.0}] # 재검증 시에도 계산주가 50000 유지
+    ]
+    
+    job_statuses = {}
+    
+    with patch("tasks.backfill_task.DatabaseManager", return_value=db_mock), \
+         patch("tasks.backfill_task.MasterRepo", return_value=master_repo_mock), \
+         patch("tasks.backfill_task.OhlcvRepo", return_value=ohlcv_repo_mock), \
+         patch("tasks.backfill_task.FactorRepo", return_value=factor_repo_mock), \
+         patch("tasks.backfill_task.KisKrClient") as mock_kis_cls, \
+         patch("collectors.factor_calculator.calculate_factors", return_value=[{"stk_cd": "005930", "ratio": 1.0}]):
+        
+        mock_kis = mock_kis_cls.return_value
+        mock_kis.fetch_daily_ohlcv_range.return_value = [{"dt": date(2025, 5, 19), "close": 40000}]
+        mock_kis.fetch_ohlcv_range.return_value = [{"dt": date(2025, 5, 19), "close": 40000.0}] # KIS API: 40000 (여전히 불일치!)
+        
+        # RuntimeError 예외 발생 및 백필 즉시 중단 검증
+        with pytest.raises(RuntimeError, match="전 기간 팩터 리빌드 후에도 3자 대조 재검증 실패"):
+            run_backfill_daily_data(job_statuses, test_mode=False, start_date=date(2026, 5, 19), end_date=date(2026, 5, 20))
+            
+        assert job_statuses["backfill_daily_data"]["last_status"] == "failed (재검증 실패 중단)"
+
+
+def test_backfill_daily_data_circuit_breaker_on_api_failures():
+    """
+    [목적] KIS API 장애/점검 등으로 연속 5회 이상 API 호출이 실패할 경우,
+    서킷 브레이커가 작동하여 백필 작업을 즉시 안전 중단(RuntimeError)하는지 검증.
+    """
+    from tasks.backfill_task import run_backfill_daily_data
+    import pytest
+    
+    db_mock = MagicMock()
+    master_repo_mock = MagicMock()
+    ohlcv_repo_mock = MagicMock()
+    factor_repo_mock = MagicMock()
+    
+    master_repo_mock.get_all_active_stocks.return_value = [
+        {"stk_cd": f"00593{i}"} for i in range(10)
+    ]
+    
+    db_mock._execute_query.side_effect = [
+        [],
+        [{"dt": date(2025, 5, 19)}],
+        [{"stk_cd": f"00593{i}", "first_dt": date(2020, 1, 2)} for i in range(10)],
+        [{"stk_cd": f"00593{i}", "check_dt": date(2025, 5, 19), "raw_close": 50000, "db_adj_close": 50000, "cum_factor": 1.0} for i in range(10)]
+    ]
+    
+    job_statuses = {}
+    
+    with patch("tasks.backfill_task.DatabaseManager", return_value=db_mock), \
+         patch("tasks.backfill_task.MasterRepo", return_value=master_repo_mock), \
+         patch("tasks.backfill_task.OhlcvRepo", return_value=ohlcv_repo_mock), \
+         patch("tasks.backfill_task.FactorRepo", return_value=factor_repo_mock), \
+         patch("tasks.backfill_task.KisKrClient") as mock_kis_cls:
+        
+        mock_kis = mock_kis_cls.return_value
+        # KIS API 예외 지속 발생 모킹 (연속 5회 이상 실패)
+        mock_kis.fetch_ohlcv_range.side_effect = Exception("KIS API Connection Error")
+        
+        with pytest.raises(RuntimeError, match="KIS API 연속 통신 실패 5회 감지"):
+            run_backfill_daily_data(job_statuses, test_mode=False, start_date=date(2026, 5, 19), end_date=date(2026, 5, 20))
+            
+        assert job_statuses["backfill_daily_data"]["last_status"] == "failed (KIS API 장애/점검)"
 
 
 def test_backfill_daily_data_with_custom_verify_date():
@@ -437,6 +508,7 @@ def test_backfill_daily_data_with_custom_verify_date():
         calls = db_mock._execute_query.call_args_list
         # start_date(2026-05-19) - 365 days = 2025-05-19
         assert calls[1][0][1] == (date(2025, 5, 19),)
+
 
 
 
