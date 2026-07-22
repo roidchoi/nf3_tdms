@@ -133,6 +133,11 @@ class UsFinancialRoutine:
         }
 
         try:
+            # 차단 유예기간(쿨다운)이 만료된 종목 자동 차단 해제
+            released_cnt = self.blacklist_mgr.auto_release_expired_blocks()
+            if isinstance(released_cnt, int) and released_cnt > 0:
+                logger.info(f"[Blacklist Auto-Release] Cool-off expired for {released_cnt} CIKs. Unblocked successfully.")
+
             target_ciks = []
             
             if force_all:

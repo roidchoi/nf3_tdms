@@ -33,7 +33,7 @@
   - **Step 2**: DB의 `us_ticker_master`를 전부 조회하여 기존 마스터 상태를 읽어옵니다.
   - **Step 3 (Diff Processing)**:
     - **신규 상장(New Listings)**: SEC에 새로 나타난 CIK를 마스터에 등록하고 첫 `us_ticker_history` 이력을 생성합니다.
-    - **상장 폐지(Delistings)**: SEC 벌크 파일에서 사라진 CIK를 검지하면, Submissions API를 개별적으로 확인하는 **신뢰성 검증(Authority Verification)**을 수행하여 404/Error인 경우에만 `is_active = FALSE`로 격하시키고 이력(`end_dt = YESTERDAY`)을 마감합니다. (벌크의 일시적 누락 오탐 방지)
+    - **상장 폐지(Delistings)**: SEC 벌크 파일에서 사라진 CIK를 검지하면, Submissions API를 개별적으로 확인하는 **신뢰성 검증(Authority Verification)**을 수행합니다. 네트워크 타임아웃/429 발생 시 비활성화를 보류(`is_active: None`)하고 오직 SEC HTTP 404 미존재 확정 시에만 비활성화합니다. 또한 단일 배치당 비활성화 수량이 전체 active의 1%(35개 초과)일 경우 대량 오탐 비활성화 방지 **안전장치(Safety Lock)**가 가동되어 비활성화를 자동 중단(Abort)합니다. (자세한 의사결정: [[p3_usdms_wiki/decisions/dec-012_master_sync_safety_lock_and_defensive_authority]])
     - **티커 변경(Ticker Changes)**: 주 티커가 변경되었을 경우, 기존 이력을 마감(`end_dt = YESTERDAY`)하고 신규 티커로 새로운 이력을 오픈(`start_dt = TODAY`)하는 SCD Type 2 로직을 트랜잭션 안전하게 수행합니다.
   - **Step 4 (Enrichment)**: `yfinance`를 활용해 신규 또는 수집 대상의 기업 메타 정보(Sector, Industry, Market Cap, Quote Type, Country 등)를 다중 비동기 수집하고 업데이트합니다.
   - **Step 5 (Targeting Analysis)**: 수집 타겟 테이블을 갱신합니다.

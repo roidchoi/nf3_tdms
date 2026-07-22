@@ -171,7 +171,8 @@
 | `decisions.md#USDMS_DEC-007` | USDMS 스케줄러 동적 리로드 및 진행률 로깅 개선 [NEW] | — |
 | `dec-008_blacklist_progressive_cooldown.md` | 수집 오류 누적 횟수 기반 점진적 쿨다운 및 5회차 영구 제외 의사결정 [NEW] | — |
 | `dec-009_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 [NEW] | — |
-| `dec-011_us_financial_routine_pinpoint_pipeline.md` | 시세/재무 수집 이원화, 수집 대상 종목 필터링 및 핀포인트 연산 도입 의사결정 [NEW] | — |
+| `dec-011_us_financial_routine_pinpoint_pipeline.md` | 시세/재무 수집 이원화, 수집 대상 종목 필터링 및 핀포인트 연산 도입 의사결정 | — |
+| `dec-012_master_sync_safety_lock_and_defensive_authority.md` | MasterSync 방어적 권한 검증 및 Safety Lock 도입으로 대량 오탐 비활성화 방지 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 

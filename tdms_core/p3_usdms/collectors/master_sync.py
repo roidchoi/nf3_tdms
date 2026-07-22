@@ -275,11 +275,22 @@ class MasterSync:
             
             for res in auth_results:
                 cik = int(res['cik'])
-                if res['is_active']:
+                if res.get('is_active') is True:
                     recovered_active.append(res)
                     logger.info(f"Authority Check SAVED {cik}: {res['ticker']} ({res['exchange']})")
-                else:
+                elif res.get('is_active') is False:
                     verified_delisted.append(cik)
+                else:
+                    logger.debug(f"Authority Check UNCERTAIN {cik}. Retaining active status.")
+            
+            # 대량 상장폐지 방지 임계치 (Safety Lock): 35개 초과 시 자동 비활성화 스킵 및 경고
+            safety_threshold = max(35, int(len(db_cik_set) * 0.01))
+            if len(verified_delisted) > safety_threshold:
+                logger.error(
+                    f"🚨 SAFETY LOCK ACTIVATED: Unusually large number of delistings detected ({len(verified_delisted)} > threshold {safety_threshold}). "
+                    f"Aborting automatic deactivation to prevent false positive delistings."
+                )
+                verified_delisted = []
             
             if verified_delisted:
                 ciks_list = [str(c).zfill(10) for c in verified_delisted]
@@ -530,10 +541,17 @@ class MasterSync:
                                     'ticker': tickers[0],
                                     'exchange': self.normalize_exchange(exchanges[0])
                                 }
-                        return {'cik': str(cik).zfill(10), 'is_active': False}
+                            return {'cik': str(cik).zfill(10), 'is_active': False}
+                        elif resp.status == 404:
+                            # 명확히 SEC 미존재(404) 시에만 상장폐지로 판정
+                            return {'cik': str(cik).zfill(10), 'is_active': False}
+                        else:
+                            # HTTP 429, 500/503 등은 검증 보류(None) 리턴
+                            logger.warning(f"Authority Check SEC HTTP {resp.status} for CIK {cik}. Retaining state.")
+                            return {'cik': str(cik).zfill(10), 'is_active': None}
                 except Exception as e:
-                    logger.warning(f"Authority Check Error {cik}: {e}")
-                    return {'cik': str(cik).zfill(10), 'is_active': False}
+                    logger.warning(f"Authority Check Exception for CIK {cik}: {e}. Retaining state.")
+                    return {'cik': str(cik).zfill(10), 'is_active': None}
 
         async with aiohttp.ClientSession() as session:
             tasks = [fetch(session, cik) for cik in ciks]
