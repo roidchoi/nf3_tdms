@@ -83,6 +83,17 @@ class DailyTask:
         skipped = 0
         mc_records = []
 
+        # 통계 집계용 변수 초기화
+        new_listings = 0
+        delistings = 0
+        ticker_changes = 0
+        daily_ohlcv_count = 0
+        market_cap_count = 0
+        minute_count = 0
+        investor_count = 0
+        adjusted_factor_count = 0
+        factor_rebuilt_count = 0
+
         # 최근 10일 이내 수정계수 발생한 종목 맵 로드 (Loop 1 & Loop 2 검증용)
         recent_event_map = {}
         if self.factor_repo is not None:
@@ -103,6 +114,7 @@ class DailyTask:
             master_records = self.kis_client.fetch_stock_master()
             if master_records:
                 self.master_repo.upsert_stock_info(master_records)
+                new_listings = len(master_records)
         except Exception as e:
             # 마스터 수집 실패 시 전체 중단하지 않고 로그를 남긴 뒤 기존 DB 상의 active 종목으로 진행
             logger.warning(f"Stock master update failed: {e}")
@@ -321,6 +333,8 @@ class DailyTask:
                                     factors = calculate_factors(df, stk_cd, "KIS")
                                     if factors:
                                         self.factor_repo.upsert_adjustment_factors(factors)
+                                        adjusted_factor_count += len(factors)
+                                        factor_rebuilt_count += 1
                                         
                                         # 이벤트 사후 소멸 보정 (Loop 1)
                                         if stk_cd in recent_event_map:
@@ -359,6 +373,7 @@ class DailyTask:
         if all_ohlcv_records:
             try:
                 self.ohlcv_repo.upsert_daily_ohlcv(all_ohlcv_records)
+                daily_ohlcv_count = len(all_ohlcv_records)
             except Exception as oe:
                 logger.error(f"Failed to bulk upsert daily ohlcv records: {oe}")
 
@@ -366,6 +381,7 @@ class DailyTask:
         if self.market_cap_repo is not None and mc_records:
             try:
                 self.market_cap_repo.upsert_daily_market_cap(mc_records)
+                market_cap_count = len(mc_records)
             except Exception as mce:
                 logger.error(f"Failed to upsert daily market cap records: {mce}")
 
@@ -399,7 +415,7 @@ class DailyTask:
         # 7. 당일 분봉 데이터 수집 및 적재 (kiwoom_client가 제공된 경우)
         if self.kiwoom_client is not None:
             try:
-                self._collect_daily_minute_data_range(start_date, end_date)
+                minute_count = self._collect_daily_minute_data_range(start_date, end_date)
             except Exception as me:
                 logger.error(f"Failed in daily minute data collection: {me}")
 
@@ -463,17 +479,34 @@ class DailyTask:
                                 if day_records:
                                     self.investor_trade_repo.upsert_daily_investor_trade(day_records)
                                     collected += len(day_records)
+                                    investor_count += len(day_records)
                         except Exception as e:
                             logger.error(f"Failed to collect investor trade for {stk_cd} on {d}: {e}")
                             failed += 1
             except Exception as ite:
                 logger.error(f"Failed in daily investor trade collection process: {ite}")
 
-        return {"collected": collected, "failed": failed, "skipped": skipped}
+        return {
+            "collected": collected,
+            "failed": failed,
+            "skipped": skipped,
+            "active_count": len(active_stocks) if active_stocks else 0,
+            "new_listings": new_listings,
+            "delistings": delistings,
+            "ticker_changes": ticker_changes,
+            "daily_ohlcv_count": daily_ohlcv_count,
+            "market_cap_count": market_cap_count,
+            "minute_count": minute_count,
+            "investor_count": investor_count,
+            "blacklisted_count": len(blacklisted_stocks) if blacklisted_stocks else 0,
+            "adjusted_factor_count": adjusted_factor_count,
+            "factor_rebuilt_count": factor_rebuilt_count,
+        }
 
-    def _collect_daily_minute_data_range(self, start_date: date, end_date: date) -> None:
+    def _collect_daily_minute_data_range(self, start_date: date, end_date: date) -> int:
         """당일 분기 대상 종목들에 대해 Kiwoom API를 통해 공백 기간(start_date ~ end_date) 분봉 데이터를 동적으로 수집하고 적재합니다."""
         logger.info(f"--- Starting Daily Minute Data Range Collection ({start_date} ~ {end_date}) ---")
+        total_minute_records = 0
         
         # 종목별 분봉 최신 적재 시점 벌크 로딩
         minute_last_map = {}
@@ -488,7 +521,7 @@ class DailyTask:
             trading_days = 1
         if trading_days == 0:
             logger.info("No trading days in range for minute data. Skipping.")
-            return
+            return 0
             
         today = end_date
         quarter = f"{today.year}Q{(today.month - 1) // 3 + 1}"
@@ -569,6 +602,7 @@ class DailyTask:
                     if range_collected:
                         transformed = col_utils.transform_data(range_collected, "kiwoom", "minute_ohlcv")
                         self.ohlcv_repo.upsert_minute_ohlcv(transformed)
+                        total_minute_records += len(transformed)
                         logger.info(f"[{stk_cd}] Range minute data {len(transformed)} records upserted.")
                 
                 # 키움 API 봇 차단 및 부하 완화 딜레이 (MagicMock이 아닐 때만 0.2초 대기)
@@ -576,6 +610,8 @@ class DailyTask:
                     time.sleep(0.2)
             except Exception as me:
                 logger.error(f"Failed to collect daily minute data for {stk_cd}: {me}")
+        
+        return total_minute_records
 
 
 
@@ -752,6 +788,14 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
         else:
             final_log = f"수집 완료 (성공: {result['collected']}건, 실패: {result['failed']}건, 스킵: {skipped_count}건, 소요시간: {total_duration_str})"
             last_status = "success"
+
+        active_cnt = result.get("active_count", 0)
+        daily_cnt = result.get("daily_ohlcv_count", 0)
+        mc_cnt = result.get("market_cap_count", 0)
+        minute_cnt = result.get("minute_count", 0)
+        investor_cnt = result.get("investor_count", 0)
+        blacklisted_cnt = result.get("blacklisted_count", 0)
+        factor_rebuilt = result.get("factor_rebuilt_count", 0)
 
         new_listings = result.get("new_listings", 0)
         delistings = result.get("delistings", 0)
