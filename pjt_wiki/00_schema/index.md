@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-07-19
-> **총 등록 파일**: 60개
+> **마지막 업데이트**: 2026-07-22
+> **총 등록 파일**: 62개
 
 
 ---
@@ -105,9 +105,10 @@
 | `dec-005_filter_non_equity_instruments.md` | 특수 상품: 비주식성 특수 상품(BC, MF, EW) 수집 제외 필터링 적용 | T-011 |
 | `dec-006_fallback_listed_shares_mechanism.md` | 상장주식수 누락: API 0 유입 시 DB 최근 데이터 Fallback 대체 | — |
 | `dec-007_financial_update_optimization.md` | KDMS 재무 업데이트 성능 최적화 전략 | — |
-| `dec-008_scheduler_reload_and_logging.md` | 스케줄러 동적 리로드 및 진행률 로깅 개선 [NEW] | — |
-| `dec-009_kdms_backfill_optimization.md` | KDMS 백필 누락 감지 및 API 호출 한도 계산 고도화 [NEW] | — |
-| `dec-010_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 [NEW] | — |
+| `dec-008_scheduler_reload_and_logging.md` | 스케줄러 동적 리로드 및 진행률 로깅 개선 | — |
+| `dec-009_kdms_backfill_optimization.md` | KDMS 백필 누락 감지 및 API 호출 한도 계산 고도화 | — |
+| `dec-010_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 | — |
+| `dec-011_file_persistent_dict_nested_mutation.md` | FilePersistentDict 중첩 딕셔너리 변경 시 캐시 저장 보장 패턴 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 
@@ -118,7 +119,8 @@
 | `err-003_task_kst_timezone_mismatch.md` | 태스크 실행 상태 기록 시 KST 시간대 처리 불일치 -> datetime.now(KST) 및 isoformat() 직렬화 | Medium |
 | `err-004_listed_shares_zero_accumulation.md` | KIS 마스터 수집 장애로 인한 상장주식수/시가총액 0 누적 적재 -> 최근 10일 DB 데이터 Fallback 대체 | Critical |
 | `err-005_daily_ohlcv_amt_turn_rt_zero_accumulation.md` | 거래대금/회전율 0 누적 적재 에러 조치 | High |
-| `err-006_kis_api_weekend_maintenance_stuck.md` | KIS 주말 점검에 따른 접속 실패 대기시간 누적으로 수집기 Stuck 장애 및 컨테이너 재시작 [NEW] | High |
+| `err-006_kis_api_weekend_maintenance_stuck.md` | KIS 주말 점검에 따른 접속 실패 대기시간 누적으로 수집기 Stuck 장애 및 컨테이너 재시작 | High |
+| `err-007_run_daily_update_name_error_metric_tracking.md` | 일일 업데이트 태스크 NameError 해결 및 수집 메트릭 파이프라인 반환 고도화 [NEW] | Critical |
 
 ---
 
@@ -245,7 +247,8 @@
 - [P2-ERR-001] KIS API 403 Forbidden 차단 → `p2_kdms_wiki/errors/err-001_kis_api_403_forbidden.md`
 - [P2-ERR-002] 시총 bigint 오버플로우 롤백 → `p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md`
 - [P2-ERR-003] KST 시간대 처리 불일치 → `p2_kdms_wiki/errors/err-003_task_kst_timezone_mismatch.md`
-- [P2-ERR-006] KIS API 주말 점검으로 인한 수집 정체 stuck 장애 → `p2_kdms_wiki/errors/err-006_kis_api_weekend_maintenance_stuck.md` [NEW]
+- [P2-ERR-006] KIS API 주말 점검으로 인한 수집 정체 stuck 장애 → `p2_kdms_wiki/errors/err-006_kis_api_weekend_maintenance_stuck.md`
+- [P2-ERR-007] 일일 업데이트 태스크 NameError 및 통계 누락 → `p2_kdms_wiki/errors/err-007_run_daily_update_name_error_metric_tracking.md` [NEW]
 - [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 - [USDMS-ERR-003] 로깅 기본값 누락 및 실행 상태 유실 → `p3_usdms_wiki/errors/usdms-err-003_logging_missing_and_running_status_loss.md`
