@@ -23,9 +23,13 @@ export const useStatusStore = defineStore('status', {
         this.isFetching = false
       }
     },
-    async runTask(market: 'kr' | 'us', taskId: string, isTest: boolean = true) {
+    async runTask(market: 'kr' | 'us', taskId: string, isTest: boolean = true, days?: number) {
       try {
-        const response = await http.post(`/run?market=${market}&task_id=${taskId}&is_test=${isTest}`)
+        let url = `/run?market=${market}&task_id=${taskId}&is_test=${isTest}`
+        if (days !== undefined && days !== null && days > 0) {
+          url += `&days=${days}`
+        }
+        const response = await http.post(url)
         await this.fetchStatus()
         return response.data
       } catch (error) {

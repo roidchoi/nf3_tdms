@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { useStatusStore } from '@/stores/statusStore'
 import type { MarketTaskSummary } from '@/types/admin'
 
@@ -167,14 +167,22 @@ const handleRun = async () => {
   }
 }
 
-const handleRunCustom = async (subTaskId: string) => {
+const backfillDays = reactive({
+  backfill_minute_data: 30,
+  backfill_daily_data: 30,
+  backfill_market_cap: 30
+})
+
+const handleRunCustom = async (subTaskId: 'backfill_minute_data' | 'backfill_daily_data' | 'backfill_market_cap') => {
   let subTitle = ''
   if (subTaskId === 'backfill_minute_data') subTitle = '분봉 백필'
   else if (subTaskId === 'backfill_daily_data') subTitle = '일봉 백필'
   else if (subTaskId === 'backfill_market_cap') subTitle = '시가총액 백필'
 
-  let message = `[${subTitle}] 작업을 실행하시겠습니까?\n\n`
+  const days = backfillDays[subTaskId] || 30
+  let message = `[${subTitle} (${days}일)] 작업을 실행하시겠습니까?\n\n`
   message += `▶ 실행 모드: ⚠️ 운영 모드 (실제 데이터 변경)\n`
+  message += `▶ 백필 지정 기간: ${days}일\n`
   
   if (isKoreanMarketOpen()) {
     message += `\n🚨 [경고] 현재 한국 주식시장 장중 거래 시간입니다!\n운영 모드 실행 시 실시간 DB 데이터 오염 위험이 매우 높습니다.\n정말 진행하시겠습니까?`
@@ -183,8 +191,8 @@ const handleRunCustom = async (subTaskId: string) => {
   if (!confirm(message)) return
 
   try {
-    await statusStore.runTask(props.market, subTaskId, false)
-    alert(`${subTitle} 수동 실행 요청 완료`)
+    await statusStore.runTask(props.market, subTaskId, false, days)
+    alert(`${subTitle} (${days}일) 수동 실행 요청 완료`)
   } catch (error: any) {
     alert(`태스크 실행 실패: ${error?.response?.data?.detail || error.message}`)
   }
@@ -201,12 +209,14 @@ const latestBackfillStatusText = computed(() => {
     { name: '시총', task: capTask }
   ]
 
-  const validTasks: Array<{ name: string; status: string; time: number }> = []
+  const validTasks: Array<{ name: string; daysStr: string; status: string; time: number }> = []
 
   for (const t of tasks) {
     if (t.task && t.task.last_run_time) {
+      const days = (t.task as any).details?.backfill_days || (t.task as any).backfill_days || 30
       validTasks.push({
         name: t.name,
+        daysStr: `${days}일`,
         status: t.task.last_status || 'none',
         time: new Date(t.task.last_run_time).getTime()
       })
@@ -218,7 +228,7 @@ const latestBackfillStatusText = computed(() => {
   }
 
   validTasks.sort((a, b) => b.time - a.time)
-  return `${validTasks[0].name}-${validTasks[0].status}`
+  return `${validTasks[0].name} - ${validTasks[0].daysStr} - ${validTasks[0].status}`
 })
 </script>
 
@@ -257,28 +267,72 @@ const latestBackfillStatusText = computed(() => {
 
     <div class="card-footer">
       <template v-if="taskId === 'backfill_minute_data'">
-        <div class="btn-group-horizontal">
-          <button 
-            class="run-btn mini" 
-            @click="handleRunCustom('backfill_minute_data')" 
-            :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
-          >
-            {{ statusStore.status.kr.tasks?.backfill_minute_data?.is_running ? '실행 중' : '분봉' }}
-          </button>
-          <button 
-            class="run-btn mini" 
-            @click="handleRunCustom('backfill_daily_data')" 
-            :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
-          >
-            {{ statusStore.status.kr.tasks?.backfill_daily_data?.is_running ? '실행 중' : '일봉' }}
-          </button>
-          <button 
-            class="run-btn mini" 
-            @click="handleRunCustom('backfill_market_cap')" 
-            :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
-          >
-            {{ statusStore.status.kr.tasks?.backfill_market_cap?.is_running ? '실행 중' : '시총' }}
-          </button>
+        <div class="backfill-controls-grid">
+          <div class="backfill-control-item">
+            <div class="input-wrap">
+              <input 
+                type="number" 
+                min="1" 
+                max="365"
+                v-model.number="backfillDays.backfill_minute_data" 
+                class="days-input" 
+                placeholder="30"
+                :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+              />
+              <span class="unit-text">일</span>
+            </div>
+            <button 
+              class="run-btn mini" 
+              @click="handleRunCustom('backfill_minute_data')" 
+              :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+            >
+              {{ statusStore.status.kr.tasks?.backfill_minute_data?.is_running ? '실행 중' : '분봉' }}
+            </button>
+          </div>
+
+          <div class="backfill-control-item">
+            <div class="input-wrap">
+              <input 
+                type="number" 
+                min="1" 
+                max="365"
+                v-model.number="backfillDays.backfill_daily_data" 
+                class="days-input" 
+                placeholder="30"
+                :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+              />
+              <span class="unit-text">일</span>
+            </div>
+            <button 
+              class="run-btn mini" 
+              @click="handleRunCustom('backfill_daily_data')" 
+              :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+            >
+              {{ statusStore.status.kr.tasks?.backfill_daily_data?.is_running ? '실행 중' : '일봉' }}
+            </button>
+          </div>
+
+          <div class="backfill-control-item">
+            <div class="input-wrap">
+              <input 
+                type="number" 
+                min="1" 
+                max="365"
+                v-model.number="backfillDays.backfill_market_cap" 
+                class="days-input" 
+                placeholder="30"
+                :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+              />
+              <span class="unit-text">일</span>
+            </div>
+            <button 
+              class="run-btn mini" 
+              @click="handleRunCustom('backfill_market_cap')" 
+              :disabled="statusStore.status.kr.tasks?.backfill_minute_data?.is_running || statusStore.status.kr.tasks?.backfill_daily_data?.is_running || statusStore.status.kr.tasks?.backfill_market_cap?.is_running"
+            >
+              {{ statusStore.status.kr.tasks?.backfill_market_cap?.is_running ? '실행 중' : '시총' }}
+            </button>
+          </div>
         </div>
       </template>
       <template v-else>
@@ -534,6 +588,76 @@ input:disabled + .slider {
   border-color: var(--color-indigo);
   color: #fff;
   box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+.backfill-controls-grid {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.backfill-control-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.backfill-control-item .run-btn.mini {
+  width: 100%;
+  padding: 0.4rem 0.2rem;
+  font-size: 0.8rem;
+  text-align: center;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+.backfill-control-item .run-btn.mini:hover:not(:disabled) {
+  background: var(--color-indigo);
+  border-color: var(--color-indigo);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+.input-wrap {
+  display: flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 3px 6px;
+  transition: border-color 0.2s;
+}
+
+.input-wrap:focus-within {
+  border-color: var(--color-indigo);
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.3);
+}
+
+.days-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.days-input::-webkit-outer-spin-button,
+.days-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.unit-text {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 
 </style>

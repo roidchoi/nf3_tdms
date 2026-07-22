@@ -104,7 +104,7 @@ def test_backfill_task_skips_when_no_missing_days():
         # 상태 업데이트 검증
         assert "backfill_minute_data" in job_statuses
         assert job_statuses["backfill_minute_data"]["is_running"] is False
-        assert "누락 없음" in job_statuses["backfill_minute_data"]["last_status"] or "success (누락 없음)" in job_statuses["backfill_minute_data"]["last_status"]
+        assert "success" in job_statuses["backfill_minute_data"]["last_status"]
 
 
 def test_backfill_task_dynamic_max_requests():

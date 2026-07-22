@@ -152,7 +152,7 @@ class StatusService:
                 "tasks": None
             }
 
-    async def run_task(self, market: str, task_id: str, is_test: bool = True) -> Dict[str, Any]:
+    async def run_task(self, market: str, task_id: str, is_test: bool = True, days: Optional[int] = None) -> Dict[str, Any]:
         if market not in ["kr", "us"]:
             raise ValueError(f"Invalid market: {market}")
 
@@ -160,7 +160,10 @@ class StatusService:
             try:
                 if market == "kr":
                     url = f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/{task_id}/run"
-                    resp = await client.post(url, json={"test_mode": is_test})
+                    params = {}
+                    if days is not None and days > 0:
+                        params["days"] = days
+                    resp = await client.post(url, json={"test_mode": is_test}, params=params)
                 else:  # us
                     url = f"{settings.P3_USDMS_URL}/api/admin/tasks/{task_id}/run"
                     resp = await client.post(url)

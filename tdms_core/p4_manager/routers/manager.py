@@ -21,13 +21,14 @@ def get_integrated_status():
 async def run_task(
     market: str = Query(..., description="시장 구분 (kr 또는 us)"),
     task_id: str = Query(..., description="실행할 태스크 식별자"),
-    is_test: bool = Query(True, description="테스트 모드 여부 (한국 전용)")
+    is_test: bool = Query(True, description="테스트 모드 여부 (한국 전용)"),
+    days: int | None = Query(None, description="수동 백필 지정 일수 범위")
 ):
     """
     통합 태스크 수동 실행 API.
     """
     try:
-        result = await status_service.run_task(market=market, task_id=task_id, is_test=is_test)
+        result = await status_service.run_task(market=market, task_id=task_id, is_test=is_test, days=days)
         if result.get("status") == "error":
             raise HTTPException(status_code=502, detail=result["message"])
         return result

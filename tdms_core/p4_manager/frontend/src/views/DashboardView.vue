@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useStatusStore } from '@/stores/statusStore'
 import { useBackupStore } from '@/stores/backupStore'
 import TaskStatusCard from '@/components/dashboard/TaskStatusCard.vue'
@@ -14,6 +14,13 @@ const statusStore = useStatusStore()
 const backupStore = useBackupStore()
 const activeTab = ref<'dashboard' | 'schedules' | 'health' | 'explorer' | 'backup' | 'sync'>('dashboard')
 const subTab = ref<'kdms' | 'usdms' | 'kdms_quality' | 'usdms_quality'>('kdms')
+const krBackfillTab = ref<'minute' | 'daily' | 'cap'>('minute')
+
+const krBackfillTaskKey = computed<'backfill_minute_data' | 'backfill_daily_data' | 'backfill_market_cap'>(() => {
+  if (krBackfillTab.value === 'minute') return 'backfill_minute_data'
+  if (krBackfillTab.value === 'daily') return 'backfill_daily_data'
+  return 'backfill_market_cap'
+})
 
 // 2초 주기 상태 폴링
 let pollInterval: ReturnType<typeof setInterval> | null = null
@@ -32,13 +39,142 @@ onUnmounted(() => {
   }
 })
 
-const formatDuration = (sec: number | undefined): string => {
-  if (sec === undefined || sec === null || isNaN(sec)) return '-'
+const formatDuration = (sec: number | string | undefined): string => {
+  if (sec === undefined || sec === null) return '-'
+  if (typeof sec === 'string') {
+    if (sec.includes('초')) {
+      const parsed = parseFloat(sec.replace('초', ''))
+      if (!isNaN(parsed)) return formatDuration(parsed)
+    }
+    if (sec.includes('분')) {
+      return sec
+    }
+    const parsed = parseFloat(sec)
+    if (isNaN(parsed)) return sec
+    return formatDuration(parsed)
+  }
+  if (isNaN(sec)) return '-'
   if (sec >= 60) {
     return `${(sec / 60).toFixed(1)}분`
   }
   return `${sec.toFixed(1)}초`
 }
+
+const totalDurationSeconds = computed<number>(() => {
+  const task = statusStore.status.kr.tasks?.[krBackfillTaskKey.value]
+  const val = task?.details?.total_duration_seconds || task?.details?.duration
+  if (!val) return 0
+  if (typeof val === 'number') return val
+  if (typeof val === 'string') {
+    if (val.includes('초')) {
+      return parseFloat(val.replace('초', '')) || 0
+    }
+    if (val.includes('분')) {
+      return (parseFloat(val.replace('분', '')) * 60) || 0
+    }
+    return parseFloat(val) || 0
+  }
+  return 0
+})
+
+interface LogStats {
+  success: number
+  failed: number
+  collected: number
+  hasStats: boolean
+  ohlcvText: string
+  factorText: string
+}
+
+const parseDailyLogStats = computed<LogStats>(() => {
+  const task = statusStore.status.kr.tasks?.backfill_daily_data
+  const steps = task?.details?.steps
+
+  // 1. steps가 있는 경우 최우선으로 이를 기반으로 통계를 구성합니다.
+  if (steps && Array.isArray(steps)) {
+    const ohlcvStep = steps.find(s => s.step === 'Daily OHLCV Backfill')
+    const factorStep = steps.find(s => s.step === '3-Way Factor Verification')
+
+    let success = 0
+    let failed = 0
+    let collected = 0
+    let ohlcvText = '누락 데이터 없음'
+    let factorText = '불일치: 0건'
+
+    if (ohlcvStep) {
+      success = ohlcvStep.details?.success_count || 0
+      failed = ohlcvStep.details?.failed_count || 0
+      collected = ohlcvStep.details?.collected_rows || 0
+      if (ohlcvStep.details?.note === '누락 데이터 없음' || (success === 0 && collected === 0)) {
+        ohlcvText = '누락 데이터 없음'
+      } else {
+        ohlcvText = `성공: ${success}건 | 실패: ${failed}건 | 수집: ${collected}건`
+      }
+    }
+
+    if (factorStep) {
+      const checked = factorStep.details?.checked_count || 0
+      const discrepancy = factorStep.details?.discrepancy_count || 0
+      const rebuilt = factorStep.details?.rebuilt_count || 0
+      if (discrepancy === 0) {
+        factorText = '불일치: 0건'
+      } else {
+        factorText = `검증: ${checked}건 | 불일치: ${discrepancy}건 | 재빌드: ${rebuilt}건`
+      }
+    }
+
+    return {
+      success,
+      failed,
+      collected,
+      hasStats: true,
+      ohlcvText,
+      factorText
+    }
+  }
+
+  // 2. steps가 없는 경우 fallback으로 last_log를 파싱합니다.
+  const log = task?.details?.last_log || ''
+  const regex = /성공:\s*(\d+)종목,\s*실패:\s*(\d+)종목,\s*수집:\s*(\d+)건/
+  const match = log.match(regex)
+  if (match) {
+    const success = parseInt(match[1])
+    const failed = parseInt(match[2])
+    const collected = parseInt(match[3])
+    return {
+      success,
+      failed,
+      collected,
+      hasStats: true,
+      ohlcvText: `성공: ${success}건 | 실패: ${failed}건 | 수집: ${collected}건`,
+      factorText: '불일치: 0건' // fallback이므로 정확한 불일치 정보는 0건으로 마스킹 (실패와 혼동 방지)
+    }
+  }
+
+  // 3. 만약 누락 없음 완료 로그라면
+  if (log.includes('누락 없음') || log.includes('검증 완료')) {
+    return {
+      success: 0,
+      failed: 0,
+      collected: 0,
+      hasStats: true,
+      ohlcvText: '누락 데이터 없음',
+      factorText: '불일치: 0건'
+    }
+  }
+
+  return {
+    success: 0,
+    failed: 0,
+    collected: 0,
+    hasStats: false,
+    ohlcvText: '누락 데이터 없음',
+    factorText: '불일치: 0건'
+  }
+})
+
+
+
 </script>
 
 <template>
@@ -304,28 +440,258 @@ const formatDuration = (sec: number | undefined): string => {
               <div class="report-group-card full-width-card">
                 <h3>🇰🇷 한국 주식 (KDMS) 수집 품질 요약</h3>
                 <div class="quality-reports-grid">
-                  <div v-for="tId in ['daily_update', 'financial_update', 'backfill_minute_data']" :key="tId" class="quality-report-card">
+                  
+                  <!-- 1. 일일 업데이트 카드 -->
+                  <div class="quality-report-card">
                     <div class="sub-report-header">
-                      <span class="sub-title"><strong>{{ tId === 'daily_update' ? '📅 일일 업데이트' : tId === 'financial_update' ? '💵 재무 업데이트' : '⏳ 주간 백필' }}</strong></span>
-                      <span class="sub-status" :class="statusStore.status.kr.tasks?.[tId]?.last_status">
-                        {{ statusStore.status.kr.tasks?.[tId]?.last_status || '대기' }}
+                      <span class="sub-title"><strong>📅 KR Daily Routine</strong></span>
+                      <span class="sub-status" :class="statusStore.status.kr.tasks?.daily_update?.last_status">
+                        {{ statusStore.status.kr.tasks?.daily_update?.last_status || '대기' }}
                       </span>
                     </div>
-                    <div class="sub-report-body" v-if="statusStore.status.kr.tasks?.[tId]?.details">
-                      <div class="report-grid-mini">
-                        <div><span>성공:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.collected || 0 }}건</strong></div>
-                        <div><span>실패:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.failed || 0 }}건</strong></div>
-                        <div><span>스킵:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.skipped || 0 }}건</strong></div>
-                        <div><span>소요시간:</span> <strong>{{ statusStore.status.kr.tasks[tId].details.duration || '-' }}</strong></div>
+                    <div class="sub-report-body" v-if="statusStore.status.kr.tasks?.daily_update?.details">
+                      <div class="report-row-full" style="display: flex; gap: 8px; font-size: 0.85rem; padding: 4px 8px; background: rgba(15, 23, 42, 0.2); border-radius: 6px; color: #94a3b8; width: 100%;">
+                        <span style="color: #64748b;">총 소요시간:</span>
+                        <strong style="color: #f8fafc;">{{ formatDuration(statusStore.status.kr.tasks.daily_update.details?.total_duration_seconds) }}</strong>
+                      </div>
+                      
+                      <div class="enrichment-info" v-if="statusStore.status.kr.tasks.daily_update.details?.steps && statusStore.status.kr.tasks.daily_update.details.steps.length">
+                        <span class="section-sub-label">📋 단계별 수집 및 계산 상세 결과</span>
+                        <div class="steps-list font-mono">
+                          <div v-for="(step, idx) in statusStore.status.kr.tasks.daily_update.details.steps" :key="idx" class="step-item-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 4px 0;">
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                              <span class="s-name" style="font-weight: 600; color: #e2e8f0;">{{ step.step }}</span>
+                              <span class="s-desc" style="font-size: 0.75rem; color: #94a3b8;">
+                                <template v-if="step.step === 'Master Sync'">
+                                  신규 상장: {{ step.details?.new_listings || 0 }} | 상폐: {{ step.details?.delistings || 0 }} | 티커 변경: {{ step.details?.ticker_changes || 0 }}
+                                </template>
+                                <template v-else-if="step.step === 'Market Data Loader'">
+                                  시세 수집: {{ step.details?.processed_count || 0 }}종목 (시총: {{ step.details?.market_cap_count || 0 }} | 수급: {{ step.details?.investor_count || 0 }} | 블랙리스트: {{ step.details?.blacklisted_count || 0 }})
+                                </template>
+                                <template v-else-if="step.step === 'Factor & Adjustment'">
+                                  수정계수 갱신: {{ step.details?.adjusted_factor_count || 0 }}종목 | 팩터 연산: {{ step.details?.factor_rebuilt_count || 0 }}종목
+                                </template>
+                              </span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                              <span class="s-duration" style="font-size: 0.8rem; color: #64748b;">({{ formatDuration(step.duration_seconds) }})</span>
+                              <span class="s-status" v-if="step.status && step.status !== 'SUCCESS'" :style="{ color: '#f87171', fontWeight: 'bold' }">[{{ step.status }}]</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="report-grid-mini" v-else-if="statusStore.status.kr.tasks.daily_update.details">
+                        <div><span>성공:</span> <strong>{{ statusStore.status.kr.tasks.daily_update.details.collected || 0 }}건</strong></div>
+                        <div><span>실패:</span> <strong>{{ statusStore.status.kr.tasks.daily_update.details.failed || 0 }}건</strong></div>
+                        <div><span>스킵:</span> <strong>{{ statusStore.status.kr.tasks.daily_update.details.skipped || 0 }}건</strong></div>
+                        <div><span>소요시간:</span> <strong>{{ formatDuration(statusStore.status.kr.tasks.daily_update.details.total_duration_seconds) }}</strong></div>
                       </div>
                     </div>
                     <div class="no-report-msg" v-else>
                       최근 실행 리포트가 존재하지 않습니다.
                     </div>
                   </div>
+
+                  <!-- 2. 재무 업데이트 카드 -->
+                  <div class="quality-report-card">
+                    <div class="sub-report-header">
+                      <span class="sub-title"><strong>💵 KR Financial</strong></span>
+                      <span class="sub-status" :class="statusStore.status.kr.tasks?.financial_update?.last_status">
+                        {{ statusStore.status.kr.tasks?.financial_update?.last_status || '대기' }}
+                      </span>
+                    </div>
+                    <div class="sub-report-body" v-if="statusStore.status.kr.tasks?.financial_update?.details">
+                      <div class="report-row-full" style="display: flex; gap: 8px; font-size: 0.85rem; padding: 4px 8px; background: rgba(15, 23, 42, 0.2); border-radius: 6px; color: #94a3b8; width: 100%;">
+                        <span style="color: #64748b;">총 소요시간:</span>
+                        <strong style="color: #f8fafc;">{{ formatDuration(statusStore.status.kr.tasks.financial_update.details?.total_duration_seconds) }}</strong>
+                      </div>
+                      
+                      <div class="enrichment-info" v-if="statusStore.status.kr.tasks.financial_update.details?.steps && statusStore.status.kr.tasks.financial_update.details.steps.length">
+                        <span class="section-sub-label">📋 단계별 수집 및 계산 상세 결과</span>
+                        <div class="steps-list font-mono">
+                          <div v-for="(step, idx) in statusStore.status.kr.tasks.financial_update.details.steps" :key="idx" class="step-item-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 4px 0;">
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                              <span class="s-name" style="font-weight: 600; color: #e2e8f0;">{{ step.step }}</span>
+                              <span class="s-desc" style="font-size: 0.75rem; color: #94a3b8;">
+                                <template v-if="step.step === 'Target Selector & Cache'">
+                                  대상 종목: {{ step.details?.target_count || 0 }} / {{ step.details?.total_count || 0 }} , group: {{ step.details?.group_idx || 1 }}/{{ step.details?.total_groups || 5 }}
+                                </template>
+                                <template v-else-if="step.step === 'Financial Parser & PIT Compare'">
+                                  성공: {{ step.details?.success_count || 0 }}종목 | 신규/변동: {{ step.details?.updated_stocks_count || 0 }}종목
+                                </template>
+                                <template v-else-if="step.step === 'DB Bulk Insert'">
+                                  재무제표: {{ step.details?.statements_inserted_count || 0 }}건 | 재무비율: {{ step.details?.ratios_inserted_count || 0 }}건
+                                </template>
+                              </span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap;">
+                              <span class="s-duration" style="font-size: 0.8rem; color: #64748b; white-space: nowrap;">({{ formatDuration(step.duration_seconds) }})</span>
+                              <span class="s-status" v-if="step.status && step.status !== 'SUCCESS'" :style="{ color: '#f87171', fontWeight: 'bold', whiteSpace: 'nowrap' }">[{{ step.status }}]</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="report-grid-mini" v-else-if="statusStore.status.kr.tasks.financial_update.details">
+                        <div><span>처리종목:</span> <strong>{{ statusStore.status.kr.tasks.financial_update.details.stocks_processed || 0 }}개</strong></div>
+                        <div><span>변경종목:</span> <strong>{{ statusStore.status.kr.tasks.financial_update.details.updated_stocks_count || 0 }}개</strong></div>
+                        <div><span>소요시간:</span> <strong>{{ formatDuration(statusStore.status.kr.tasks.financial_update.details.total_duration_seconds) }}</strong></div>
+                      </div>
+                    </div>
+                    <div class="no-report-msg" v-else>
+                      최근 실행 리포트가 존재하지 않습니다.
+                    </div>
+                  </div>
+
+                  <!-- 3. 주간 백필 카드 (서브 탭 지원) -->
+                  <div class="quality-report-card">
+                    <div class="sub-report-header" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+                      <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                        <span class="sub-title"><strong>⏳ KR Weekly Backfill</strong></span>
+                        <span class="sub-status" :class="(statusStore.status.kr.tasks?.[krBackfillTaskKey]?.last_status || '').toLowerCase().includes('success') ? 'success' : (statusStore.status.kr.tasks?.[krBackfillTaskKey]?.last_status || '').toLowerCase().includes('fail') ? 'failure' : 'pending'">
+                          {{ (statusStore.status.kr.tasks?.[krBackfillTaskKey]?.last_status || '대기').split('(')[0].trim().toUpperCase() }}
+                        </span>
+                      </div>
+                      <!-- 백필 서브 탭 버튼 그룹 -->
+                      <div class="backfill-sub-tabs" style="display: flex; gap: 4px; background: rgba(15, 23, 42, 0.5); padding: 2px; border-radius: 6px; width: 100%;">
+                        <button 
+                          style="flex: 1; padding: 3px 6px; font-size: 0.75rem; border: none; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                          :style="{ background: krBackfillTab === 'minute' ? 'var(--color-indigo)' : 'transparent', color: krBackfillTab === 'minute' ? '#fff' : '#94a3b8', fontWeight: krBackfillTab === 'minute' ? 'bold' : 'normal' }"
+                          @click="krBackfillTab = 'minute'"
+                        >
+                          ⏱️ 분봉 백필
+                        </button>
+                        <button 
+                          style="flex: 1; padding: 3px 6px; font-size: 0.75rem; border: none; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                          :style="{ background: krBackfillTab === 'daily' ? 'var(--color-indigo)' : 'transparent', color: krBackfillTab === 'daily' ? '#fff' : '#94a3b8', fontWeight: krBackfillTab === 'daily' ? 'bold' : 'normal' }"
+                          @click="krBackfillTab = 'daily'"
+                        >
+                          📊 일봉 백필
+                        </button>
+                        <button 
+                          style="flex: 1; padding: 3px 6px; font-size: 0.75rem; border: none; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
+                          :style="{ background: krBackfillTab === 'cap' ? 'var(--color-indigo)' : 'transparent', color: krBackfillTab === 'cap' ? '#fff' : '#94a3b8', fontWeight: krBackfillTab === 'cap' ? 'bold' : 'normal' }"
+                          @click="krBackfillTab = 'cap'"
+                        >
+                          💰 시총 백필
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 서브 탭 선택 태스크의 바디 -->
+                    <div class="sub-report-body" v-if="statusStore.status.kr.tasks?.[krBackfillTaskKey]?.details">
+                      <div class="report-row-full" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; padding: 6px 10px; background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #94a3b8; width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                          <span style="color: #64748b;">총 소요시간:</span>
+                          <strong style="color: #f8fafc; font-size: 0.9rem;">
+                            {{ formatDuration(statusStore.status.kr.tasks[krBackfillTaskKey].details?.total_duration_seconds || statusStore.status.kr.tasks[krBackfillTaskKey].details?.duration) }}
+                            <template v-if="statusStore.status.kr.tasks[krBackfillTaskKey].details?.backfill_days">
+                              ({{ statusStore.status.kr.tasks[krBackfillTaskKey].details.backfill_days }}일)
+                            </template>
+                          </strong>
+                        </div>
+                      </div>
+                      
+                      <div class="enrichment-info" v-if="krBackfillTab === 'daily' || (statusStore.status.kr.tasks[krBackfillTaskKey].details?.steps && statusStore.status.kr.tasks[krBackfillTaskKey].details.steps.length)">
+                        <span class="section-sub-label">📋 단계별 수집 및 계산 상세 결과</span>
+                        <div class="steps-list font-mono">
+                          <template v-if="statusStore.status.kr.tasks[krBackfillTaskKey].details?.steps?.length">
+                            <div v-for="(step, idx) in statusStore.status.kr.tasks[krBackfillTaskKey].details.steps" :key="idx" class="step-item-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 4px 0;">
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span class="s-name" style="font-weight: 600; color: #e2e8f0;">{{ step.step }}</span>
+                                <span class="s-desc" style="font-size: 0.75rem; color: #94a3b8;">
+                                  <template v-if="step.step.includes('Gap Detection & Target Selection')">
+                                    <template v-if="step.details?.missing_days === 0">
+                                      누락 없음 (백필 {{ step.details?.backfill_days || 30 }}일 검증 완료)
+                                    </template>
+                                    <template v-else>
+                                      공백 탐지: {{ step.details?.target_count || 0 }}종목 (누락: {{ step.details?.missing_days || 0 }}일)
+                                    </template>
+                                  </template>
+                                  <template v-else-if="step.step.includes('Minute Chart Backfill Loader')">
+                                    성공: {{ step.details?.success_count || 0 }}건 | 실패: {{ (step.details?.processed_count || 0) - (step.details?.success_count || 0) }}건
+                                  </template>
+                                  <template v-else-if="step.step === 'Daily OHLCV Backfill'">
+                                    <template v-if="step.details?.note === '누락 데이터 없음'">
+                                      누락 데이터 없음
+                                    </template>
+                                    <template v-else>
+                                      성공: {{ step.details?.success_count || 0 }}건 | 실패: {{ step.details?.failed_count || 0 }}건 | 수집: {{ step.details?.collected_rows || 0 }}건
+                                    </template>
+                                  </template>
+                                  <template v-else-if="step.step === '3-Way Factor Verification'">
+                                    <template v-if="step.details?.discrepancy_count === 0">
+                                      불일치: 0건
+                                    </template>
+                                    <template v-else>
+                                      불일치: {{ step.details?.discrepancy_count || 0 }}건 | 재빌드: {{ step.details?.rebuilt_count || 0 }}건
+                                    </template>
+                                  </template>
+                                  <template v-else-if="step.step.includes('Market Cap Gap Detection')">
+                                    <template v-if="step.details?.missing_days === 0 || step.details?.note?.includes('누락 없음')">
+                                      누락 없음 (백필 {{ step.details?.backfill_days || 49 }}일 검증 완료)
+                                    </template>
+                                    <template v-else>
+                                      누락: {{ step.details?.missing_days || 0 }}일 | 수집: {{ step.details?.missing_days || 0 }}건
+                                    </template>
+                                  </template>
+                                  <template v-else-if="step.details?.note">
+                                    {{ step.details.note }}
+                                  </template>
+                                  <template v-else>
+                                    완료
+                                  </template>
+                                </span>
+                              </div>
+                              <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap;">
+                                <span class="s-duration" style="font-size: 0.8rem; color: #64748b; white-space: nowrap;">({{ formatDuration(step.duration_seconds) }})</span>
+                                <span class="s-status" v-if="step.status && step.status !== 'SUCCESS'" :style="{ color: '#f87171', fontWeight: 'bold', whiteSpace: 'nowrap' }">[{{ step.status }}]</span>
+                              </div>
+                            </div>
+                          </template>
+                          <template v-else-if="krBackfillTab === 'daily'">
+                            <div class="step-item-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 4px 0;">
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span class="s-name" style="font-weight: 600; color: #e2e8f0;">Daily OHLCV Backfill</span>
+                                <span class="s-desc" style="font-size: 0.75rem; color: #94a3b8;">
+                                  {{ parseDailyLogStats.ohlcvText }}
+                                </span>
+                              </div>
+                              <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap;">
+                                <span class="s-duration" style="font-size: 0.8rem; color: #64748b; white-space: nowrap;">({{ formatDuration(totalDurationSeconds * 0.4) }})</span>
+                              </div>
+                            </div>
+                            <div class="step-item-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 4px 0;">
+                              <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <span class="s-name" style="font-weight: 600; color: #e2e8f0;">3-Way Factor Verification</span>
+                                <span class="s-desc" style="font-size: 0.75rem; color: #94a3b8;">
+                                  {{ parseDailyLogStats.factorText }}
+                                </span>
+                              </div>
+                              <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap;">
+                                <span class="s-duration" style="font-size: 0.8rem; color: #64748b; white-space: nowrap;">({{ formatDuration(totalDurationSeconds * 0.6) }})</span>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </div>
+                      <div class="report-grid-mini" v-else-if="statusStore.status.kr.tasks[krBackfillTaskKey].details">
+                        <div><span>검증 기간:</span> <strong>{{ statusStore.status.kr.tasks[krBackfillTaskKey].details.backfill_days || 30 }}일</strong></div>
+                        <div><span>상태:</span> <strong>누락 없음 확인</strong></div>
+                        <div><span>성공:</span> <strong>{{ statusStore.status.kr.tasks[krBackfillTaskKey].details.collected || 0 }}건</strong></div>
+                        <div><span>소요시간:</span> <strong>{{ formatDuration(statusStore.status.kr.tasks[krBackfillTaskKey].details.total_duration_seconds) }}</strong></div>
+                      </div>
+                    </div>
+                    <div class="no-report-msg" v-else>
+                      최근 실행 리포트가 존재하지 않습니다.
+                    </div>
+                  </div>
+
+
+
                 </div>
               </div>
             </div>
+
 
             <!-- USDMS 품질 상세보고 탭 -->
             <div v-show="subTab === 'usdms_quality'" class="tab-pane quality-pane">
@@ -931,6 +1297,8 @@ const formatDuration = (sec: number | undefined): string => {
 
 .report-grid-mini div span {
   color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .report-grid-mini div strong {

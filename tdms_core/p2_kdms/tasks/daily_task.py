@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
 
 
+def format_duration_str(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.1f}초"
+    minutes = seconds / 60.0
+    return f"{minutes:.1f}분"
+
+
+
 class DailyTask:
     """
     일일 데이터 수집 및 수정계수/수정주가 갱신 작업을 총괄하는 태스크 조정자.
@@ -735,26 +743,70 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
 
         end_time = datetime.now(KST)
         duration = (end_time - start_time).total_seconds()
+        total_duration_str = format_duration_str(duration)
         
         skipped_count = result.get("skipped", 0)
         if skipped_count > 0 and result.get("collected", 0) == 0 and result.get("failed", 0) == 0:
             final_log = f"수집 스킵 (휴장일 범위: {start_date} ~ {end_date})"
             last_status = "success (holiday skipped)"
         else:
-            final_log = f"수집 완료 (성공: {result['collected']}건, 실패: {result['failed']}건, 스킵: {skipped_count}건, 소요시간: {int(duration)}초)"
+            final_log = f"수집 완료 (성공: {result['collected']}건, 실패: {result['failed']}건, 스킵: {skipped_count}건, 소요시간: {total_duration_str})"
             last_status = "success"
+
+        new_listings = result.get("new_listings", 0)
+        delistings = result.get("delistings", 0)
+        ticker_changes = result.get("ticker_changes", 0)
+
+        steps = [
+            {
+                "step": "Master Sync",
+                "status": "SUCCESS",
+                "duration_seconds": float(result.get("step1_duration", 0.0)),
+                "details": {
+                    "active_count": active_cnt,
+                    "new_listings": new_listings,
+                    "delistings": delistings,
+                    "ticker_changes": ticker_changes
+                }
+            },
+            {
+                "step": "Market Data Loader",
+                "status": "SUCCESS",
+                "duration_seconds": float(result.get("step2_duration", 0.0)),
+                "details": {
+                    "processed_count": daily_cnt,
+                    "market_cap_count": mc_cnt,
+                    "minute_count": minute_cnt,
+                    "investor_count": investor_cnt,
+                    "blacklisted_count": blacklisted_cnt,
+                    "failed_count": result.get("failed", 0)
+                }
+            },
+            {
+                "step": "Factor & Adjustment",
+                "status": "SUCCESS",
+                "duration_seconds": float(result.get("step3_duration", 0.0)),
+                "details": {
+                    "adjusted_factor_count": result.get("adjusted_factor_count", 0),
+                    "factor_rebuilt_count": factor_rebuilt
+                }
+            }
+        ]
 
         job_statuses[job_id].update({
             "is_running": False,
             "progress": 100,
-
             "last_status": last_status,
             "end_time": end_time.isoformat(),
-            "duration": f"{int(duration)}초",
+            "duration": total_duration_str,
+            "total_duration_seconds": duration,
+            "total_duration_str": total_duration_str,
             "last_log": final_log,
             "collected": result.get("collected", 0),
             "failed": result.get("failed", 0),
-            "skipped": skipped_count
+            "skipped": skipped_count,
+            "total_blacklisted_count": blacklisted_cnt,
+            "steps": steps
         })
         logger.info(f"✅ [{job_id}] {final_log}")
 
@@ -764,9 +816,21 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             "is_running": False,
             "last_status": "failure",
             "error": str(e),
-            "end_time": datetime.now(KST).isoformat()
+            "end_time": datetime.now(KST).isoformat(),
+            "last_log": f"수집 실패 (오류: {e})",
+            "steps": [
+                {
+                    "step": "Task Execution Error",
+                    "status": "FAILED",
+                    "duration_seconds": 0.0,
+                    "details": {
+                        "error": str(e)
+                    }
+                }
+            ]
         })
     finally:
         status_dict = job_statuses.get(job_id, {})
         status_dict["is_running"] = False
         job_statuses[job_id] = status_dict
+

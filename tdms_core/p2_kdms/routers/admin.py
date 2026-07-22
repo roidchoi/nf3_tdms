@@ -19,7 +19,7 @@ class TaskRunRequest(BaseModel):
     test_mode: bool = Field(default=False, description="테스트 모드 실행 여부")
 
 
-def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = False, start_date: Optional[date] = None, end_date: Optional[date] = None):
+def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = False, start_date: Optional[date] = None, end_date: Optional[date] = None, days: Optional[int] = None):
     """시가총액 백필 작업을 격리 실행하는 래퍼 함수"""
     import os
     from collectors.pub_data_client import PubDataClient
@@ -46,7 +46,10 @@ def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = 
 
     # 3. 날짜 범위 기본값 설정
     if start_date is None:
-        start_date = date.today() - timedelta(days=30)
+        if days is not None and days > 0:
+            start_date = date.today() - timedelta(days=days)
+        else:
+            start_date = date.today() - timedelta(days=30)
     if end_date is None:
         end_date = date.today() - timedelta(days=1)
 
@@ -91,6 +94,7 @@ async def run_task(
     request: Optional[TaskRunRequest] = None,
     start_date: Optional[str] = Query(None, description="백필 시작 날짜 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="백필 종료 날짜 (YYYY-MM-DD)"),
+    days: Optional[int] = Query(None, description="수동 백필 지정 일수 범위"),
     verify_date: Optional[str] = Query(None, description="수정주가 3자 검증 기준일 (YYYY-MM-DD 또는 정수 일수)")
 ):
     """
@@ -126,25 +130,35 @@ async def run_task(
         current_time = datetime.now(ZoneInfo("Asia/Seoul")) + timedelta(seconds=5)
         if task_id in ["backfill_market_cap", "backfill_minute_data", "backfill_daily_data", "backfill_investor_trade"]:
             # 클로저 바인딩 꼬임 방지를 위한 래퍼 함수 정의
-            def run_job(t_mode, p_start, p_end, v_date):
+            def run_job(t_mode, p_start, p_end, v_date, p_days):
                 if task_id == "backfill_daily_data":
                     return task_func(
                         job_statuses=job_statuses,
                         test_mode=t_mode,
                         start_date=p_start,
                         end_date=p_end,
-                        verify_date=v_date
+                        verify_date=v_date,
+                        days=p_days
+                    )
+                elif task_id == "backfill_market_cap":
+                    return task_func(
+                        job_statuses=job_statuses,
+                        test_mode=t_mode,
+                        start_date=p_start,
+                        end_date=p_end,
+                        days=p_days
                     )
                 else:
                     return task_func(
                         job_statuses=job_statuses,
                         test_mode=t_mode,
                         start_date=p_start,
-                        end_date=p_end
+                        end_date=p_end,
+                        days=p_days
                     )
             
             scheduler.add_job(
-                func=lambda: run_job(test_mode, parsed_start, parsed_end, verify_date),
+                func=lambda: run_job(test_mode, parsed_start, parsed_end, verify_date, days),
                 trigger="date",
                 run_date=current_time,
                 misfire_grace_time=900,

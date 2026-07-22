@@ -21,9 +21,9 @@ def calculate_factors(df: pd.DataFrame, stk_cd: str, price_source: str) -> List[
     # 날짜 순 정렬 보장
     df = df.sort_values('dt').reset_index(drop=True)
 
-    # [보완 1] 음수 시세 정제: raw_close나 adj_close가 0 이하인 경우 유효가격(abs)으로 보정
-    df['raw_close_clean'] = df['raw_close'].apply(lambda x: abs(x) if x != 0 else 0.0)
-    df['adj_close_clean'] = df['adj_close'].apply(lambda x: abs(x) if x != 0 else 0.0)
+    # [보완 1] 음수 시세 정제 및 float 형변환: raw_close나 adj_close가 Decimal/float 형일 경우 안전하게 float 변환
+    df['raw_close_clean'] = df['raw_close'].apply(lambda x: float(abs(x)) if x is not None and x != 0 else 0.0)
+    df['adj_close_clean'] = df['adj_close'].apply(lambda x: float(abs(x)) if x is not None and x != 0 else 0.0)
 
     # 0으로 나누기 및 음수 비율 방지
     df['ratio'] = np.where(

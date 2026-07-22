@@ -14,6 +14,7 @@ from collectors import utils
 from repositories.base import create_kdms_pool
 from repositories.master_repo import MasterRepo
 from repositories.financial_repo import FinancialRepo
+from p1_shared.utils.env_detector import EnvDetector
 
 logger = logging.getLogger(__name__)
 KST = ZoneInfo("Asia/Seoul")
@@ -76,7 +77,6 @@ class KisREST:
             self.client = None
         else:
             # 환경 프로파일 또는 환경변수에서 KIS API Credentials 로드
-            from p1_shared.utils.env_detector import EnvDetector
             detector = EnvDetector()
             profile = detector.load_env_profile()
             
@@ -181,14 +181,17 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
         
         statements_to_insert = []
         ratios_to_insert = []
+        updated_stock_codes = set()
 
         # 1.5 벌크 캐싱 수행 (루프 내부의 N+1 SELECT 차단)
         logger.info(f"[{job_id}] 대상 {len(target_stocks)}개 종목의 최신 재무 데이터 벌크 로드 중...")
+        step1_start = time.time()
         bulk_statements = db.get_latest_statements_bulk(target_stocks, '1')
         bulk_ratios = db.get_latest_ratios_bulk(target_stocks, '1')
         
         statements_cache = {(r['stk_cd'], r['stac_yymm']): r for r in bulk_statements if r.get('stac_yymm')}
         ratios_cache = {(r['stk_cd'], r['stac_yymm']): r for r in bulk_ratios if r.get('stac_yymm')}
+        step1_duration = time.time() - step1_start
         logger.info(f"[{job_id}] 벌크 로드 완료 (Statement 캐시: {len(statements_cache)}건, Ratio 캐시: {len(ratios_cache)}건)")
 
         # 2. 종목 순회 및 PIT 변경 감지
@@ -288,10 +291,12 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
                     if _compare_financial_data(api_statement, db_statement, statement_cols, logger):
                         logger.debug(f"[{stk_cd}] {yymm} 재무제표 변경 또는 신규 생성 감지 → DB INSERT 대기")
                         statements_to_insert.append(api_statement)
+                        updated_stock_codes.add(stk_cd)
                     
                     if _compare_financial_data(api_ratio, db_ratio, ratio_cols, logger):
                         logger.debug(f"[{stk_cd}] {yymm} 재무비율 변경 또는 신규 생성 감지 → DB INSERT 대기")
                         ratios_to_insert.append(api_ratio)
+                        updated_stock_codes.add(stk_cd)
             
             except KisAPIError as e:
                 logger.error(f"[{stk_cd}] KIS API 수집 실패 (에러코드: {e.error_code}): {e}")
@@ -300,10 +305,10 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
                 logger.error(f"[{stk_cd}] 재무정보 처리 중 예외 발생: {e}", exc_info=True)
                 continue
         
-        loop_elapsed = time.time() - loop_start_time
+        step2_duration = time.time() - loop_start_time
         final_progress_msg = (
             f"[{job_id}] ({total}/{total}) "
-            f"수집/비교 완료. (소요시간: {time.strftime('%H:%M:%S', time.gmtime(loop_elapsed))})"
+            f"수집/비교 완료. (소요시간: {time.strftime('%H:%M:%S', time.gmtime(step2_duration))})"
         )
         logger.info(final_progress_msg)
         
@@ -315,6 +320,7 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
             "last_log": final_progress_msg
         })
         
+        step3_start = time.time()
         if statements_to_insert:
             logger.info(f"[{job_id}] 신규/변경된 재무제표: {len(statements_to_insert)}건 저장 시작...")
             db.insert_financial_statements(statements_to_insert)
@@ -328,21 +334,72 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
             logger.info(f"[{job_id}] ✅ 재무비율 벌크 저장 성공.")
         else:
             logger.info(f"[{job_id}] 신규/변경된 재무비율이 없어 DB 업데이트를 스킵합니다.")
+        step3_duration = time.time() - step3_start
 
         # 성공 완료 상태 기록
         end_time = datetime.now(KST)
         duration = (end_time - start_time).total_seconds()
-        final_msg = f"재무정보 수집 성공적으로 완료 (총 {total}개 처리, {duration/60:.1f}분 소요)"
         
+        def _fmt_dur(sec: float) -> str:
+            return f"{sec:.1f}초" if sec < 60 else f"{sec/60.0:.1f}분"
+
+        total_dur_str = _fmt_dur(duration)
+        final_msg = f"재무정보 수집 성공적으로 완료 (총 {total}개 처리, {total_dur_str} 소요)"
+        
+        updated_stocks_cnt = len(updated_stock_codes)
+        total_active_cnt = len(all_active_stocks) if 'all_active_stocks' in locals() else total
+        total_grp = 1 if target_group == -1 else 5
+        grp_idx = 1 if target_group == -1 else (current_group + 1 if 'current_group' in locals() else 1)
+
+        steps = [
+            {
+                "step": "Target Selector & Cache",
+                "status": "SUCCESS",
+                "duration_seconds": float(step1_duration),
+                "details": {
+                    "total_count": total_active_cnt,
+                    "target_count": total,
+                    "group_idx": grp_idx,
+                    "total_groups": total_grp
+                }
+            },
+            {
+                "step": "Financial Parser & PIT Compare",
+                "status": "SUCCESS",
+                "duration_seconds": float(step2_duration),
+                "details": {
+                    "processed_count": total,
+                    "success_count": total,
+                    "updated_stocks_count": updated_stocks_cnt
+                }
+            },
+            {
+                "step": "DB Bulk Insert",
+                "status": "SUCCESS",
+                "duration_seconds": float(step3_duration),
+                "details": {
+                    "statements_inserted_count": len(statements_to_insert),
+                    "ratios_inserted_count": len(ratios_to_insert)
+                }
+            }
+        ]
+
         job_statuses[job_id].update({
             "is_running": False,
             "progress": 100,
             "last_status": "success",
             "end_time": end_time.isoformat(),
-            "duration": f"{int(duration)}초 ({duration/60:.1f}분)",
-            "last_log": final_msg
+            "duration": total_dur_str,
+            "total_duration_seconds": duration,
+            "total_duration_str": total_dur_str,
+            "last_log": final_msg,
+            "updated_stocks_count": updated_stocks_cnt,
+            "statements_inserted_count": len(statements_to_insert),
+            "ratios_inserted_count": len(ratios_to_insert),
+            "steps": steps
         })
         logger.info(f"✅ [{job_id}] {final_msg}")
+
 
     except Exception as e:
         logger.critical(f"[{job_id}] 수집 파이프라인 구동 중 치명적 오류 발생: {e}", exc_info=True)
