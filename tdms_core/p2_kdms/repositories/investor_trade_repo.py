@@ -88,7 +88,7 @@ class InvestorTradeRepo:
             with conn.cursor() as cur:
                 execute_values(cur, query, values)
             conn.commit()
-            logger.info(f"✅ daily_investor_trade 테이블 벌크 UPSERT 완료: {len(data)}건")
+            logger.debug(f"daily_investor_trade 테이블 벌크 UPSERT 완료: {len(data)}건")
             return len(data)
         except Exception as e:
             if conn:
@@ -101,28 +101,24 @@ class InvestorTradeRepo:
 
     def get_active_symbols_for_date(self, dt: date) -> List[str]:
         """
-        주어진 날짜 dt가 포함된 분기(quarter)의 분봉 수집 대상 종목코드 리스트를 반환합니다.
-        분기 형식 예: '2025Q1'
+        주어진 날짜 dt 기준 상장(listed) 상태의 활성 종목코드 리스트를 반환합니다.
         """
-        q_num = (dt.month - 1) // 3 + 1
-        quarter = f"{dt.year}Q{q_num}"
-        
         query = """
-            SELECT DISTINCT symbol
-            FROM minute_target_history
-            WHERE quarter = %s;
+            SELECT stk_cd
+            FROM stock_info
+            WHERE status = 'listed' AND (delist_dt IS NULL OR delist_dt > CURRENT_DATE);
         """
         conn = None
         try:
             conn = self._get_connection()
             with conn.cursor() as cur:
-                cur.execute(query, (quarter,))
+                cur.execute(query)
                 rows = cur.fetchall()
                 symbols = [row[0] for row in rows]
-            logger.info(f"[{quarter}] 분봉 수집 대상 종목 조회 완료: {len(symbols)}개")
+            logger.info(f"[{dt}] 일별 수급 수집 대상 종목 조회 완료: {len(symbols)}개")
             return symbols
         except Exception as e:
-            logger.error(f"[{quarter}] 분봉 수집 대상 종목 조회 중 오류 발생: {e}", exc_info=True)
+            logger.error(f"[{dt}] 일별 수급 수집 대상 종목 조회 중 오류 발생: {e}", exc_info=True)
             raise
         finally:
             if conn:

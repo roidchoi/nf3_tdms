@@ -93,3 +93,4 @@ conda run -n tdms_p1_env uv pip install -e tdms_core/p1_shared/
 | USDMS 폴더 탐색기 접근 불가 | Docker가 UID 70으로 폴더 잠금 | `sudo setfacl -R -m u:$USER:rx ./data/usdms_db` |
 | SSH sudo 비밀번호 프롬프트 | 자동화 실행 차단 | `sudoers.d/tdms_sync` 1회 설정 (`[[p1_shared_wiki/decisions/dec-001_physical_sync.md]]`) |
 | 도커 가상망 DNS/마운트 꼬임 | PC 재부팅 시 가상 DNS 해석 실패 및 볼륨 링크 로딩 지연 | restart 정책 `always`로 상향, 서비스별 `healthcheck` 대기, `env_detector.py` 내 DNS 해석 예외 시 고정 IP 폴백 메커니즘 연동 |
+| Docker prune 후 윈도우 C:드라이브 미환수 | WSL2 `ext4.vhdx` 가상 디스크 동적 미축소 | IDE 세션 유지: Docker Desktop 종료 ➔ PS에서 `wsl -t docker-desktop` ➔ `diskpart` (`select vdisk file="C:\Users\roid2\AppData\Local\Docker\wsl\disk\docker_data.vhdx"` ➔ `compact vdisk`) 실행 |

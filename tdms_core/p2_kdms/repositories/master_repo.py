@@ -104,5 +104,13 @@ class MasterRepo:
         with self.pool.get_cursor() as cursor:
             cursor.execute(query, (status, status, stk_cds))
 
+    def get_all_stock_codes(self) -> set:
+        """stock_info 테이블에 존재하는 모든 stk_cd 집합을 반환합니다 (status 구분 없이 전체)."""
+        query = "SELECT stk_cd FROM stock_info"
+        with self.pool.get_cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return {row[0] for row in rows}
+
 
 

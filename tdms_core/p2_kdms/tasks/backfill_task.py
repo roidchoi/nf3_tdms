@@ -781,7 +781,10 @@ def run_backfill_daily_data(
         failed_cnt = 0
         collected_cnt = 0
 
-        if days is not None and days > 0:
+        if days == 0:
+            start_date = date(2017, 1, 2)
+            backfill_days = (date.today() - start_date).days
+        elif days is not None and days > 0:
             backfill_days = days
         else:
             # 날짜 자동 산정
@@ -810,6 +813,13 @@ def run_backfill_daily_data(
         # 리포지토리 및 클라이언트 초기화
         db = DatabaseManager()
         
+        # 캘린더 과거 개장일 이력 자동 동기화 (days==0 전기간 백필 수동 요청 시)
+        if days == 0 and not test_mode:
+            try:
+                _sync_trading_calendar_history(db, start_date)
+            except Exception as sync_err:
+                logger.warning(f"[{job_id}] 과거 거래일 동기화 중 경고 (계속 진행): {sync_err}")
+
         master_repo = MasterRepo(db.pool)
         ohlcv_repo = OhlcvRepo(db.pool)
         factor_repo = FactorRepo(db.pool)
@@ -887,7 +897,7 @@ def run_backfill_daily_data(
         # Step 2-2: 수정 비율(price_adjustment_factors) 및 수정주가 3자 정합성 전수 대조 검증 및 자가 치유(Self-healing)
         discrepancy_stocks = []
         if target_stocks:
-            # 1. 3자 대조 검증일 산출 (verify_date에 따른 유연한 파싱 적용, 기본값 1년전)
+            # 1. 3자 대조 검증일 산출 (verify_date에 따른 유연한 파싱 적용)
             if verify_date is not None:
                 if isinstance(verify_date, str):
                     try:
@@ -907,13 +917,31 @@ def run_backfill_daily_data(
             else:
                 target_back_date = start_date - timedelta(days=365)
 
-            dt_res = db._execute_query("""
-                SELECT max(dt) as dt FROM trading_calendar 
-                WHERE opnd_yn = 'Y' AND dt <= %s
-            """, (target_back_date,), fetch='all')
-            check_dt_global = dt_res[0]['dt'] if dt_res and dt_res[0]['dt'] else target_back_date
+            # 전기간 백필(days == 0)일 경우 연도별 다점(Multi-Point) 검증 세트 구성
+            if days == 0:
+                base_years = [2017, 2019, 2021, 2023, target_back_date.year]
+                raw_target_dates = []
+                for yr in base_years:
+                    candidate = date(yr, 1, 2)
+                    if candidate <= target_back_date:
+                        raw_target_dates.append(candidate)
+                raw_target_dates.append(target_back_date)
+                raw_target_dates = sorted(list(set(raw_target_dates)))
+            else:
+                raw_target_dates = [target_back_date]
+
+            # 장 휴일 보정: trading_calendar 기반 각 검증 타깃별 직전 최근 영업일 산출
+            check_dates_global = []
+            for t_dt in raw_target_dates:
+                dt_res = db._execute_query("""
+                    SELECT max(dt) as dt FROM trading_calendar 
+                    WHERE opnd_yn = 'Y' AND dt <= %s
+                """, (t_dt,), fetch='all')
+                c_dt = dt_res[0]['dt'] if dt_res and dt_res[0]['dt'] else t_dt
+                if c_dt and c_dt not in check_dates_global:
+                    check_dates_global.append(c_dt)
             
-            # 2. 각 종목별 최초 거래일 조회
+            # 2. 각 종목별 최초 거래일(상장일) 조회
             first_dates_res = db._execute_query("""
                 SELECT stk_cd, min(dt) as first_dt 
                 FROM daily_ohlcv 
@@ -922,21 +950,33 @@ def run_backfill_daily_data(
             """, (target_stocks,), fetch='all')
             first_dates = {r['stk_cd']: r['first_dt'] for r in first_dates_res if r['stk_cd'] and r['first_dt']}
             
-            # 3. 종목별 개별 동적 검증일(check_dt) 산출
-            stock_check_dates = {}
+            # 3. 종목별 개별 동적 검증일 세트(check_dt) 산출 (+5일 상장 유예 및 거래정지(vol > 0) 보정)
+            stock_check_dates = {} # stk_cd -> List[date]
             for stk in target_stocks:
                 first_dt = first_dates.get(stk)
                 if not first_dt:
                     continue
-                if first_dt <= check_dt_global:
-                    stock_check_dates[stk] = check_dt_global
-                else:
-                    stock_check_dates[stk] = first_dt
+                
+                # 신규 상장 종목 유예기간 (+5일 이후 직전 영업일)
+                safe_first_dt = first_dt + timedelta(days=5)
+                
+                stk_dates = []
+                for c_dt_g in check_dates_global:
+                    if first_dt <= c_dt_g:
+                        target_dt = c_dt_g
+                    else:
+                        target_dt = safe_first_dt
+                    if target_dt not in stk_dates:
+                        stk_dates.append(target_dt)
+                
+                if stk_dates:
+                    stock_check_dates[stk] = stk_dates
             
             # 4. 로컬 DB 3자 대조 대상 데이터 벌크 조회 (VALUES 조인 활용)
             values_list = []
-            for stk, dt_val in stock_check_dates.items():
-                values_list.append(f"('{stk}', '{dt_val.isoformat()}'::date)")
+            for stk, dt_list in stock_check_dates.items():
+                for dt_val in dt_list:
+                    values_list.append(f"('{stk}', '{dt_val.isoformat()}'::date)")
             
             if values_list:
                 values_str = ", ".join(values_list)
@@ -957,11 +997,12 @@ def run_backfill_daily_data(
                     cum_factors AS (
                         SELECT 
                             f.stk_cd,
+                            t.check_dt,
                             EXP(SUM(LN(f.price_ratio))) as cum_factor
                         FROM price_adjustment_factors f
                         JOIN target_dates t ON f.stk_cd = t.stk_cd
                         WHERE f.event_dt > t.check_dt AND f.price_source = 'KIS' AND f.price_ratio > 0
-                        GROUP BY f.stk_cd
+                        GROUP BY f.stk_cd, t.check_dt
                     )
                     SELECT 
                         b.stk_cd,
@@ -970,14 +1011,14 @@ def run_backfill_daily_data(
                         b.db_adj_close,
                         COALESCE(c.cum_factor, 1.0) as cum_factor
                     FROM raw_adj_base b
-                    LEFT JOIN cum_factors c ON c.stk_cd = b.stk_cd;
+                    LEFT JOIN cum_factors c ON c.stk_cd = b.stk_cd AND c.check_dt = b.check_dt;
                 """
                 local_data_res = db._execute_query(query_local_values, fetch='all')
                 
-                logger.info(f"[{job_id}] 총 {len(local_data_res)}개 종목 대상 3자 정합성 검증 시작 (Rate limit 제어 적용)")
+                logger.info(f"[{job_id}] 총 {len(local_data_res)}개 다점 포인트 레코드 대상 3자 정합성 검증 시작 (Rate limit 제어 적용)")
                 
                 consecutive_api_errors = 0
-                discrepancy_stock_map = {} # stk_cd -> check_dt
+                discrepancy_stock_map = {} # stk_cd -> (check_dt, kis_adj_close)
                 
                 for row in local_data_res:
                     stk_cd = row['stk_cd']
@@ -986,24 +1027,24 @@ def run_backfill_daily_data(
                     db_adj_close = float(row['db_adj_close']) if row['db_adj_close'] is not None else None
                     cum_factor = float(row['cum_factor'])
                     
-                    # 값 C: 로컬 팩터 적용 역산 수정주가
-                    calc_adj_close = round(raw_close * cum_factor)
+                    # 값 C: 로컬 팩터 적용 역산 수정주가 (소수점 둘째자리 보존)
+                    calc_adj_close = round(float(raw_close) * cum_factor, 2)
                     
                     # 1단계: 로컬 DB 내부 불일치 확인 (값 B != 값 C)
-                    # 절대 오차 1.0원 이상이면서 동시에 상대 오차 0.5% 이상일 때만 실제 정합성 오류로 감지
                     is_local_discrepancy = False
                     if db_adj_close is None:
                         is_local_discrepancy = True
                     else:
                         local_diff = abs(db_adj_close - calc_adj_close)
-                        # Phase 1 불일치 감지 기준: 상대오차 1.0%(0.01) 이상일 때만 백필 대상으로 포섭 (Self-Healing Guard와 수평선 통일)
-                        if local_diff >= 1.0 and (local_diff / db_adj_close) >= 0.01:
+                        denom_db = max(abs(db_adj_close), 1.0)
+                        if local_diff >= 1.0 and (local_diff / denom_db) >= 0.01:
                             is_local_discrepancy = True
                             
                     if is_local_discrepancy:
-                        logger.warning(f"[{stk_cd}] 로컬 DB 불일치 감지 (물리 수정주가: {db_adj_close}, 계산 수정주가: {calc_adj_close}). 백필 대상 추가.")
+                        logger.warning(f"[{stk_cd}] 로컬 DB 불일치 감지 (검증일: {check_dt}, 물리 수정주가: {db_adj_close}, 계산 수정주가: {calc_adj_close}). 백필 대상 추가.")
                         discrepancy_stocks.append((stk_cd, check_dt))
-                        discrepancy_stock_map[stk_cd] = (check_dt, None)
+                        if stk_cd not in discrepancy_stock_map:
+                            discrepancy_stock_map[stk_cd] = (check_dt, None)
                         continue
                     
                     # 2단계: 외부 KIS API 수정주가(값 A) 대조
@@ -1035,17 +1076,21 @@ def run_backfill_daily_data(
                             
                     if kis_adj_close is not None:
                         kis_adj_close = float(kis_adj_close)
-                        # 3자 정합성 대조 판정 (물리 DB 오염 0.5% / 계산 주가 미세 시차 1.0% 통일)
+                        # 3자 정합성 대조 판정 (0원 나눗셈 방지 분모 적용)
                         diff_db_kis = abs(db_adj_close - kis_adj_close)
                         diff_calc_kis = abs(calc_adj_close - kis_adj_close)
                         
-                        is_db_err = diff_db_kis >= 1.0 and (diff_db_kis / db_adj_close) >= 0.005
-                        is_calc_err = diff_calc_kis >= 1.0 and (diff_calc_kis / kis_adj_close) >= 0.01
+                        denom_db = max(abs(db_adj_close), 1.0)
+                        denom_kis = max(abs(kis_adj_close), 1.0)
+                        
+                        is_db_err = diff_db_kis >= 1.0 and (diff_db_kis / denom_db) >= 0.005
+                        is_calc_err = diff_calc_kis >= 1.0 and (diff_calc_kis / denom_kis) >= 0.01
                         
                         if is_db_err or is_calc_err:
-                            logger.warning(f"[{stk_cd}] 3자 불일치 감지 (KIS API: {kis_adj_close}, 물리: {db_adj_close}, 계산: {calc_adj_close}). 백필 대상 추가.")
+                            logger.warning(f"[{stk_cd}] 3자 불일치 감지 (검증일: {check_dt}, KIS API: {kis_adj_close}, 물리: {db_adj_close}, 계산: {calc_adj_close}). 백필 대상 추가.")
                             discrepancy_stocks.append((stk_cd, check_dt))
-                            discrepancy_stock_map[stk_cd] = (check_dt, kis_adj_close)
+                            if stk_cd not in discrepancy_stock_map:
+                                discrepancy_stock_map[stk_cd] = (check_dt, kis_adj_close)
             
             if discrepancy_stocks:
                 logger.info(f"[{job_id}] 수정 팩터 3자 불일치(결손/오염) 종목 감지: {len(discrepancy_stocks)}건. 백필 대상에 병합합니다.")
@@ -1250,15 +1295,18 @@ def run_backfill_daily_data(
                                         WHERE stk_cd = %s AND event_dt > %s AND price_source = 'KIS' AND price_ratio > 0
                                     """, (stk_cd, saved_check_dt), fetch='all')
                                     re_cum_factor = float(cum_res[0]['cum_factor']) if cum_res and cum_res[0]['cum_factor'] is not None else 1.0
-                                    re_calc_adj_close = round(re_raw_close * re_cum_factor)
+                                    re_calc_adj_close = round(float(re_raw_close) * re_cum_factor, 2)
                                     
                                     diff_re_db = abs(re_db_adj_close - re_kis_close)
                                     diff_re_calc = abs(re_calc_adj_close - re_kis_close)
                                     
-                                    re_db_err = diff_re_db >= 1.0 and (diff_re_db / re_db_adj_close) >= 0.005
+                                    denom_re_db = max(abs(re_db_adj_close), 1.0)
+                                    denom_re_kis = max(abs(re_kis_close), 1.0)
+                                    
+                                    re_db_err = diff_re_db >= 1.0 and (diff_re_db / denom_re_db) >= 0.005
                                     # 물리 DB가 KIS 오피셜과 100% 완벽 일치(re_db_err False)된 경우, 미세 소급 팩터 시차(1.0% 미만)는 정상 통과로 인정
                                     calc_err_threshold = 0.01 if not re_db_err else 0.005
-                                    re_calc_err = diff_re_calc >= 1.0 and (diff_re_calc / re_kis_close) >= calc_err_threshold
+                                    re_calc_err = diff_re_calc >= 1.0 and (diff_re_calc / denom_re_kis) >= calc_err_threshold
                                     
                                     if re_db_err or re_calc_err:
                                         critical_err_msg = (

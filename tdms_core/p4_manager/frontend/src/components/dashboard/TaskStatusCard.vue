@@ -179,10 +179,14 @@ const handleRunCustom = async (subTaskId: 'backfill_minute_data' | 'backfill_dai
   else if (subTaskId === 'backfill_daily_data') subTitle = '일봉 백필'
   else if (subTaskId === 'backfill_market_cap') subTitle = '시가총액 백필'
 
-  const days = backfillDays[subTaskId] || 30
-  let message = `[${subTitle} (${days}일)] 작업을 실행하시겠습니까?\n\n`
+  const days = backfillDays[subTaskId] ?? 30
+  let message = `[${subTitle} (${days === 0 ? '전기간(2017~)' : days + '일'})] 작업을 실행하시겠습니까?\n\n`
   message += `▶ 실행 모드: ⚠️ 운영 모드 (실제 데이터 변경)\n`
-  message += `▶ 백필 지정 기간: ${days}일\n`
+  if (days === 0) {
+    message += `▶ 백필 지정 기간: 0일 (2017-01-02 기준 전기간 전수 백필)\n`
+  } else {
+    message += `▶ 백필 지정 기간: ${days}일\n`
+  }
   
   if (isKoreanMarketOpen()) {
     message += `\n🚨 [경고] 현재 한국 주식시장 장중 거래 시간입니다!\n운영 모드 실행 시 실시간 DB 데이터 오염 위험이 매우 높습니다.\n정말 진행하시겠습니까?`
@@ -192,7 +196,7 @@ const handleRunCustom = async (subTaskId: 'backfill_minute_data' | 'backfill_dai
 
   try {
     await statusStore.runTask(props.market, subTaskId, false, days)
-    alert(`${subTitle} (${days}일) 수동 실행 요청 완료`)
+    alert(`${subTitle} (${days === 0 ? '2017-01-02 기준 전기간' : days + '일'}) 수동 실행 요청 완료`)
   } catch (error: any) {
     alert(`태스크 실행 실패: ${error?.response?.data?.detail || error.message}`)
   }
@@ -213,10 +217,11 @@ const latestBackfillStatusText = computed(() => {
 
   for (const t of tasks) {
     if (t.task && t.task.last_run_time) {
-      const days = (t.task as any).details?.backfill_days || (t.task as any).backfill_days || 30
+      const rawDays = (t.task as any).details?.backfill_days ?? (t.task as any).backfill_days
+      const days = rawDays !== undefined ? rawDays : 30
       validTasks.push({
         name: t.name,
-        daysStr: `${days}일`,
+        daysStr: days === 0 ? '전기간(2017~)' : `${days}일`,
         status: t.task.last_status || 'none',
         time: new Date(t.task.last_run_time).getTime()
       })
@@ -294,8 +299,8 @@ const latestBackfillStatusText = computed(() => {
             <div class="input-wrap">
               <input 
                 type="number" 
-                min="1" 
-                max="365"
+                min="0" 
+                max="3650"
                 v-model.number="backfillDays.backfill_daily_data" 
                 class="days-input" 
                 placeholder="30"

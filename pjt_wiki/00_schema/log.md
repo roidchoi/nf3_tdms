@@ -11,6 +11,12 @@
 ---
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
+## [2026-07-23] Task완료+에러등록 | KDMS 일별 수급 수집 타겟 정상화 및 로깅 소음 정밀 최적화 (err-007 3차). 기존 분봉 백필 타겟(2,399개) 쿼리로 오용되던 investor_trade_repo.py의 get_active_symbols_for_date 쿼리를 stock_info 상장 활성 종목(3,920개) 전체로 교정하고, 매 종목별 벌크 UPSERT 완료 로그(INFO)를 DEBUG 수준으로 전환하여 폭풍 로그를 소탕하였으며, 50종목 단위의 실시간 진행률 전용 로그만 남도록 개선 후 p2_kdms 도커 재빌드 배포 완료.
+
+## [2026-07-23] Task완료+에러등록 | KDMS P4 대시보드 품질 요약 탭 데이터 왜곡 현상 정밀 해결 (err-007 2차). Master Sync 신규 상장 수를 KIS 전체 마스터 수량(4,313개)에서 순수 편입 종목 수로 보정하고, Market Data Loader 시세/시총 수집 수를 레코드 Row 수(15,660건)에서 실제 수집 처리된 독자 종목 수(Distinct Stock Count)로 분리/교정하였으며, 각 Step별 duration_seconds 측정 및 테스트(119건 100% 통과) 후 p2_kdms 도커 재빌드 배포 완료.
+
+## [2026-07-23] 환경변경+지식화 | 개발 PC 도커 미사용 데이터 104.9GB(컨테이너 80.9GB, 빌드캐시 21.47GB, 레거시 이미지 2.5GB) 소탕 및 실측 재검증(119.77GB ➔ 14.8GB 사용) 완료. 아울러 WSL2 환경에서 도커 prune 후 윈도우 탐색기 C:드라이브 여유 공간 실질 환수를 위한 VHDX Compact/Shrink 런북을 `p1_shared_wiki/environment.md`에 지식화 갱신 완료.
+
 ## [2026-07-23] Task완료+의사결정 | USDMS MasterSync의 방어적 권한 검증 및 Safety Lock 도입, 블랙리스트 자동 쿨다운 릴리즈 연동 및 오탐 비활성화 종목(XOM 등 74개) 복구를 완료하고, 관련 의사결정 문서(`dec-012`)와 `master_sync.md` 인터페이스 및 `index.md` 지식 지도를 갱신 반영하였습니다.
 
 ## [2026-07-22] Task완료+의사결정 | KDMS 백필 및 데일리 수집 작업 상태 캐싱 안정화와 UI 품질 요약 정상화 (dec-011, err-007). FilePersistentDict의 중첩 구조 내 값 변경 시 캐시 저장 유실을 최상위 키 수준 재할당 패턴으로 해결하고, daily_task.py 내 NameError(active_cnt 미정의)를 파이프라인 구간별 수집 메트릭을 집계하여 딕셔너리로 반환하도록 보강함으로써 최종 해결 완료.

@@ -67,5 +67,20 @@ NameError: name 'active_cnt' is not defined
         factor_rebuilt = result.get("factor_rebuilt_count", 0)
 ```
 
+### 2차 고도화 (2026-07-23 UI 품질 요약 데이터 왜곡 정밀 보정)
+- **현상**: P4 대시보드 품질 요약 탭에서 `Master Sync` 신규 상장 수가 4,313개(전체 KIS 마스터 수량)로 표시되고, `Market Data Loader` 시세/시총 수집 수가 15,660종목(4개 거래일치 총 레코드 Row 수)으로 엉뚱하게 왜곡되어 표출됨.
+- **원인 및 조치**:
+  1. `new_listings`를 KIS API 전체 개수(`len(master_records)`)가 아닌 `prev_shares_map` 미존재 신규 종목 수로 카운팅하도록 보정.
+  2. `daily_ohlcv_count` 및 `market_cap_count`에 총 레코드 건수가 아닌 **실제 수집 처리된 독자 종목 수 (Distinct Stock Count: 약 3,923개)**를 대입하여 UI 표출 정합성 확보.
+  3. `steps` 내 각 Step별 `duration_seconds` 측정 코드를 추가하여 UI에 각 단계별 소요 시간이 실시간 표출되도록 완수.
+
+### 3차 고도화 (2026-07-23 수급 수집 타겟 3,920개 확대 및 폭풍 로그 제거)
+- **현상**: P4 대시보드에서 `Market Data Loader` 단계의 `수급: 2399` 수치가 전체 활성 종목(3,920개)이 아닌 분봉 백필 타겟(2,399개)으로 엉뚱하게 묶여 출력되고, 종목별 벌크 UPSERT 완료 로그가 매번 INFO로 수천 번 남는 로그 폭풍 발생.
+- **원인 및 조치**:
+  1. `investor_trade_repo.py:get_active_symbols_for_date()` 쿼리를 `minute_target_history`가 아닌 `stock_info` 테이블의 `status = 'listed'` 전체 활성 상장 종목(약 3,920개)을 반환하도록 정비하여 대시보드 표출 `수급: 3920` 정합성 완수.
+  2. `investor_trade_repo.py` 내의 종목별 `logger.info`를 `logger.debug`로 격하하여 무의미한 연쇄 로그를 제거하고, 50종목 단위의 실시간 진행률 전용 로그(Progress %, Speed, ETA)만 깔끔하게 출력되도록 로깅 시스템 최적화 완료.
+
 ### 발생 이력
 - 2026-07-22 21:20:05 자동 수집 중 최초 발생 및 보고됨.
+- 2026-07-23 21:35:00 2차 품질 요약 집계 데이터왜곡 정밀 보정 및 도커 배포 완료.
+- 2026-07-23 23:22:00 3차 수급 수집 타겟 전체 활성 종목(3,920개) 정상화 및 폭풍 로그 제거 완료.

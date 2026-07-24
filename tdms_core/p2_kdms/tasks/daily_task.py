@@ -102,11 +102,18 @@ class DailyTask:
             except Exception as re_err:
                 logger.error(f"Failed to load recent event stocks map: {re_err}")
 
-        # 1. 종목마스터 수집 및 갱신 전, 전일 상장주식수 정보를 사전 로딩 (수정계수 이벤트 감지용)
+        # Step 1: Master Sync 시작 시간 측정
+        step1_start = time.time()
+        # 1. 종목마스터 수집 및 갱신 전, 전일 상장주식수 및 기존 전체 종목 코드 정보 사전 로딩
         prev_shares_map = {}
+        all_existing_stk_cds = set()
         try:
             old_active = self.master_repo.get_all_active_stocks()
             prev_shares_map = {s["stk_cd"]: s.get("listed_shares", 0) or 0 for s in old_active}
+            if hasattr(self.master_repo, 'get_all_stock_codes'):
+                all_existing_stk_cds = self.master_repo.get_all_stock_codes()
+            else:
+                all_existing_stk_cds = set(prev_shares_map.keys())
         except Exception as pre_shares_err:
             logger.warning(f"Failed to pre-load active stock shares: {pre_shares_err}")
 
@@ -114,11 +121,15 @@ class DailyTask:
             master_records = self.kis_client.fetch_stock_master()
             if master_records:
                 self.master_repo.upsert_stock_info(master_records)
-                new_listings = len(master_records)
+                # DB에 기존에 아예 없었던 진짜 신규 상장 종목 수만 카운트
+                new_listings = len([r for r in master_records if r.get("stk_cd") and r.get("stk_cd") not in all_existing_stk_cds])
         except Exception as e:
             # 마스터 수집 실패 시 전체 중단하지 않고 로그를 남긴 뒤 기존 DB 상의 active 종목으로 진행
             logger.warning(f"Stock master update failed: {e}")
+        step1_duration = time.time() - step1_start
 
+        # Step 2: Market Data Loader 시작 시간 측정
+        step2_start = time.time()
         # 전일 종가 정보 벌크 로딩 (주가 괴리 감지용)
         prev_close_map = {}
         try:
@@ -373,7 +384,7 @@ class DailyTask:
         if all_ohlcv_records:
             try:
                 self.ohlcv_repo.upsert_daily_ohlcv(all_ohlcv_records)
-                daily_ohlcv_count = len(all_ohlcv_records)
+                daily_ohlcv_count = len({r["stk_cd"] for r in all_ohlcv_records if "stk_cd" in r})
             except Exception as oe:
                 logger.error(f"Failed to bulk upsert daily ohlcv records: {oe}")
 
@@ -381,10 +392,12 @@ class DailyTask:
         if self.market_cap_repo is not None and mc_records:
             try:
                 self.market_cap_repo.upsert_daily_market_cap(mc_records)
-                market_cap_count = len(mc_records)
+                market_cap_count = len({r["stk_cd"] for r in mc_records if "stk_cd" in r})
             except Exception as mce:
                 logger.error(f"Failed to upsert daily market cap records: {mce}")
 
+        # Step 3: Factor & Adjustment 시작 시간 측정
+        step3_start = time.time()
         # 5. Loop 2: API 오류 추정 종목 팩터 정밀 검증 및 청소
         if self.factor_repo is not None and recent_event_map:
             logger.info(f"Starting Loop 2: API error correction for {len(recent_event_map)} stocks...")
@@ -411,6 +424,7 @@ class DailyTask:
                 self.ohlcv_repo.refresh_adjusted_ohlcv_batch(start_update_dt, end_date, 'KIS')
             except Exception as re:
                 logger.error(f"Failed to refresh adjusted ohlcv physical table: {re}")
+        step3_duration = time.time() - step3_start
 
         # 7. 당일 분봉 데이터 수집 및 적재 (kiwoom_client가 제공된 경우)
         if self.kiwoom_client is not None:
@@ -442,6 +456,7 @@ class DailyTask:
                 if not open_days:
                     open_days = [start_date]
 
+                investor_stock_cds = set()
                 for d in open_days:
                     try:
                         targets = self.investor_trade_repo.get_active_symbols_for_date(d)
@@ -479,12 +494,13 @@ class DailyTask:
                                 if day_records:
                                     self.investor_trade_repo.upsert_daily_investor_trade(day_records)
                                     collected += len(day_records)
-                                    investor_count += len(day_records)
+                                    investor_stock_cds.add(stk_cd)
                         except Exception as e:
                             logger.error(f"Failed to collect investor trade for {stk_cd} on {d}: {e}")
-                            failed += 1
+                investor_count = len(investor_stock_cds)
             except Exception as ite:
                 logger.error(f"Failed in daily investor trade collection process: {ite}")
+        step2_duration = time.time() - step2_start
 
         return {
             "collected": collected,
@@ -501,6 +517,9 @@ class DailyTask:
             "blacklisted_count": len(blacklisted_stocks) if blacklisted_stocks else 0,
             "adjusted_factor_count": adjusted_factor_count,
             "factor_rebuilt_count": factor_rebuilt_count,
+            "step1_duration": step1_duration,
+            "step2_duration": step2_duration,
+            "step3_duration": step3_duration if 'step3_duration' in locals() else 0.0,
         }
 
     def _collect_daily_minute_data_range(self, start_date: date, end_date: date) -> int:

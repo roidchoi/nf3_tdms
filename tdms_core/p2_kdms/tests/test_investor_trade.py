@@ -84,7 +84,7 @@ def test_fetch_investor_trade_daily_parsing(mocker):
 def test_investor_trade_repo_get_active_symbols(mocker):
     """
     [목적] InvestorTradeRepo.get_active_symbols_for_date가 
-           해당 날짜에 부합하는 분기의 분봉 수집 대상을 잘 가져오는지 검증.
+           해당 날짜에 부합하는 활성 상장 종목 대상을 잘 가져오는지 검증.
     """
     mock_pool = mocker.MagicMock()
     mock_conn = mocker.MagicMock()
@@ -93,16 +93,14 @@ def test_investor_trade_repo_get_active_symbols(mocker):
     mock_pool.get_conn.return_value = mock_conn
     mock_conn.cursor.return_value.__enter__.return_value = mock_cur
     
-    # 2026-07-15 -> 2026Q3
+    # 2026-07-15 활성 종목
     mock_cur.fetchall.return_value = [("005930",), ("000660",)]
     
     repo = InvestorTradeRepo(mock_pool)
     symbols = repo.get_active_symbols_for_date(date(2026, 7, 15))
     
     assert symbols == ["005930", "000660"]
-    mock_cur.execute.assert_called_once_with(
-        mocker.ANY, ("2026Q3",)
-    )
+    mock_cur.execute.assert_called_once()
 
 
 def test_run_backfill_investor_trade_test_mode():
