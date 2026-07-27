@@ -183,11 +183,15 @@ const handleRunCustom = async (subTaskId: 'backfill_minute_data' | 'backfill_dai
   let message = `[${subTitle} (${days === 0 ? '전기간(2017~)' : days + '일'})] 작업을 실행하시겠습니까?\n\n`
   message += `▶ 실행 모드: ⚠️ 운영 모드 (실제 데이터 변경)\n`
   if (days === 0) {
-    message += `▶ 백필 지정 기간: 0일 (2017-01-02 기준 전기간 전수 백필)\n`
+    if (subTaskId === 'backfill_market_cap') {
+      message += `▶ 백필 지정 기간: 0일 (2017-01-02 기준 시총+매매동향 전기간 백필)\n`
+    } else {
+      message += `▶ 백필 지정 기간: 0일 (2017-01-02 기준 전기간 전수 백필)\n`
+    }
   } else {
     message += `▶ 백필 지정 기간: ${days}일\n`
   }
-  
+
   if (isKoreanMarketOpen()) {
     message += `\n🚨 [경고] 현재 한국 주식시장 장중 거래 시간입니다!\n운영 모드 실행 시 실시간 DB 데이터 오염 위험이 매우 높습니다.\n정말 진행하시겠습니까?`
   }
@@ -321,8 +325,8 @@ const latestBackfillStatusText = computed(() => {
             <div class="input-wrap">
               <input 
                 type="number" 
-                min="1" 
-                max="365"
+                min="0" 
+                max="3650"
                 v-model.number="backfillDays.backfill_market_cap" 
                 class="days-input" 
                 placeholder="30"

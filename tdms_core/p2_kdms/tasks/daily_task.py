@@ -441,63 +441,59 @@ class DailyTask:
             except Exception as she:
                 logger.error(f"Failed to perform self-healing auto-delist for blacklisted stocks: {she}")
 
-        # 9. 투자자 매매동향(일별) 수집 및 적재
+        # 9. 투자자 매매동향(일별) 동적 갭 탐지 수집 및 적재 (전종목 대상 수집 공백 핀포인트 수집)
         if self.investor_trade_repo is not None:
             try:
-                logger.info("Starting daily investor trade collection...")
+                logger.info(f"Starting daily investor trade collection via dynamic gap detection ({start_date} ~ {end_date})...")
+                missing_map = {}
                 try:
-                    open_days = self.ohlcv_repo.get_open_trading_days(start_date, end_date)
-                    if isinstance(open_days, MagicMock):
-                        open_days = []
-                except Exception as od_err:
-                    logger.error(f"Failed to fetch open trading days for daily investor trade: {od_err}")
-                    open_days = []
+                    if hasattr(self.investor_trade_repo, "get_missing_investor_trade_gaps"):
+                        missing_map = self.investor_trade_repo.get_missing_investor_trade_gaps(start_date, end_date)
+                        if isinstance(missing_map, MagicMock):
+                            symbols = self.investor_trade_repo.get_active_symbols_for_date(end_date)
+                            missing_map = {s: [end_date] for s in symbols} if isinstance(symbols, list) else {}
+                    else:
+                        symbols = self.investor_trade_repo.get_active_symbols_for_date(end_date)
+                        missing_map = {s: [end_date] for s in symbols} if isinstance(symbols, list) else {}
+                except Exception as gap_err:
+                    logger.error(f"Failed to fetch missing gaps for investor trade: {gap_err}")
+                    missing_map = {}
 
-                if not open_days:
-                    open_days = [start_date]
-
-                investor_stock_cds = set()
-                for d in open_days:
-                    try:
-                        targets = self.investor_trade_repo.get_active_symbols_for_date(d)
-                    except Exception as tg_err:
-                        logger.error(f"Failed to fetch active symbols for date {d}: {tg_err}")
-                        continue
-
-                    if not targets:
-                        logger.info(f"No investor trade target symbols found for date {d}")
-                        continue
-
-                    logger.info(f"Collecting investor trade daily for {len(targets)} symbols on {d}")
+                if isinstance(missing_map, MagicMock) or not isinstance(missing_map, dict) or not missing_map:
+                    logger.info("No missing investor trade gaps found. Skipping collection.")
+                else:
+                    investor_stock_cds = set()
+                    total_stocks = len(missing_map)
+                    logger.info(f"Collecting investor trade for {total_stocks} symbols with missing gaps")
                     loop_start_time = time.time()
-                    total_targets = len(targets)
-                    for idx, stk_cd in enumerate(targets):
-                        if idx % 50 == 0 or idx == total_targets - 1:
+                    for idx, (stk_cd, missing_days) in enumerate(missing_map.items()):
+                        if idx % 50 == 0 or idx == total_stocks - 1:
                             elapsed = time.time() - loop_start_time
                             if elapsed == 0:
                                 elapsed = 1e-6
                             items_per_sec = (idx + 1) / elapsed
-                            remaining = total_targets - (idx + 1)
+                            remaining = total_stocks - (idx + 1)
                             eta_seconds = remaining / items_per_sec if items_per_sec > 0 else 0
                             eta_str = time.strftime('%H:%M:%S', time.gmtime(eta_seconds))
-                            progress_pct = (idx + 1) / total_targets * 100.0
+                            progress_pct = (idx + 1) / total_stocks * 100.0
                             
                             logger.info(
-                                f"[KDMS 일일 수급 수집] Progress: {progress_pct:.1f}% ({idx+1}/{total_targets}) | "
+                                f"[KDMS 일일 수급 수집] Progress: {progress_pct:.1f}% ({idx+1}/{total_stocks}) | "
                                 f"Speed: {items_per_sec:.1f} it/s | Elapsed: {elapsed:.0f}s | ETA: {eta_str} | "
                                 f"Current: {stk_cd}"
                             )
-                        try:
-                            records = self.kis_client.fetch_investor_trade_daily(stk_cd, start_date=d, end_date=d)
-                            if records:
-                                day_records = [r for r in records if r.get("dt") == d]
-                                if day_records:
-                                    self.investor_trade_repo.upsert_daily_investor_trade(day_records)
-                                    collected += len(day_records)
-                                    investor_stock_cds.add(stk_cd)
-                        except Exception as e:
-                            logger.error(f"Failed to collect investor trade for {stk_cd} on {d}: {e}")
-                investor_count = len(investor_stock_cds)
+                        for d in missing_days:
+                            try:
+                                records = self.kis_client.fetch_investor_trade_daily(stk_cd, start_date=d, end_date=d)
+                                if records:
+                                    day_records = [r for r in records if r.get("dt") == d]
+                                    if day_records:
+                                        self.investor_trade_repo.upsert_daily_investor_trade(day_records)
+                                        collected += len(day_records)
+                                        investor_stock_cds.add(stk_cd)
+                            except Exception as e:
+                                logger.error(f"Failed to collect investor trade for {stk_cd} on {d}: {e}")
+                    investor_count = len(investor_stock_cds)
             except Exception as ite:
                 logger.error(f"Failed in daily investor trade collection process: {ite}")
         step2_duration = time.time() - step2_start

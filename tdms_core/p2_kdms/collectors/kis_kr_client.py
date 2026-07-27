@@ -1,5 +1,5 @@
-# collectors/kis_kr_client.py
-
+import logging
+import time
 import urllib.request
 import zipfile
 import io
@@ -7,6 +7,8 @@ import os
 import re
 import tempfile
 from datetime import datetime, date, timedelta
+
+logger = logging.getLogger(__name__)
 
 class KisKrClient:
     """
@@ -82,10 +84,19 @@ class KisKrClient:
                 "FID_ORG_ADJ_PRC": adj_price
             }
             
-            try:
-                res = self.api_core.get(path, adj_price=adj_price, **params)
-            except Exception as e:
-                logger.error(f"[{stk_cd}] KIS 일봉 페이징 수집 실패 (범위: {start_date}~{current_end}): {e}")
+            res = None
+            for retry in range(3):
+                try:
+                    res = self.api_core.get(path, adj_price=adj_price, **params)
+                    break
+                except Exception as e:
+                    if retry < 2:
+                        logger.warning(f"[{stk_cd}] KIS 일봉 API 통신 실패 (재시도 {retry+1}/3): {e}")
+                        time.sleep(1.0)
+                    else:
+                        logger.error(f"[{stk_cd}] KIS 일봉 페이징 수집 실패 (범위: {start_date}~{current_end}): {e}")
+                        break
+            if not res:
                 break
 
             output2 = res.get("output2", [])

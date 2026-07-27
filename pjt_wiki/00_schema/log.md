@@ -11,6 +11,8 @@
 ---
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
+## [2026-07-27] Task완료+에러등록 | KDMS 시가총액(daily_market_cap) 2017~2019년 자체 연산 SQL 쿼리 스키마/오버플로우 오류 해결(err-008), 2017-01-02 일봉(daily_ohlcv) 수집 단위 표준화 정제 완수, 수급 백필 CLI 스크립트 인터페이스(backfill_investor_trade_cli.md) 신규 지식화 및 MoC(index.md) 갱신 완료.
+
 ## [2026-07-23] Task완료+에러등록 | KDMS 일별 수급 수집 타겟 정상화 및 로깅 소음 정밀 최적화 (err-007 3차). 기존 분봉 백필 타겟(2,399개) 쿼리로 오용되던 investor_trade_repo.py의 get_active_symbols_for_date 쿼리를 stock_info 상장 활성 종목(3,920개) 전체로 교정하고, 매 종목별 벌크 UPSERT 완료 로그(INFO)를 DEBUG 수준으로 전환하여 폭풍 로그를 소탕하였으며, 50종목 단위의 실시간 진행률 전용 로그만 남도록 개선 후 p2_kdms 도커 재빌드 배포 완료.
 
 ## [2026-07-23] Task완료+에러등록 | KDMS P4 대시보드 품질 요약 탭 데이터 왜곡 현상 정밀 해결 (err-007 2차). Master Sync 신규 상장 수를 KIS 전체 마스터 수량(4,313개)에서 순수 편입 종목 수로 보정하고, Market Data Loader 시세/시총 수집 수를 레코드 Row 수(15,660건)에서 실제 수집 처리된 독자 종목 수(Distinct Stock Count)로 분리/교정하였으며, 각 Step별 duration_seconds 측정 및 테스트(119건 100% 통과) 후 p2_kdms 도커 재빌드 배포 완료.

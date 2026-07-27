@@ -91,6 +91,7 @@
 | `investor_trade_repo.md` | InvestorTradeRepo | — | 일별 투자자 매매동향(수급) 벌크 UPSERT 및 기간별 조회 기능 제공 |
 | `schema_kdms_db.md` | kdms_db | — | kdms_timescaledb 내 12개 테이블 컬럼 타입, PK, 인덱스, hypertable 3종 상세 스키마 |
 | `data_api_endpoints.md` | routers/data.py | — | /api/data/* 전체 엔드포인트 명세 |
+| `backfill_investor_trade_cli.md` | scripts/backfill_investor_trade_by_year.py | — | 일별 투자자 매매동향(수급) 연도별 백필 전용 CLI 인터페이스 |
 | `fastapi_lifespan.md` | main.py lifespan | — | DB풀, StartupValidator, APScheduler 크론 등록 순서 |
 | `settings_config.md` | Settings | — | pydantic-settings Layer A/B 이중 구조, .env 변수 |
 
@@ -120,7 +121,8 @@
 | `err-004_listed_shares_zero_accumulation.md` | KIS 마스터 수집 장애로 인한 상장주식수/시가총액 0 누적 적재 -> 최근 10일 DB 데이터 Fallback 대체 | Critical |
 | `err-005_daily_ohlcv_amt_turn_rt_zero_accumulation.md` | 거래대금/회전율 0 누적 적재 에러 조치 | High |
 | `err-006_kis_api_weekend_maintenance_stuck.md` | KIS 주말 점검에 따른 접속 실패 대기시간 누적으로 수집기 Stuck 장애 및 컨테이너 재시작 | High |
-| `err-007_run_daily_update_name_error_metric_tracking.md` | 일일 업데이트 태스크 NameError 해결 및 수집 메트릭 파이프라인 반환 고도화 [NEW] | Critical |
+| `err-007_run_daily_update_name_error_metric_tracking.md` | 일일 업데이트 태스크 NameError 해결 및 수집 메트릭 파이프라인 반환 고도화 | Critical |
+| `err-008_market_cap_dual_math_schema_overflow_fix.md` | 시가총액 2017~2019년 자체 연산 쿼리 스키마 오류 및 단위 정제 해결 | High |
 
 ---
 
@@ -249,7 +251,8 @@
 - [P2-ERR-002] 시총 bigint 오버플로우 롤백 → `p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md`
 - [P2-ERR-003] KST 시간대 처리 불일치 → `p2_kdms_wiki/errors/err-003_task_kst_timezone_mismatch.md`
 - [P2-ERR-006] KIS API 주말 점검으로 인한 수집 정체 stuck 장애 → `p2_kdms_wiki/errors/err-006_kis_api_weekend_maintenance_stuck.md`
-- [P2-ERR-007] 일일 업데이트 태스크 NameError 및 통계 누락 → `p2_kdms_wiki/errors/err-007_run_daily_update_name_error_metric_tracking.md` [NEW]
+- [P2-ERR-007] 일일 업데이트 태스크 NameError 및 통계 누락 → `p2_kdms_wiki/errors/err-007_run_daily_update_name_error_metric_tracking.md`
+- [P2-ERR-008] 시가총액 2017~2019 자체 연산 쿼리 스키마 오류 및 단위 정제 → `p2_kdms_wiki/errors/err-008_market_cap_dual_math_schema_overflow_fix.md` [NEW]
 - [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 - [USDMS-ERR-003] 로깅 기본값 누락 및 실행 상태 유실 → `p3_usdms_wiki/errors/usdms-err-003_logging_missing_and_running_status_loss.md`

@@ -26,7 +26,7 @@ export const useStatusStore = defineStore('status', {
     async runTask(market: 'kr' | 'us', taskId: string, isTest: boolean = true, days?: number) {
       try {
         let url = `/run?market=${market}&task_id=${taskId}&is_test=${isTest}`
-        if (days !== undefined && days !== null && days > 0) {
+        if (days !== undefined && days !== null && days >= 0) {
           url += `&days=${days}`
         }
         const response = await http.post(url)

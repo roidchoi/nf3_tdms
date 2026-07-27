@@ -161,7 +161,7 @@ class StatusService:
                 if market == "kr":
                     url = f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/{task_id}/run"
                     params = {}
-                    if days is not None and days > 0:
+                    if days is not None and days >= 0:
                         params["days"] = days
                     resp = await client.post(url, json={"test_mode": is_test}, params=params)
                 else:  # us

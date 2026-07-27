@@ -1,9 +1,12 @@
 # collectors/factor_calculator.py
 
+import logging
 import pandas as pd
 import numpy as np
 import json
 from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 def calculate_factors(df: pd.DataFrame, stk_cd: str, price_source: str) -> List[Dict[str, Any]]:
     """

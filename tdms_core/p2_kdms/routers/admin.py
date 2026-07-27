@@ -46,21 +46,38 @@ def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = 
 
     # 3. 날짜 범위 기본값 설정
     if start_date is None:
-        if days is not None and days > 0:
+        if days == 0:
+            start_date = date(2017, 1, 2)
+        elif days is not None and days > 0:
             start_date = date.today() - timedelta(days=days)
         else:
             start_date = date.today() - timedelta(days=30)
     if end_date is None:
         end_date = date.today() - timedelta(days=1)
 
-    # 4. 백필 작업 기동
+    # 4. 시가총액 백필 작업 기동
     run_backfill_market_cap(
         job_statuses=job_statuses,
         pub_client=pub_client,
         mc_repo=mc_repo,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        days=days
     )
+
+    # 5. 매매동향(수급) 백필 연동 연속 기동
+    from tasks.backfill_task import run_backfill_investor_trade
+    try:
+        run_backfill_investor_trade(
+            job_statuses=job_statuses,
+            test_mode=test_mode,
+            start_date=start_date,
+            end_date=end_date,
+            days=days
+        )
+    except Exception as it_err:
+        import logging
+        logging.getLogger("p2_kdms").warning(f"[trigger_backfill_market_cap] 매매동향 백필 연동 중 오류 발생: {it_err}")
 
 
 # 수동 기동 가능한 태스크 맵 정의

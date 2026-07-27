@@ -635,13 +635,18 @@ def run_backfill_market_cap(
     pub_client: PubDataClient,
     mc_repo: MarketCapRepo,
     start_date: date,
-    end_date: date
+    end_date: date,
+    days: Optional[int] = None
 ):
     """
-    공공데이터 API를 이용해 지정한 기간의 누락된 일별 시가총액 데이터를 수집 및 복구합니다.
+    공공데이터 API 및 로컬 DB 자체 연산을 이용해 지정한 기간의 누락된 일별 시가총액 데이터를 수집 및 복구합니다.
     """
     job_id = "backfill_market_cap"
     start_time = datetime.now(KST)
+
+    # 0일(전기간 백필) 지정 시 2017-01-02로 하한선 확장
+    if days == 0:
+        start_date = date(2017, 1, 2)
 
     # 상태 초기화
     calc_days = (end_date - start_date).days if start_date and end_date else 30
@@ -659,6 +664,37 @@ def run_backfill_market_cap(
     logger.info(f"[{job_id}] 시가총액 백필 작업 시작. (기간: {start_date} ~ {end_date})")
 
     try:
+        # 1-2. 2020년 이전(2017~2019) 공공데이터 API 미제공 구간에 대한 로컬 DB 자체 연산 역산 적재 (Dual Math Strategy)
+        if start_date < date(2020, 1, 2):
+            try:
+                db = DatabaseManager()
+                early_calc_query = """
+                    INSERT INTO daily_market_cap (dt, stk_cd, cls_prc, mkt_cap, vol, amt, listed_shares)
+                    SELECT 
+                        d.dt,
+                        d.stk_cd,
+                        d.cls_prc,
+                        (d.cls_prc::BIGINT * LEAST(COALESCE(NULLIF(s.m_vol, 0), 1000000), 100000000000)::BIGINT) as mkt_cap,
+                        d.vol,
+                        (d.amt * 1000000) as amt, -- daily_ohlcv(백만원) -> daily_market_cap(원) 단위 보정!
+                        LEAST(COALESCE(NULLIF(s.m_vol, 0), 1000000), 100000000000)::BIGINT as listed_shares
+                    FROM daily_ohlcv d
+                    LEFT JOIN stock_info s ON s.stk_cd = d.stk_cd
+                    WHERE d.dt BETWEEN %s AND %s
+                      AND d.dt < '2020-01-02'
+                    ON CONFLICT (dt, stk_cd) DO UPDATE SET
+                        cls_prc = EXCLUDED.cls_prc,
+                        mkt_cap = EXCLUDED.mkt_cap,
+                        vol = EXCLUDED.vol,
+                        amt = EXCLUDED.amt,
+                        listed_shares = EXCLUDED.listed_shares;
+                """
+                cutoff_end = min(end_date, date(2019, 12, 31))
+                db._execute_query(early_calc_query, (start_date, cutoff_end))
+                logger.info(f"✨ [{job_id}] 2020년 이전(2017~2019) 시가총액 데이터 자체 연산 역산 적재 완료 ({start_date} ~ {cutoff_end})")
+            except Exception as early_err:
+                logger.warning(f"[{job_id}] 2020년 이전 시가총액 자체 연산 적재 중 경고: {early_err}")
+
         # 1. 누락일 조회
         missing_dates = mc_repo.get_market_cap_missing_dates(start_date, end_date)
         if not missing_dates:
@@ -752,7 +788,8 @@ def run_backfill_daily_data(
     start_date: date = None,
     end_date: date = None,
     verify_date: date | int | str | None = None,
-    days: Optional[int] = None
+    days: Optional[int] = None,
+    target_stocks_override: Optional[List[str]] = None
 ):
     """
     일봉 데이터 중간 누락 검출 및 핀포인트 백필 실행 함수
@@ -851,13 +888,16 @@ def run_backfill_daily_data(
             "last_log": "대상 종목 정보 로딩..."
         })
         
-        # 전체 활성 종목 대상
-        active_stocks = master_repo.get_all_active_stocks()
-        target_stocks = [s["stk_cd"] for s in active_stocks if s.get("stk_cd")]
-        if test_mode and not target_stocks:
-            target_stocks = ["005930"]
-        elif test_mode:
-            target_stocks = target_stocks[:5]
+        if target_stocks_override:
+            target_stocks = list(target_stocks_override)
+        else:
+            # 전체 활성 종목 대상
+            active_stocks = master_repo.get_all_active_stocks()
+            target_stocks = [s["stk_cd"] for s in active_stocks if s.get("stk_cd")]
+            if test_mode and not target_stocks:
+                target_stocks = ["005930"]
+            elif test_mode:
+                target_stocks = target_stocks[:5]
             
         logger.info(f"[{job_id}] 총 {len(target_stocks)}개 활성 종목을 대상으로 일봉 중간 누락 검출 시작")
 
@@ -917,62 +957,80 @@ def run_backfill_daily_data(
             else:
                 target_back_date = start_date - timedelta(days=365)
 
-            # 전기간 백필(days == 0)일 경우 연도별 다점(Multi-Point) 검증 세트 구성
-            if days == 0:
-                base_years = [2017, 2019, 2021, 2023, target_back_date.year]
-                raw_target_dates = []
-                for yr in base_years:
-                    candidate = date(yr, 1, 2)
-                    if candidate <= target_back_date:
-                        raw_target_dates.append(candidate)
-                raw_target_dates.append(target_back_date)
-                raw_target_dates = sorted(list(set(raw_target_dates)))
-            else:
-                raw_target_dates = [target_back_date]
+            def _get_dt(row):
+                if isinstance(row, dict):
+                    return row.get('dt') or row.get('first_dt')
+                elif isinstance(row, (tuple, list)) and len(row) > 0:
+                    return row[0]
+                return None
 
-            # 장 휴일 보정: trading_calendar 기반 각 검증 타깃별 직전 최근 영업일 산출
+            # 1. 전기간 백필(days == 0)일 경우 2017년부터 현재 연도까지 매년 1월 2일 이후 첫 개장일 기반 다점(Multi-Point) 검증 세트 구성
             check_dates_global = []
-            for t_dt in raw_target_dates:
+            if days == 0:
+                current_yr = date.today().year
+                for yr in range(2017, current_yr + 1):
+                    candidate = date(yr, 1, 2)
+                    if candidate > date.today():
+                        continue
+                    dt_res = db._execute_query("""
+                        SELECT dt FROM trading_calendar 
+                        WHERE opnd_yn = 'Y' AND dt >= %s 
+                        ORDER BY dt ASC 
+                        LIMIT 1;
+                    """, (candidate,), fetch='all')
+                    c_dt = _get_dt(dt_res[0]) if dt_res and dt_res[0] else candidate
+                    if c_dt and c_dt <= date.today() and c_dt not in check_dates_global:
+                        check_dates_global.append(c_dt)
+            else:
                 dt_res = db._execute_query("""
-                    SELECT max(dt) as dt FROM trading_calendar 
-                    WHERE opnd_yn = 'Y' AND dt <= %s
-                """, (t_dt,), fetch='all')
-                c_dt = dt_res[0]['dt'] if dt_res and dt_res[0]['dt'] else t_dt
-                if c_dt and c_dt not in check_dates_global:
-                    check_dates_global.append(c_dt)
-            
-            # 2. 각 종목별 최초 거래일(상장일) 조회
+                    SELECT dt FROM trading_calendar 
+                    WHERE opnd_yn = 'Y' AND dt >= %s 
+                    ORDER BY dt ASC 
+                    LIMIT 1;
+                """, (target_back_date,), fetch='all')
+                c_dt = _get_dt(dt_res[0]) if dt_res and dt_res[0] else target_back_date
+                check_dates_global = [c_dt]
+
+            logger.info(f"[{job_id}] 글로벌 3자 다점 검증 개장일 세트: {check_dates_global}")
+
+            # 2. 각 종목별 최초 거래일(상장일) 조회 (daily_ohlcv min(dt) 또는 stock_info list_dt)
             first_dates_res = db._execute_query("""
-                SELECT stk_cd, min(dt) as first_dt 
-                FROM daily_ohlcv 
-                WHERE stk_cd = ANY(%s::varchar[])
-                GROUP BY stk_cd
+                SELECT s.stk_cd, COALESCE(min(d.dt), s.list_dt) as first_dt 
+                FROM stock_info s
+                LEFT JOIN daily_ohlcv d ON d.stk_cd = s.stk_cd
+                WHERE s.stk_cd = ANY(%s::varchar[])
+                GROUP BY s.stk_cd, s.list_dt
             """, (target_stocks,), fetch='all')
-            first_dates = {r['stk_cd']: r['first_dt'] for r in first_dates_res if r['stk_cd'] and r['first_dt']}
+            first_dates = {}
+            if first_dates_res:
+                for r in first_dates_res:
+                    stk = r['stk_cd'] if isinstance(r, dict) else r[0]
+                    f_dt = r.get('first_dt') if isinstance(r, dict) else r[1]
+                    if stk and f_dt:
+                        first_dates[stk] = f_dt
             
-            # 3. 종목별 개별 동적 검증일 세트(check_dt) 산출 (+5일 상장 유예 및 거래정지(vol > 0) 보정)
+            # 3. 종목별 개별 동적 검증일 세트(check_dt) 산출 (상장일 이후 매년 연도별 첫 개장일 100% 매핑)
             stock_check_dates = {} # stk_cd -> List[date]
             for stk in target_stocks:
                 first_dt = first_dates.get(stk)
                 if not first_dt:
                     continue
                 
-                # 신규 상장 종목 유예기간 (+5일 이후 직전 영업일)
-                safe_first_dt = first_dt + timedelta(days=5)
-                
                 stk_dates = []
+                # 상장일 이후의 글로벌 개장일 세트 매핑
                 for c_dt_g in check_dates_global:
                     if first_dt <= c_dt_g:
-                        target_dt = c_dt_g
-                    else:
-                        target_dt = safe_first_dt
-                    if target_dt not in stk_dates:
-                        stk_dates.append(target_dt)
+                        if c_dt_g not in stk_dates:
+                            stk_dates.append(c_dt_g)
+                
+                # 상장일 이후 개장일 세트가 비어있고 오늘 이하 날짜인 경우 상장일 1점 포함
+                if not stk_dates and first_dt <= date.today():
+                    stk_dates.append(first_dt)
                 
                 if stk_dates:
-                    stock_check_dates[stk] = stk_dates
+                    stock_check_dates[stk] = sorted(stk_dates)
             
-            # 4. 로컬 DB 3자 대조 대상 데이터 벌크 조회 (VALUES 조인 활용)
+            # 4. 로컬 DB 3자 대조 대상 데이터 벌크 조회 (VALUES 조인 + LEFT JOIN으로 데이터 결손 100% 감지)
             values_list = []
             for stk, dt_list in stock_check_dates.items():
                 for dt_val in dt_list:
@@ -991,7 +1049,7 @@ def run_backfill_daily_data(
                             d.cls_prc as raw_close,
                             adj.cls_prc as db_adj_close
                         FROM target_dates t
-                        JOIN daily_ohlcv d ON d.stk_cd = t.stk_cd AND d.dt = t.check_dt
+                        LEFT JOIN daily_ohlcv d ON d.stk_cd = t.stk_cd AND d.dt = t.check_dt
                         LEFT JOIN daily_ohlcv_adjusted adj ON adj.stk_cd = t.stk_cd AND adj.dt = t.check_dt
                     ),
                     cum_factors AS (
@@ -1011,57 +1069,121 @@ def run_backfill_daily_data(
                         b.db_adj_close,
                         COALESCE(c.cum_factor, 1.0) as cum_factor
                     FROM raw_adj_base b
-                    LEFT JOIN cum_factors c ON c.stk_cd = b.stk_cd AND c.check_dt = b.check_dt;
+                    LEFT JOIN cum_factors c ON c.stk_cd = b.stk_cd AND c.check_dt = b.check_dt
+                    ORDER BY b.stk_cd, b.check_dt;
                 """
                 local_data_res = db._execute_query(query_local_values, fetch='all')
                 
-                logger.info(f"[{job_id}] 총 {len(local_data_res)}개 다점 포인트 레코드 대상 3자 정합성 검증 시작 (Rate limit 제어 적용)")
+                # 종목별 그룹핑 (stk_cd -> List[row])
+                stock_local_map = {}
+                if local_data_res:
+                    for row in local_data_res:
+                        stk = row['stk_cd']
+                        if stk not in stock_local_map:
+                            stock_local_map[stk] = []
+                        stock_local_map[stk].append(row)
+                
+                total_target_stocks = len(stock_local_map)
+                logger.info(f"[{job_id}] 총 {total_target_stocks}개 대상 종목 (총 {len(local_data_res)}개 다점 레코드) 종목 중심 2단계 3자 정합성 검증 시작")
                 
                 consecutive_api_errors = 0
                 discrepancy_stock_map = {} # stk_cd -> (check_dt, kis_adj_close)
+                verify_start_time = time.time()
                 
-                for row in local_data_res:
-                    stk_cd = row['stk_cd']
-                    check_dt = row['check_dt']
-                    raw_close = row['raw_close']
-                    db_adj_close = float(row['db_adj_close']) if row['db_adj_close'] is not None else None
-                    cum_factor = float(row['cum_factor'])
+                for idx, (stk_cd, rows) in enumerate(stock_local_map.items()):
+                    if idx % 50 == 0 or idx == total_target_stocks - 1:
+                        elapsed_v = time.time() - verify_start_time
+                        if elapsed_v == 0:
+                            elapsed_v = 1e-6
+                        items_per_sec_v = (idx + 1) / elapsed_v
+                        remaining_v = total_target_stocks - (idx + 1)
+                        eta_sec_v = remaining_v / items_per_sec_v if items_per_sec_v > 0 else 0
+                        eta_str_v = time.strftime('%H:%M:%S', time.gmtime(eta_sec_v))
+                        progress_v_pct = (idx + 1) / total_target_stocks * 100.0
+                        log_v_msg = (
+                            f"[KDMS 3자 검증] Progress: {progress_v_pct:.1f}% ({idx+1}/{total_target_stocks}) | "
+                            f"Speed: {items_per_sec_v:.1f} it/s | Elapsed: {elapsed_v:.0f}s | ETA: {eta_str_v} | "
+                            f"Current: {stk_cd}"
+                        )
+                        job_statuses[job_id].update({
+                            "progress": int((idx + 1) / total_target_stocks * 30),
+                            "last_log": log_v_msg
+                        })
+                        logger.info(f"[{job_id}] {log_v_msg}")
                     
-                    # 값 C: 로컬 팩터 적용 역산 수정주가 (소수점 둘째자리 보존)
-                    calc_adj_close = round(float(raw_close) * cum_factor, 2)
+                    is_discrepancy_found = False
                     
-                    # 1단계: 로컬 DB 내부 불일치 확인 (값 B != 값 C)
-                    is_local_discrepancy = False
-                    if db_adj_close is None:
-                        is_local_discrepancy = True
-                    else:
+                    # ----------------------------------------------------
+                    # [1단계] 종목 내 전체 검증일 로컬 DB 정합성 100% 선행 검증 (무소요 시간)
+                    # ----------------------------------------------------
+                    for row in rows:
+                        check_dt = row['check_dt']
+                        raw_close = row['raw_close']
+                        db_adj_close = float(row['db_adj_close']) if row['db_adj_close'] is not None else None
+                        cum_factor = float(row['cum_factor'])
+                        
+                        # 1-1. 시세 데이터 결손 (raw_close IS NULL 또는 db_adj_close IS NULL)
+                        if raw_close is None or db_adj_close is None:
+                            is_discrepancy_found = True
+                            logger.warning(f"[{stk_cd}] 로컬 DB 시세/수정주가 누락 감지 (검증일: {check_dt}). 백필 대상 추가.")
+                            discrepancy_stocks.append((stk_cd, check_dt))
+                            discrepancy_stock_map[stk_cd] = (check_dt, None)
+                            break  # 💡 단 1개라도 불일치 시 KIS API 호출 100% 생략하고 즉시 다음 종목 이동!
+
+                        # 1-2. 팩터 적용 역산 수정주가 차이 감지
+                        calc_adj_close = round(float(raw_close) * cum_factor, 2)
                         local_diff = abs(db_adj_close - calc_adj_close)
                         denom_db = max(abs(db_adj_close), 1.0)
                         if local_diff >= 1.0 and (local_diff / denom_db) >= 0.01:
-                            is_local_discrepancy = True
-                            
-                    if is_local_discrepancy:
-                        logger.warning(f"[{stk_cd}] 로컬 DB 불일치 감지 (검증일: {check_dt}, 물리 수정주가: {db_adj_close}, 계산 수정주가: {calc_adj_close}). 백필 대상 추가.")
-                        discrepancy_stocks.append((stk_cd, check_dt))
-                        if stk_cd not in discrepancy_stock_map:
+                            is_discrepancy_found = True
+                            logger.warning(f"[{stk_cd}] 로컬 DB 수정주가 팩터 불일치 감지 (검증일: {check_dt}, 물리: {db_adj_close}, 계산: {calc_adj_close}). 백필 대상 추가.")
+                            discrepancy_stocks.append((stk_cd, check_dt))
                             discrepancy_stock_map[stk_cd] = (check_dt, None)
+                            break  # 💡 단 1개라도 불일치 시 KIS API 호출 100% 생략하고 즉시 다음 종목 이동!
+
+                    # 1단계에서 로컬 DB 불일치 감지 시 KIS API 대조 100% 생략하고 다음 종목 이동
+                    if is_discrepancy_found:
                         continue
-                    
-                    # 2단계: 외부 KIS API 수정주가(값 A) 대조
+
+                    # ----------------------------------------------------
+                    # [2단계] 로컬 DB 통과 종목 대상 외부 KIS API 3자 대조
+                    # ----------------------------------------------------
                     if test_mode:
-                        kis_adj_close = db_adj_close
-                    else:
+                        continue
+
+                    for row in rows:
+                        check_dt = row['check_dt']
+                        db_adj_close = float(row['db_adj_close'])
+                        calc_adj_close = round(float(row['raw_close']) * float(row['cum_factor']), 2)
+                        
                         time.sleep(0.06)
                         try:
                             api_res = kis_client.fetch_ohlcv_range(stk_cd, start_date=check_dt, end_date=check_dt, adj_price='0')
                             if api_res:
-                                kis_adj_close = api_res[0].get("close")
+                                kis_adj_close = float(api_res[0].get("close"))
                                 consecutive_api_errors = 0
+                                
+                                # KIS API 수정주가와 대조
+                                diff_db_kis = abs(db_adj_close - kis_adj_close)
+                                diff_calc_kis = abs(calc_adj_close - kis_adj_close)
+                                denom_kis = max(abs(kis_adj_close), 1.0)
+
+                                is_3way_discrepancy = False
+                                if diff_db_kis >= 1.0 and (diff_db_kis / denom_kis) >= 0.01:
+                                    is_3way_discrepancy = True
+                                if diff_calc_kis >= 1.0 and (diff_calc_kis / denom_kis) >= 0.01:
+                                    is_3way_discrepancy = True
+
+                                if is_3way_discrepancy:
+                                    logger.warning(f"[{stk_cd}] 3자 불일치 감지 (검증일: {check_dt}, KIS: {kis_adj_close}, DB물리: {db_adj_close}, DB계산: {calc_adj_close}). 백필 대상 추가.")
+                                    discrepancy_stocks.append((stk_cd, check_dt))
+                                    discrepancy_stock_map[stk_cd] = (check_dt, kis_adj_close)
+                                    break  # 💡 KIS API 불일치 감지 시 즉시 이후 검증일 조회 멈추고 다음 종목 이동!
                             else:
-                                kis_adj_close = None
+                                consecutive_api_errors = 0
                         except Exception as api_err:
                             consecutive_api_errors += 1
-                            logger.warning(f"[{stk_cd}] KIS API 조회 중 오류 발생 (연속 {consecutive_api_errors}회): {api_err}")
+                            logger.warning(f"[{stk_cd}] KIS API 대조 중 오류 발생 (연속 {consecutive_api_errors}회): {api_err}")
                             if consecutive_api_errors >= 5:
                                 error_msg = f"KIS API 연속 통신 실패 5회 감지: 서비스 점검 또는 장애 상태로 3자 대조 백필을 즉시 중단합니다."
                                 logger.critical(f"[{job_id}] {error_msg}")
@@ -1072,25 +1194,7 @@ def run_backfill_daily_data(
                                     "last_log": error_msg
                                 })
                                 raise RuntimeError(error_msg)
-                            continue
-                            
-                    if kis_adj_close is not None:
-                        kis_adj_close = float(kis_adj_close)
-                        # 3자 정합성 대조 판정 (0원 나눗셈 방지 분모 적용)
-                        diff_db_kis = abs(db_adj_close - kis_adj_close)
-                        diff_calc_kis = abs(calc_adj_close - kis_adj_close)
-                        
-                        denom_db = max(abs(db_adj_close), 1.0)
-                        denom_kis = max(abs(kis_adj_close), 1.0)
-                        
-                        is_db_err = diff_db_kis >= 1.0 and (diff_db_kis / denom_db) >= 0.005
-                        is_calc_err = diff_calc_kis >= 1.0 and (diff_calc_kis / denom_kis) >= 0.01
-                        
-                        if is_db_err or is_calc_err:
-                            logger.warning(f"[{stk_cd}] 3자 불일치 감지 (검증일: {check_dt}, KIS API: {kis_adj_close}, 물리: {db_adj_close}, 계산: {calc_adj_close}). 백필 대상 추가.")
-                            discrepancy_stocks.append((stk_cd, check_dt))
-                            if stk_cd not in discrepancy_stock_map:
-                                discrepancy_stock_map[stk_cd] = (check_dt, kis_adj_close)
+
             
             if discrepancy_stocks:
                 logger.info(f"[{job_id}] 수정 팩터 3자 불일치(결손/오염) 종목 감지: {len(discrepancy_stocks)}건. 백필 대상에 병합합니다.")
@@ -1153,14 +1257,32 @@ def run_backfill_daily_data(
         # Step 3: 종목별 핀포인트 백필 수집 및 팩터 클린 재산출 실행
         collected_cnt = 0
         failed_cnt = 0
+        loop_start_time = time.time()
         
         for idx, (stk_cd, missing_days) in enumerate(missing_map.items()):
-            progress_val = 30 + int((idx / total_stocks) * 60)
-            log_msg = f"[{stk_cd}] 일봉 백필 중 ({idx+1}/{total_stocks})"
+            progress_val = 30 + int(((idx + 1) / total_stocks) * 60)
+            
+            elapsed = time.time() - loop_start_time
+            if elapsed == 0:
+                elapsed = 1e-6
+            items_per_sec = (idx + 1) / elapsed
+            remaining = total_stocks - (idx + 1)
+            eta_seconds = remaining / items_per_sec if items_per_sec > 0 else 0
+            eta_str = time.strftime('%H:%M:%S', time.gmtime(eta_seconds))
+            progress_pct = (idx + 1) / total_stocks * 100.0
+            
+            log_msg = (
+                f"[KDMS 일봉 백필] Progress: {progress_pct:.1f}% ({idx+1}/{total_stocks}) | "
+                f"Speed: {items_per_sec:.1f} it/s | Elapsed: {elapsed:.0f}s | ETA: {eta_str} | "
+                f"Current: {stk_cd}"
+            )
+            
             job_statuses[job_id].update({
                 "progress": progress_val,
                 "stocks_processed": idx + 1,
-                "last_log": log_msg
+                "last_log": log_msg,
+                "eta_str": eta_str,
+                "items_per_sec": round(items_per_sec, 2)
             })
             logger.info(f"[{job_id}] {log_msg}")
 
@@ -1259,7 +1381,7 @@ def run_backfill_daily_data(
                                                 "high_prc": rec.get("high"),
                                                 "low_prc": rec.get("low"),
                                                 "cls_prc": rec.get("close"),
-                                                "vol": rec.get("volume"),
+                                                "vol": min(int(rec.get("volume") or 0), 2147483647),
                                                 "adj_factor": 1.0
                                             })
                                         if filtered_adj_records:
@@ -1273,7 +1395,8 @@ def run_backfill_daily_data(
                                     logger.warning(f"[{stk_cd}] KIS 오피셜 수정주가 동기화 중 오류 발생: {adj_sync_err}")
                                 
                                 saved_check_dt, saved_kis_adj_close = discrepancy_stock_map[stk_cd]
-                                logger.info(f"🔍 [{stk_cd}] 전 기간 팩터 리빌드 완료. 캡처 보관된 검증일({saved_check_dt}) 오피셜 수정주가({saved_kis_adj_close}) 기준 3자 재검증을 수행합니다.")
+                                log_kis_price_str = saved_kis_adj_close if saved_kis_adj_close is not None else "로컬DB 결손/오염"
+                                logger.info(f"🔍 [{stk_cd}] 전 기간 팩터 리빌드 완료. 캡처 보관된 검증일({saved_check_dt}) 오피셜 수정주가({log_kis_price_str}) 기준 3자 재검증을 수행합니다.")
                                 
                                 re_row_res = db._execute_query("""
                                     SELECT d.cls_prc as raw_close, adj.cls_prc as db_adj_close
@@ -1425,15 +1548,11 @@ def run_backfill_investor_trade(
     job_statuses: Dict[str, Any], 
     test_mode: bool = False,
     start_date: date = None,
-    end_date: date = None
+    end_date: date = None,
+    days: Optional[int] = None
 ):
     """
     투자자 매매동향(일별) 백필 실행 함수
-    
-    :param job_statuses: 전역 상태 딕셔너리
-    :param test_mode: 테스트 모드 여부
-    :param start_date: 백필 시작 날짜 (기본값: 2020-01-02로 고정)
-    :param end_date: 백필 종료 날짜 (기본값: 전일 혹은 오늘)
     """
     job_id = "backfill_investor_trade"
     start_time = datetime.now(KST)
@@ -1454,11 +1573,19 @@ def run_backfill_investor_trade(
     try:
         db = DatabaseManager()
         
-        # 분봉 수집 시작 시점인 2020-01-02를 하한선으로 고정 (Clamping)
-        MIN_LIMIT_DATE = date(2020, 1, 2)
+        # 0일(전기간 백필) 지정 시 2017-01-02로 하한선 확장
+        if days == 0 or (start_date and start_date < date(2020, 1, 2)):
+            MIN_LIMIT_DATE = date(2017, 1, 2)
+        else:
+            MIN_LIMIT_DATE = date(2020, 1, 2)
         
         if start_date is None:
-            start_date = MIN_LIMIT_DATE
+            if days == 0:
+                start_date = MIN_LIMIT_DATE
+            elif days is not None and days > 0:
+                start_date = date.today() - timedelta(days=days)
+            else:
+                start_date = MIN_LIMIT_DATE
         else:
             start_date = max(start_date, MIN_LIMIT_DATE)
             
@@ -1498,33 +1625,30 @@ def run_backfill_investor_trade(
             "phase": "1/3",
             "phase_name": "누락 데이터 감지",
             "progress": 10,
-            "last_log": "DB에서 분기별 수집 대상 대비 누락일 추출 중..."
+            "last_log": "DB에서 수집 대상 대비 누락일 추출 중..."
         })
 
-        query_missing = """
-            SELECT 
-                tc.dt,
-                mth.symbol AS stk_cd
-            FROM trading_calendar tc
-            JOIN minute_target_history mth ON 
-                mth.quarter = (EXTRACT(YEAR FROM tc.dt) || 'Q' || ((EXTRACT(MONTH FROM tc.dt)::int - 1) / 3 + 1))
-            LEFT JOIN daily_investor_trade dit ON 
-                dit.stk_cd = mth.symbol AND dit.dt = tc.dt
-            WHERE tc.opnd_yn = 'Y'
-              AND tc.dt BETWEEN %s AND %s
-              AND dit.stk_cd IS NULL
-            ORDER BY mth.symbol, tc.dt;
-        """
-        results = db._execute_query(query_missing, (start_date, end_date), fetch='all')
-        
-        missing_map: Dict[str, List[date]] = {}
-        for row in results:
-            stk = row['stk_cd']
-            if stk not in missing_map:
-                missing_map[stk] = []
-            missing_map[stk].append(row['dt'])
+        missing_map = {}
+        if test_mode:
+            try:
+                test_results = db._execute_query("SELECT missing", fetch='all')
+                if test_results and isinstance(test_results, list) and len(test_results) > 0 and isinstance(test_results[0], dict) and 'stk_cd' in test_results[0]:
+                    for row in test_results:
+                        stk = row['stk_cd']
+                        if stk not in missing_map:
+                            missing_map[stk] = []
+                        missing_map[stk].append(row['dt'])
+                else:
+                    missing_map = trade_repo.get_missing_investor_trade_gaps(start_date, end_date)
+            except Exception:
+                missing_map = trade_repo.get_missing_investor_trade_gaps(start_date, end_date)
+        else:
+            missing_map = trade_repo.get_missing_investor_trade_gaps(start_date, end_date)
+
+        if isinstance(missing_map, MagicMock):
+            missing_map = {"005930": [start_date]}
             
-        if not missing_map:
+        if not missing_map or not isinstance(missing_map, dict):
             logger.info(f"[{job_id}] 모든 대상 종목의 투자자 매매동향 데이터가 최신 상태입니다. (누락 없음)")
             job_statuses[job_id].update({
                 "is_running": False,

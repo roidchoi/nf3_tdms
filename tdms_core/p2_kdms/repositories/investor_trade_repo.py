@@ -99,6 +99,49 @@ class InvestorTradeRepo:
             if conn:
                 self._release_connection(conn)
 
+    def get_missing_investor_trade_gaps(self, start_date: date, end_date: date) -> Dict[str, List[date]]:
+        """
+        지정된 개장일 범위(start_date ~ end_date) 내에서 상장(listed) 종목별 daily_investor_trade 미적재 공백일(Gap)을 동적 탐지합니다.
+        
+        :return: {stk_cd: [dt1, dt2, ...]} 형태의 누락일 맵
+        """
+        query = """
+            SELECT 
+                s.stk_cd,
+                tc.dt
+            FROM trading_calendar tc
+            CROSS JOIN (
+                SELECT stk_cd FROM stock_info WHERE status = 'listed' AND (delist_dt IS NULL OR delist_dt > CURRENT_DATE)
+            ) s
+            LEFT JOIN daily_investor_trade dit ON 
+                dit.stk_cd = s.stk_cd AND dit.dt = tc.dt
+            WHERE tc.opnd_yn = 'Y'
+              AND tc.dt BETWEEN %s AND %s
+              AND dit.stk_cd IS NULL
+            ORDER BY s.stk_cd, tc.dt;
+        """
+        conn = None
+        missing_map: Dict[str, List[date]] = {}
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                cur.execute(query, (start_date, end_date))
+                rows = cur.fetchall()
+                for row in rows:
+                    stk = row[0]
+                    dt_val = row[1]
+                    if stk not in missing_map:
+                        missing_map[stk] = []
+                    missing_map[stk].append(dt_val)
+            logger.info(f"[{start_date} ~ {end_date}] 수급 동적 갭 탐지 완료: 총 {len(missing_map)}개 종목 누락 존재")
+            return missing_map
+        except Exception as e:
+            logger.error(f"수급 동적 갭 탐지 중 오류 발생: {e}", exc_info=True)
+            raise
+        finally:
+            if conn:
+                self._release_connection(conn)
+
     def get_active_symbols_for_date(self, dt: date) -> List[str]:
         """
         주어진 날짜 dt 기준 상장(listed) 상태의 활성 종목코드 리스트를 반환합니다.

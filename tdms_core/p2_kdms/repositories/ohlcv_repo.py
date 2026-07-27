@@ -175,10 +175,10 @@ class OhlcvRepo:
             SELECT 
                 dt,
                 stk_cd,
-                ROUND(open_prc * cum_price_factor)::INTEGER,
-                ROUND(high_prc * cum_price_factor)::INTEGER,
-                ROUND(low_prc * cum_price_factor)::INTEGER,
-                ROUND(cls_prc * cum_price_factor)::INTEGER,
+                LEAST(ROUND(open_prc * cum_price_factor), 2147483647)::INTEGER,
+                LEAST(ROUND(high_prc * cum_price_factor), 2147483647)::INTEGER,
+                LEAST(ROUND(low_prc * cum_price_factor), 2147483647)::INTEGER,
+                LEAST(ROUND(cls_prc * cum_price_factor), 2147483647)::INTEGER,
                 ROUND(vol * cum_volume_factor)::BIGINT,
                 cum_price_factor,
                 CURRENT_TIMESTAMP
