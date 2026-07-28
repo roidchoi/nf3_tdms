@@ -34,16 +34,34 @@ export const useScheduleStore = defineStore('schedule', {
       }
     },
     
-    async rescheduleJob(market: 'kr' | 'us', jobId: string, hour: number, minute: number) {
+    async rescheduleJob(market: 'kr' | 'us', jobId: string, hour: number, minute: number, dayOfWeek?: string) {
       this.isLoading = true;
       this.errorMessage = '';
       try {
+        const params: any = { hour, minute };
+        if (dayOfWeek) {
+          params.day_of_week = dayOfWeek;
+        }
         await axios.put(`/api/mgr/schedules/${market}/${jobId}`, null, {
-          params: { hour, minute }
+          params
         });
         await this.fetchSchedules(market);
       } catch (error: any) {
         this.errorMessage = error.response?.data?.detail || 'Failed to reschedule task.';
+        throw error;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async reloadSchedules(market: 'kr' | 'us') {
+      this.isLoading = true;
+      this.errorMessage = '';
+      try {
+        await axios.post(`/api/mgr/schedules/${market}/reload`);
+        await this.fetchSchedules(market);
+      } catch (error: any) {
+        this.errorMessage = error.response?.data?.detail || 'Failed to reload schedule from .env';
         throw error;
       } finally {
         this.isLoading = false;

@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p3_usdms (미국 시장 데이터 백엔드)  
-> **마지막 업데이트**: 2026-07-03 (로깅 및 스케줄링 유예 시간 보정 반영 완료)  
+> **마지막 업데이트**: 2026-07-17 (시세/재무 이원화 및 수집 효율화 개선 반영 완료)  
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -36,7 +36,10 @@ tdms_core/p3_usdms/
 │   ├── health.py         # 데이터 최신성(Freshness), 갭(Gaps), 블랙리스트 헬스 엔드포인트 [NEW]
 │   └── admin.py          # 일일 루틴 수동 실행, 스케줄링 관리 및 실시간 로그 스트리밍 엔드포인트 [NEW]
 ├── tasks/                # 자동화 태스크 레이어 [✅완성]
-│   └── daily_routine.py  # 5단계 일일 루틴 및 주간 백필 스케줄러 제어기 (KST 기반 target_date 처리 및 동적 FileHandler 바인딩 내장)
+│   ├── daily_routine.py  # 시세 전수 수집 및 스케줄러 제어기 (target_group 샤딩 제거)
+│   └── us_financial_routine.py # SEC 재무 공시 스캔 핀포인트 수집 및 연산 제어기 [NEW]
+├── run_daily.py          # 일일 시세 수집 수동 CLI 구동 스크립트 [NEW]
+├── run_financial.py      # 재무 수집 및 지표 연산 수동 CLI 구동 스크립트 [NEW]
 ├── ops/                  # 시스템 운영 및 진단 스크립트 레이어 [✅완성] [NEW]
 │   └── run_diagnostics.py # 3종 감사 및 최신성 판정을 일괄 실행하는 CLI 진단 스크립트
 ├── utils/                # 유틸리티 레이어 [✅완성]
@@ -102,9 +105,9 @@ tdms_core/p3_usdms/
 | **engines** | ✅ | `valuation_calculator.py`, `metric_calculator.py` | PIT 기반 가치평가비율 및 YoY 성장률을 포함한 12대 퀀트 재무지표 산출 |
 | **repositories** | ✅ | `master_repo.py`, `valuation_repo.py`, `blacklist_repo.py` | 마스터, 시세, 가치평가, 블랙리스트 대용량 DB 저장 및 최적화 조회 기능 제공 |
 | **routers** | ✅ | `data.py`, `admin.py` | 외부 퀀트 및 분석 서비스 대상 시세 조회 및 수동 태스크 기동 API 제공 |
-| **tasks** | ✅ | `daily_routine.py` | 5단계 일일 루틴 및 주간 자동 해제/보강 백필 스케줄러 오케스트레이션 |
+| **tasks** | ✅ | `daily_routine.py`, `us_financial_routine.py` | 일일 시세 수집, 주간 자동 해제 백필 및 일일 재무 공시 스캔/핀포인트 연산 스케줄러 오케스트레이션 |
 | **utils** | ✅ | `blacklist_manager.py` | 일시적/영구적 에러의 이원화 격리 처리 및 쿨다운 해제 비즈니스 논리 제어 |
-| **config** | ✅ | `config.py`, `main.py` | FastAPI 기동, DB 커넥션 풀 초기화, Startup Validator 및 APScheduler 연동 |
+| **config** | ✅ | `config.py`, `main.py` | FastAPI 기동, DB 커넥션 풀 초기화, Startup Validator 및 APScheduler 연동 (Daily 및 Financial 스케줄 각각 등록) |
 
 ---
 
@@ -113,6 +116,8 @@ tdms_core/p3_usdms/
 | 스크립트 | 실행 방법 | 역할 |
 |---|---|---|
 | `main.py` | `uvicorn main:app --port 8000` | FastAPI Web API Server 기동 및 APScheduler 스케줄러 백그라운드 구동 |
+| `run_daily.py` | `python run_daily.py [--limit N] [--date YYYY-MM-DD]` | 미국 일일 시세 수집 수동 CLI 실행 도구 (진행상황 tqdm 로깅 제공) |
+| `run_financial.py` | `python run_financial.py [--limit N] [--date YYYY-MM-DD] [--force-all]` | 미국 재무 공시 핀포인트 수집 및 연산 수동 CLI 실행 도구 |
 | `tests/test_daily_routine.py` | `pytest tests/test_daily_routine.py` | 일일 파이프라인 E2E 통합 및 이상치 격리, 수동 Lock API 통합 검증 |
 
 ---
@@ -159,3 +164,5 @@ tdms_core/p3_usdms/
 | T-011 | 스케줄 변수명 일원화(SCHEDULE_USDMS_*) 및 주간 유지보수 스케줄 외부화, API 개정에 따른 .env 실시간 갱신 및 reschedule 보존 처리 적용 |
 | T-105 (2026-06-16) | logging.basicConfig 기본값 누락에 따른 로깅 중단 복구, /tasks/status API 내 실행 중 플래그 동적 오버라이드 구현 |
 | T-111 (2026-07-03) | APScheduler misfire_grace_time 미지정으로 인한 스케줄러 트리거 누락 현상 교정 (10시간 유예 적용) |
+| T-112 (2026-07-17) | 미국 주식 수집 및 연산 이원화(시세 전수 수집 및 샤딩 제거, 재무/지표 핀포인트 계산 및 수집 대상 필터링), 대시보드 UI 연동 및 실시간 로그 모니터링 개선 완료 |
+| T-112 (2026-07-17) | 시세/재무 파이프라인 이원화(DailyRoutine 시세 전수 수집 및 UsFinancialRoutine 신설), 수집 대상 종목 필터링 및 실질 적재(ingested_ciks) 기반 핀포인트 재무비율 계산 도입, 비동기 양보 및 로그 일원화 적용 |

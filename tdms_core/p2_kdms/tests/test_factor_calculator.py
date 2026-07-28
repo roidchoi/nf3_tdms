@@ -61,3 +61,22 @@ def test_calculate_factors_avoids_division_by_zero():
     
     factors = calculate_factors(df, "005930", "KIS")
     assert isinstance(factors, list)
+
+
+def test_calculate_factors_handles_negative_prices_safely():
+    """
+    [목적] 과거 레거시 시세 데이터 오류로 마이너스 주가(prev_adj_close = -3599.0)가 유입되더라도
+           price_ratio <= 0 인 음수 팩터를 절대 생성하지 않고 안전 정제하는지 검증.
+    """
+    test_data = {
+        "dt": [pd.Timestamp("1998-12-09"), pd.Timestamp("1998-12-10"), pd.Timestamp("1998-12-11")],
+        "raw_close": [4040.0, 4520.0, 460.0],
+        "adj_close": [4040.0, -3599.0, 460.0]
+    }
+    df = pd.DataFrame(test_data)
+    
+    factors = calculate_factors(df, "017510", "KIS")
+    # 음수 주가 유입 시 price_ratio <= 0 인 팩터는 절대 생성되지 않아야 함
+    for f in factors:
+        assert f["price_ratio"] > 0.0
+        assert f["volume_ratio"] > 0.0

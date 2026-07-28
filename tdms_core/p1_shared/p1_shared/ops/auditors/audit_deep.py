@@ -15,10 +15,14 @@ def serialize(val):
     return str(val)
 
 def audit_database(conf, label):
-    print(f"[{label}] 정밀 분석 시작...")
-    conn = get_conn(conf)
-    conn.autocommit = True # 개별 쿼리 실패가 전체에 영향 주지 않도록 설정
-    cur = conn.cursor()
+    print(f"[{label}] 정밀 분석 시작... ({conf['host']}:{conf['port']})")
+    try:
+        conn = get_conn(conf)
+        conn.autocommit = True # 개별 쿼리 실패가 전체에 영향 주지 않도록 설정
+        cur = conn.cursor()
+    except Exception as e:
+        print(f"[{label}] DB 접속 실패 ({conf['host']}): {e}")
+        return {"_connection": {"error": f"DB 접속 실패: {e}"}}
     
     cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename")
     tables = [r[0] for r in cur.fetchall()]
@@ -72,15 +76,22 @@ def audit_database(conf, label):
 def main():
     load_dotenv()
     env = EnvDetector()
-    peer_ip = env.get_peer_host()
-    local_ip = os.getenv("DEV_IP", "127.0.0.1") if env.detect() == "dev" else os.getenv("SERVER_IP", "127.0.0.1")
+    is_docker = os.path.exists("/.dockerenv")
+    
+    # 도커 컨테이너 내부 런타임과 호스트 CLI 기동 구분
+    if is_docker:
+        local_host = os.getenv("DEV_KDMS_DB_HOST", "kdms_db")
+        peer_host = os.getenv("SERVER_IP") or env.get_peer_host()
+    else:
+        peer_host = env.get_peer_host()
+        local_host = os.getenv("DEV_KDMS_DB_HOST") or (os.getenv("DEV_IP", "127.0.0.1") if env.detect() == "dev" else os.getenv("SERVER_IP", "127.0.0.1"))
 
     db_name = os.getenv("POSTGRES_DB") or os.getenv("DEV_KDMS_DB_NAME") or os.getenv("SERVER_KDMS_DB_NAME") or "kdms_db"
     db_user = os.getenv("POSTGRES_USER") or os.getenv("DEV_KDMS_DB_USER") or os.getenv("SERVER_KDMS_DB_USER") or "roid"
     db_pw = os.getenv("POSTGRES_PASSWORD") or os.getenv("DEV_KDMS_DB_PASSWORD") or os.getenv("SERVER_KDMS_DB_PASSWORD") or "password"
 
-    dev_conf = {"host": local_ip, "port": 5432, "dbname": db_name, "user": db_user, "password": db_pw, "label": "로컬PC"}
-    srv_conf = {"host": peer_ip, "port": 5432, "dbname": db_name, "user": db_user, "password": db_pw, "label": "원격PC"}
+    dev_conf = {"host": local_host, "port": 5432, "dbname": db_name, "user": db_user, "password": db_pw, "label": "로컬PC"}
+    srv_conf = {"host": peer_host, "port": 5432, "dbname": db_name, "user": db_user, "password": db_pw, "label": "원격PC"}
 
     dev_report = audit_database(dev_conf, dev_conf["label"])
     srv_report = audit_database(srv_conf, srv_conf["label"])

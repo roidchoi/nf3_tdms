@@ -19,7 +19,7 @@ class TaskRunRequest(BaseModel):
     test_mode: bool = Field(default=False, description="테스트 모드 실행 여부")
 
 
-def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = False, start_date: Optional[date] = None, end_date: Optional[date] = None):
+def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = False, start_date: Optional[date] = None, end_date: Optional[date] = None, days: Optional[int] = None):
     """시가총액 백필 작업을 격리 실행하는 래퍼 함수"""
     import os
     from collectors.pub_data_client import PubDataClient
@@ -46,30 +46,52 @@ def trigger_backfill_market_cap(job_statuses: Dict[str, Any], test_mode: bool = 
 
     # 3. 날짜 범위 기본값 설정
     if start_date is None:
-        start_date = date.today() - timedelta(days=30)
+        if days == 0:
+            start_date = date(2017, 1, 2)
+        elif days is not None and days > 0:
+            start_date = date.today() - timedelta(days=days)
+        else:
+            start_date = date.today() - timedelta(days=30)
     if end_date is None:
         end_date = date.today() - timedelta(days=1)
 
-    # 4. 백필 작업 기동
+    # 4. 시가총액 백필 작업 기동
     run_backfill_market_cap(
         job_statuses=job_statuses,
         pub_client=pub_client,
         mc_repo=mc_repo,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        days=days
     )
+
+    # 5. 매매동향(수급) 백필 연동 연속 기동
+    from tasks.backfill_task import run_backfill_investor_trade
+    try:
+        run_backfill_investor_trade(
+            job_statuses=job_statuses,
+            test_mode=test_mode,
+            start_date=start_date,
+            end_date=end_date,
+            days=days
+        )
+    except Exception as it_err:
+        import logging
+        logging.getLogger("p2_kdms").warning(f"[trigger_backfill_market_cap] 매매동향 백필 연동 중 오류 발생: {it_err}")
 
 
 # 수동 기동 가능한 태스크 맵 정의
 from tasks.daily_task import run_daily_update
 from tasks.financial_task import run_financial_update
-from tasks.backfill_task import run_backfill_minute_data
+from tasks.backfill_task import run_backfill_minute_data, run_backfill_daily_data, run_backfill_investor_trade
 
 task_map = {
     "daily_update": run_daily_update,
     "financial_update": run_financial_update,
     "backfill_minute_data": run_backfill_minute_data,
-    "backfill_market_cap": trigger_backfill_market_cap
+    "backfill_daily_data": run_backfill_daily_data,
+    "backfill_market_cap": trigger_backfill_market_cap,
+    "backfill_investor_trade": run_backfill_investor_trade
 }
 
 VALID_TASK_IDS = list(task_map.keys())
@@ -88,7 +110,9 @@ async def run_task(
     task_id: str,
     request: Optional[TaskRunRequest] = None,
     start_date: Optional[str] = Query(None, description="백필 시작 날짜 (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="백필 종료 날짜 (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="백필 종료 날짜 (YYYY-MM-DD)"),
+    days: Optional[int] = Query(None, description="수동 백필 지정 일수 범위"),
+    verify_date: Optional[str] = Query(None, description="수정주가 3자 검증 기준일 (YYYY-MM-DD 또는 정수 일수)")
 ):
     """
     태스크를 스케줄러의 백그라운드 스레드 풀에서 즉시 1회 실행합니다. (Non-Blocking)
@@ -121,29 +145,62 @@ async def run_task(
     try:
         # 비동기적으로 스케줄러에 단발성 작업 추가 (KST timezone-aware 미래 시점으로 즉시 실행 보장)
         current_time = datetime.now(ZoneInfo("Asia/Seoul")) + timedelta(seconds=5)
-        if task_id == "backfill_market_cap":
+        if task_id in ["backfill_market_cap", "backfill_minute_data", "backfill_daily_data", "backfill_investor_trade"]:
+            # 클로저 바인딩 꼬임 방지를 위한 래퍼 함수 정의
+            def run_job(t_mode, p_start, p_end, v_date, p_days):
+                if task_id == "backfill_daily_data":
+                    return task_func(
+                        job_statuses=job_statuses,
+                        test_mode=t_mode,
+                        start_date=p_start,
+                        end_date=p_end,
+                        verify_date=v_date,
+                        days=p_days
+                    )
+                elif task_id == "backfill_market_cap":
+                    return task_func(
+                        job_statuses=job_statuses,
+                        test_mode=t_mode,
+                        start_date=p_start,
+                        end_date=p_end,
+                        days=p_days
+                    )
+                else:
+                    return task_func(
+                        job_statuses=job_statuses,
+                        test_mode=t_mode,
+                        start_date=p_start,
+                        end_date=p_end,
+                        days=p_days
+                    )
+            
             scheduler.add_job(
-                func=lambda: task_func(
-                    job_statuses=job_statuses,
-                    test_mode=test_mode,
-                    start_date=parsed_start,
-                    end_date=parsed_end
-                ),
+                func=lambda: run_job(test_mode, parsed_start, parsed_end, verify_date, days),
                 trigger="date",
                 run_date=current_time,
-                misfire_grace_time=36000,
+                misfire_grace_time=900,
                 id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
                 name=task_id
             )
         else:
-            scheduler.add_job(
-                func=lambda: task_func(job_statuses, test_mode=test_mode),
-                trigger="date",
-                run_date=current_time,
-                misfire_grace_time=36000,
-                id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
-                name=task_id
-            )
+            if task_id == "financial_update":
+                scheduler.add_job(
+                    func=lambda: task_func(job_statuses, test_mode=test_mode, target_group=-1),
+                    trigger="date",
+                    run_date=current_time,
+                    misfire_grace_time=900,
+                    id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
+                    name=task_id
+                )
+            else:
+                scheduler.add_job(
+                    func=lambda: task_func(job_statuses, test_mode=test_mode),
+                    trigger="date",
+                    run_date=current_time,
+                    misfire_grace_time=900,
+                    id=f"manual_run_{task_id}_{datetime.now().timestamp()}",
+                    name=task_id
+                )
 
         logger.info(f"수동 실행 요청 완료: '{task_id}' 등록 완료 (Test Mode: {test_mode})")
         return {
@@ -213,10 +270,11 @@ async def toggle_job(
 async def reschedule_job(
     job_id: str,
     hour: int,
-    minute: int
+    minute: int,
+    day_of_week: Optional[str] = Query(None, description="요일 설정 (예: 'mon-fri', 'wed,sat' 등)")
 ):
     """
-    특정 작업(job_id)의 매일 실행 시간(hour, minute)을 동적으로 변경(reschedule)하며,
+    특정 작업(job_id)의 매일 실행 시간(hour, minute) 및 요일(day_of_week)을 동적으로 변경(reschedule)하며,
     .env 파일의 스케줄 설정도 영구 보존 업데이트합니다.
     """
     if scheduler is None:
@@ -236,9 +294,12 @@ async def reschedule_job(
     var_name = var_map.get(job_id)
     
     try:
-        new_time_str = f"{hour:02d}:{minute:02d}"
+        if day_of_week:
+            new_time_str = f"{day_of_week}:{hour:02d}:{minute:02d}"
+        else:
+            new_time_str = f"{hour:02d}:{minute:02d}"
         
-        # 1. .env 파일 및 os.environ 업데이트 (요일 보존 처리 내장)
+        # 1. .env 파일 및 os.environ 업데이트
         if var_name:
             from p1_shared.utils.schedule_utils import update_env_value, parse_schedule_string
             import os
@@ -246,19 +307,65 @@ async def reschedule_job(
             
             # 2. 업데이트된 값에서 요일 정보 등을 다시 읽어 스케줄러 갱신
             updated_val = os.environ.get(var_name, new_time_str)
-            h, m, day_of_week = parse_schedule_string(updated_val)
+            h, m, parsed_dow = parse_schedule_string(updated_val)
             
-            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=parsed_dow, hour=h, minute=m)
             logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {updated_val}")
         else:
             # 매핑 변수가 없는 특수 job의 경우 기존 방식 적용
-            scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=hour, minute=minute)
             logger.info(f"스케줄러 작업 일정 변경 완료: {job_id} -> {new_time_str}")
             
-        return {"status": "SUCCESS", "job_id": job_id, "hour": hour, "minute": minute}
+        return {"status": "SUCCESS", "job_id": job_id, "hour": hour, "minute": minute, "day_of_week": day_of_week}
     except Exception as e:
         logger.error(f"스케줄러 일정 변경 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"스케줄 일정 변경에 실패했습니다: {str(e)}")
+
+
+@router.post("/scheduler/reload", summary="환경설정(.env)에서 스케줄을 다시 읽어 스케줄러 갱신")
+async def reload_scheduler_from_env():
+    """
+    물리 .env 파일을 다시 읽고, os.environ 갱신 후 
+    스케줄러에 등록된 각 작업들의 일정을 동적으로 갱신합니다.
+    """
+    if scheduler is None:
+        raise HTTPException(status_code=500, detail="스케줄러 시스템이 작동 중이 아닙니다.")
+        
+    try:
+        from dotenv import load_dotenv
+        import os
+        from p1_shared.utils.schedule_utils import parse_schedule_string
+        
+        # 1. .env 파일 강제 덮어쓰기 로드 (override=True)
+        env_path = "/app/.env" if os.path.exists("/app/.env") else None
+        load_dotenv(dotenv_path=env_path, override=True)
+        
+        # 2. 각 작업의 설정 키 갱신
+        var_map = {
+            "daily_update": ("SCHEDULE_KDMS_DAILY_UPDATE", "mon-fri"),
+            "financial_update": ("SCHEDULE_KDMS_FINANCIAL_UPDATE", None),
+            "backfill_minute_data": ("SCHEDULE_KDMS_BACKFILL_MINUTE", "sat")
+        }
+        
+        updated_jobs = []
+        for job_id, (env_key, default_days) in var_map.items():
+            job = scheduler.get_job(job_id)
+            if not job:
+                continue
+            
+            val = os.environ.get(env_key)
+            if not val:
+                continue
+                
+            h, m, day_of_week = parse_schedule_string(val, default_days=default_days)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            updated_jobs.append({"job_id": job_id, "schedule": val})
+            
+        logger.info(f"스케줄러 .env 재로드 완료: {updated_jobs}")
+        return {"status": "SUCCESS", "updated_jobs": updated_jobs}
+    except Exception as e:
+        logger.error(f"스케줄러 .env 재로드 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"스케줄 재로드 실패: {str(e)}")
 
 
 

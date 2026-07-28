@@ -108,3 +108,34 @@ conda run -n tdms_p1_env pytest tdms_core/p1_shared/tests/test_connection.py -v
 echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/tar, /usr/bin/rm, /usr/bin/chown, /usr/bin/docker" \
   | sudo tee /etc/sudoers.d/tdms_sync
 ```
+
+---
+
+## 7. 개발 PC vs 서버 PC 1:1 Dual Run 데이터 정합성 검증
+
+개발 PC의 최적화된 데이터 수집기(배포 예정본)와 실서버 PC의 기존 수집기(운영계) 간의 적재 데이터 품질 및 정합성을 비교 분석하기 위한 1:1 교차 검증 도구입니다.
+
+### 실행 방법
+
+프로젝트 루트의 `verify_dual_run.py` 스크립트를 실행합니다. 각 시장(KDMS, USDMS)의 개발용 DB DSN과 실서버 DB DSN을 인자로 전달하여 1:1 품질 대조를 수행합니다.
+
+```bash
+# 가상환경 기동 하에서 검증 도구 호출 예시
+python verify_dual_run.py \
+  --dev-kdms-dsn "postgresql://roid:pass@localhost:5432/kdms_db" \
+  --srv-kdms-dsn "postgresql://roid:pass@192.168.35.205:5432/kdms_db" \
+  --dev-usdms-dsn "postgresql://roid:pass@localhost:5432/usdms_db" \
+  --srv-usdms-dsn "postgresql://roid:pass@192.168.35.205:5432/usdms_db" \
+  --start-date "2026-07-01" \
+  --end-date "2026-07-14"
+```
+
+### 주요 검증 내용
+1. **KDMS (한국 주식)**
+   - `daily_ohlcv` 테이블의 시작~종료 기간 내 총 적재 행(row) 수 대조.
+   - 서버 PC에는 적재되었으나 개발 PC에는 누락된 종목/날짜 목록(Left Join) 검출.
+   - 시가, 고가, 저가, 종가 및 거래량이 양측 DB에서 오차 없이 100% 일치하는지 정밀 대조.
+2. **USDMS (미국 주식)**
+   - `us_daily_valuation` 테이블의 지정 기간 내 총 적재 행 수 대조.
+   - 서버 대비 개발 PC의 누락 데이터 검출.
+   - 시가총액, PE, PB 등의 가치지표 산출 수치에 부동소수점 오차(1% 미만 허용오차 범위) 내 정합성 검증.

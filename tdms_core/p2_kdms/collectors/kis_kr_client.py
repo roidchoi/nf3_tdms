@@ -1,12 +1,14 @@
-# collectors/kis_kr_client.py
-
+import logging
+import time
 import urllib.request
 import zipfile
 import io
 import os
 import re
 import tempfile
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+
+logger = logging.getLogger(__name__)
 
 class KisKrClient:
     """
@@ -62,79 +64,87 @@ class KisKrClient:
                 }
         return None
 
-    def fetch_daily_ohlcv_range(self, stk_cd: str, start_date: date, end_date: date) -> list[dict]:
+    def fetch_daily_ohlcv_range(self, stk_cd: str, start_date: date, end_date: date, adj_price: str = "1") -> list[dict]:
         """
         특정 종목의 지정 범위(start_date ~ end_date) 일봉 데이터를 수집.
+        KIS API 100건 호출 한도를 극복하기 위해 루프 페이징(Loop Paging)을 수행합니다.
         """
         path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-        
-        # T-002 스펙: end_date=target_date, adj_price='1' (Raw 주가)
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_INPUT_ISCD": stk_cd,
-            "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
-            "FID_INPUT_DATE_2": end_date.strftime("%Y%m%d"),
-            "FID_PERIOD_DIV_CODE": "D",
-            "FID_ORG_ADJ_PRC": "1"  # 원본 가격 요청
-        }
-        
-        try:
-            res = self.api_core.get(path, adj_price="1", **params)
-        except Exception as e:
-            raise e
+        current_end = end_date
+        all_records = []
+        seen_dts = set()
+
+        while current_end >= start_date:
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": stk_cd,
+                "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
+                "FID_INPUT_DATE_2": current_end.strftime("%Y%m%d"),
+                "FID_PERIOD_DIV_CODE": "D",
+                "FID_ORG_ADJ_PRC": adj_price
+            }
             
-        output2 = res.get("output2", [])
-        records = []
-        for row in output2:
-            dt_str = row.get("stck_bsop_date")
-            if dt_str:
-                dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
-                if start_date <= dt_val <= end_date:
-                    records.append({
-                        "stk_cd": stk_cd,
-                        "dt": dt_val,
-                        "open": int(row["stck_oprc"]),
-                        "high": int(row["stck_hgpr"]),
-                        "low": int(row["stck_lwpr"]),
-                        "close": int(row["stck_clpr"]),
-                        "volume": int(row["acml_vol"]),
-                        "amt": int(row.get("acml_tr_pbmn", 0) or 0),
-                        "turn_rt": 0.0
-                    })
-        return records
+            res = None
+            for retry in range(3):
+                try:
+                    res = self.api_core.get(path, adj_price=adj_price, **params)
+                    break
+                except Exception as e:
+                    if retry < 2:
+                        logger.warning(f"[{stk_cd}] KIS 일봉 API 통신 실패 (재시도 {retry+1}/3): {e}")
+                        time.sleep(1.0)
+                    else:
+                        logger.error(f"[{stk_cd}] KIS 일봉 페이징 수집 실패 (범위: {start_date}~{current_end}): {e}")
+                        break
+            if not res:
+                break
+
+            output2 = res.get("output2", [])
+            if not output2:
+                break
+                
+            fetched_count = 0
+            min_date_in_batch = None
+            
+            for row in output2:
+                dt_str = row.get("stck_bsop_date")
+                if dt_str:
+                    dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
+                    if start_date <= dt_val <= end_date:
+                        if min_date_in_batch is None or dt_val < min_date_in_batch:
+                            min_date_in_batch = dt_val
+                        
+                        if dt_val not in seen_dts:
+                            seen_dts.add(dt_val)
+                            fetched_count += 1
+                            all_records.append({
+                                "stk_cd": stk_cd,
+                                "dt": dt_val,
+                                "open": int(row["stck_oprc"]),
+                                "high": int(row["stck_hgpr"]),
+                                "low": int(row["stck_lwpr"]),
+                                "close": int(row["stck_clpr"]),
+                                "volume": int(row["acml_vol"]),
+                                "amt": int(row.get("acml_tr_pbmn", 0) or 0),
+                                "turn_rt": 0.0
+                            })
+
+            if not min_date_in_batch or min_date_in_batch <= start_date or fetched_count == 0:
+                break
+                
+            current_end = min_date_in_batch - timedelta(days=1)
+
+        # 날짜 오름차순 정렬 반환
+        all_records.sort(key=lambda x: x["dt"])
+        return all_records
 
 
     def fetch_ohlcv_range(self, stk_cd: str, start_date: date, end_date: date, adj_price: str = '1') -> list[dict]:
         """
-        특정 종목의 지정 범위 시세 데이터를 수집합니다.
+        특정 종목의 지정 범위 시세 데이터를 수집합니다 (루프 페이징 적용).
         """
-        path = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_INPUT_ISCD": stk_cd,
-            "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
-            "FID_INPUT_DATE_2": end_date.strftime("%Y%m%d"),
-            "FID_PERIOD_DIV_CODE": "D",
-            "FID_ORG_ADJ_PRC": adj_price
-        }
-        
-        try:
-            res = self.api_core.get(path, adj_price=adj_price, **params)
-        except Exception as e:
-            raise e
-            
-        output2 = res.get("output2", [])
-        records = []
-        for row in output2:
-            dt_str = row.get("stck_bsop_date")
-            if dt_str:
-                dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
-                if start_date <= dt_val <= end_date:
-                    records.append({
-                        "dt": dt_val,
-                        "close": float(row["stck_clpr"])
-                    })
-        return records
+        records = self.fetch_daily_ohlcv_range(stk_cd, start_date, end_date, adj_price=adj_price)
+        return [{"dt": r["dt"], "close": float(r["close"])} for r in records]
 
 
     def fetch_stock_master(self) -> list[dict]:
@@ -327,4 +337,144 @@ class KisKrClient:
                 print(f"Error fetching financial {api_type} for {stk_cd}: {e}")
                 results[api_type] = []
         return results
+
+    def fetch_investor_trade_daily(self, stk_cd: str, start_date: date, end_date: date) -> list[dict]:
+        """
+        특정 종목의 지정 범위(start_date ~ end_date) 투자자 매매동향(일별) 데이터를 수집.
+        """
+        path = "/uapi/domestic-stock/v1/quotations/investor-trade-by-stock-daily"
+        from datetime import timedelta
+        
+        def to_int(val) -> int | None:
+            if val is None:
+                return None
+            try:
+                s = str(val).strip()
+                if not s or s.lower() == 'nan' or s == 'null':
+                    return None
+                return int(s)
+            except ValueError:
+                return None
+
+        def to_float(val) -> float | None:
+            if val is None:
+                return None
+            try:
+                s = str(val).strip()
+                if not s or s.lower() == 'nan' or s == 'null':
+                    return None
+                return float(s)
+            except ValueError:
+                return None
+
+        records = []
+        current_end_date = end_date
+        
+        # 13개 일반 투자 주체 리스트
+        normal_subjects = [
+            "prsn", "frgn", "orgn", "scrt", "insu", "fund", "bank", "ivtr", "mrbn",
+            "pe_fund", "etc", "etc_corp", "etc_orgt"
+        ]
+        # 2개 외국인 상세 주체 리스트
+        foreign_subjects = [
+            "frgn_reg", "frgn_nreg"
+        ]
+
+        seen_dates = set()
+
+        while current_end_date >= start_date:
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": stk_cd,
+                "FID_INPUT_DATE_1": current_end_date.strftime("%Y%m%d"),
+                "FID_ORG_ADJ_PRC": "",
+                "FID_ETC_CLS_CODE": "1"
+            }
+            
+            try:
+                res = self.api_core.request(
+                    method="GET",
+                    path=path,
+                    params=params,
+                    tr_id="FHPTJ04160001"
+                )
+            except Exception as e:
+                # API 호출 오류 시 예외 전파
+                raise e
+                
+            output2 = res.get("output2", [])
+            if not output2:
+                break
+                
+            min_date_in_batch = None
+            
+            for row in output2:
+                dt_str = row.get("stck_bsop_date")
+                if not dt_str:
+                    continue
+                try:
+                    dt_val = datetime.strptime(dt_str, "%Y%m%d").date()
+                except ValueError:
+                    continue
+                    
+                if dt_val < start_date:
+                    if min_date_in_batch is None or dt_val < min_date_in_batch:
+                        min_date_in_batch = dt_val
+                    continue
+                    
+                if dt_val > end_date:
+                    continue
+                    
+                if dt_val in seen_dates:
+                    continue
+                
+                seen_dates.add(dt_val)
+                
+                rec = {
+                    "dt": dt_val,
+                    "stk_cd": stk_cd,
+                    "stck_clpr": to_int(row.get("stck_clpr")),
+                    "prdy_vrss": to_int(row.get("prdy_vrss")),
+                    "prdy_vrss_sign": row.get("prdy_vrss_sign"),
+                    "prdy_ctrt": to_float(row.get("prdy_ctrt")),
+                    "acml_vol": to_int(row.get("acml_vol")),
+                    "acml_tr_pbmn": to_int(row.get("acml_tr_pbmn")),
+                    "stck_oprc": to_int(row.get("stck_oprc")),
+                    "stck_hgpr": to_int(row.get("stck_hgpr")),
+                    "stck_lwpr": to_int(row.get("stck_lwpr")),
+                }
+                
+                # 1. 일반 주체 13개
+                for sub in normal_subjects:
+                    qty_key = f"{sub}_ntby_vol" if sub in ["pe_fund", "etc_corp", "etc_orgt"] else f"{sub}_ntby_qty"
+                    
+                    rec[f"{sub}_seln_vol"] = to_int(row.get(f"{sub}_seln_vol"))
+                    rec[f"{sub}_shnu_vol"] = to_int(row.get(f"{sub}_shnu_vol"))
+                    rec[qty_key] = to_int(row.get(qty_key))
+                    
+                    rec[f"{sub}_seln_tr_pbmn"] = to_int(row.get(f"{sub}_seln_tr_pbmn"))
+                    rec[f"{sub}_shnu_tr_pbmn"] = to_int(row.get(f"{sub}_shnu_tr_pbmn"))
+                    rec[f"{sub}_ntby_tr_pbmn"] = to_int(row.get(f"{sub}_ntby_tr_pbmn"))
+                    
+                # 2. 외국인 상세 주체 2개
+                for sub in foreign_subjects:
+                    rec[f"{sub}_askp_qty"] = to_int(row.get(f"{sub}_askp_qty"))
+                    rec[f"{sub}_bidp_qty"] = to_int(row.get(f"{sub}_bidp_qty"))
+                    rec[f"{sub}_ntby_qty"] = to_int(row.get(f"{sub}_ntby_qty"))
+                    
+                    rec[f"{sub}_askp_pbmn"] = to_int(row.get(f"{sub}_askp_pbmn"))
+                    rec[f"{sub}_bidp_pbmn"] = to_int(row.get(f"{sub}_bidp_pbmn"))
+                    rec[f"{sub}_ntby_pbmn"] = to_int(row.get(f"{sub}_ntby_pbmn"))
+                    
+                records.append(rec)
+                
+                if min_date_in_batch is None or dt_val < min_date_in_batch:
+                    min_date_in_batch = dt_val
+                    
+            if min_date_in_batch is None or min_date_in_batch >= current_end_date:
+                break
+                
+            current_end_date = min_date_in_batch - timedelta(days=1)
+            
+        return records
 

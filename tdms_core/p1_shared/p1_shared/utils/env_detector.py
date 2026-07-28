@@ -184,6 +184,10 @@ class EnvDetector:
         if "microsoft" not in platform.release().lower():
             return
 
+        # 도커 컨테이너 내부 환경인 경우 검증 건너뜀 (powershell.exe 실행 불가)
+        if os.path.exists('/.dockerenv'):
+            return
+
         env = self.detect()
         if env != "dev":
             return

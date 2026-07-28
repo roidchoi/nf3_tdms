@@ -23,6 +23,7 @@
 | P4DEC-005 | 컨테이너 재생성 시 백업 유실 방지를 위한 데이터 볼륨 바인딩 및 호스트 Docker.sock 연동 | T-009 | active |
 | P4DEC-006 | 시장 격리형 물리 백업 및 개별 복구 오케스트레이션 아키텍처 | T-009 | active |
 | P4DEC-007 | Windows PowerShell 우회 DNS 쿼리 및 Async C클래스 포트 스캔을 통한 서버 IP 자가 갱신 | T-010 | active |
+| P4DEC-008 | 크론 스케줄 요일 편집 및 무중단 .env 재로드 대시보드 구현 | — | active |
 
 ---
 
@@ -199,3 +200,23 @@
 ### 관련 링크
 *   `network_api.md` (서버 IP 자동 탐색 및 환경변수 갱신 API 명세)
 *   `physical_sync.md` (물리 동기화 및 사전 검증 인터페이스 명세)
+
+---
+
+## [P4DEC-008] 크론 스케줄 요일 편집 및 무중단 .env 재로드 대시보드 구현
+
+### 배경
+*   하위 백엔드 서비스(KDMS/USDMS)의 크론 수집 일정을 동적으로 요일 단위까지 유연하게 기입 및 튜닝하고, 변경된 `.env` 스케줄 설정값을 컨테이너 재빌드/재부팅 없이 대시보드에서 즉각 적용할 수 있는 사용자 조작 접점이 필요했습니다.
+
+### 결정 내용
+*   **스케줄 변경 모달 요일(day_of_week) 편집 지원**:
+    - `ScheduleModal.vue` UI 상에 요일 텍스트 인풋 필드 및 월-금, 화-토, 수,토, 매일 퀵 템플릿 배지를 추가하여 직관적으로 수정할 수 있게 하였습니다.
+    - 모달 활성화 시 `trigger` 정규식 파싱을 통해 `day_of_week` 설정을 초기값으로 바인딩 처리했습니다.
+*   **.env 메모리 강제 재로드 릴레이 프록시**:
+    - 대시보드 상단에 그린 톤의 **"환경설정(.env) 재로드"** 버튼을 배치하고, 해당 탭 시장의 API `POST /api/mgr/schedules/{market}/reload` 호출을 릴레이하여 하위 백엔드들이 무중단으로 스케줄 설정을 재갱신하도록 연동했습니다.
+
+### 영향 범위
+*   `tdms_core/p4_manager/routers/manager.py` (reload 프록시 라우터 탑재)
+*   `tdms_core/p4_manager/frontend/src/stores/scheduleStore.ts` (스토어 액션 추가)
+*   `tdms_core/p4_manager/frontend/src/components/dashboard/ScheduleModal.vue` (요일 편집 UI 설계)
+*   `tdms_core/p4_manager/frontend/src/views/ScheduleView.vue` (.env 재로드 연동 및 템플릿 수정)

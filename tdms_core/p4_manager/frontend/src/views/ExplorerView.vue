@@ -8,6 +8,7 @@ const store = useExplorerStore()
 onMounted(async () => {
   await store.fetchMetadata()
   if (store.selectedTable) {
+    store.applyDefaultFiltersForTable(store.selectedTable)
     await store.fetchPreviewData()
   }
 })
@@ -28,6 +29,7 @@ const handleMarketChange = async (market: 'kr' | 'us') => {
 watch(() => store.selectedTable, async (newTable) => {
   if (newTable) {
     store.offset = 0 // 테이블 전환 시 페이지 초기화
+    store.applyDefaultFiltersForTable(newTable)
     await store.fetchPreviewData()
   }
 })
@@ -64,6 +66,116 @@ const handleNextPage = async () => {
 const handleLimitChange = async () => {
   store.offset = 0
   await store.fetchPreviewData()
+}
+
+// 필터 동적 노출 여부 및 레이블 조건 설정
+const showStkCdFilter = computed(() => {
+  return !['system_milestones', 'trading_calendar'].includes(store.selectedTable)
+})
+
+const stkCdLabel = computed(() => {
+  if (store.selectedMarket === 'us') {
+    return ['us_ticker_master', 'us_daily_price'].includes(store.selectedTable) ? '티커' : 'CIK'
+  }
+  return '종목코드'
+})
+
+const stkCdPlaceholder = computed(() => {
+  if (store.selectedMarket === 'us') {
+    return ['us_ticker_master', 'us_daily_price'].includes(store.selectedTable) ? '예: AAPL' : '예: 0000320193'
+  }
+  return '예: 005930'
+})
+
+const showDateFilter = computed(() => {
+  return [
+    'daily_ohlcv', 'daily_ohlcv_adjusted', 'daily_market_cap', 'minute_ohlcv',
+    'system_milestones', 'trading_calendar', 'price_adjustment_factors',
+    'us_daily_price', 'us_daily_valuation', 'us_price_adjustment_factors',
+    'us_ticker_history', 'us_collection_blacklist',
+    'daily_investor_trade'
+  ].includes(store.selectedTable)
+})
+
+const showQuarterFilter = computed(() => {
+  return ['minute_target_history', 'financial_statements', 'financial_ratios'].includes(store.selectedTable)
+})
+
+const quarterLabel = computed(() => {
+  return store.selectedTable === 'minute_target_history' ? '분기(Quarter)' : '결산년월(stac_yymm)'
+})
+
+const quarterPlaceholder = computed(() => {
+  return store.selectedTable === 'minute_target_history' ? '예: 2026Q1' : '예: 202512'
+})
+
+const showMarketFilter = computed(() => {
+  return ['minute_target_history', 'stock_info', 'us_ticker_master'].includes(store.selectedTable)
+})
+
+const marketFilterLabel = computed(() => {
+  return store.selectedMarket === 'us' ? '거래소' : '시장 구분'
+})
+
+const isMarketSelect = computed(() => {
+  return store.selectedTable === 'minute_target_history'
+})
+
+// 종목 코드 헬퍼 상태 및 메소드 정의
+import { ref } from 'vue'
+import http from '@/api/http'
+
+const helperSearchKeyword = ref<string>('')
+const helperMatchType = ref<'contains' | 'exact'>('contains')
+const helperSearchField = ref<'all' | 'code' | 'name'>('all')
+const helperLoading = ref<boolean>(false)
+const helperResults = ref<any[]>([])
+const hasSearchedHelper = ref<boolean>(false)
+
+const searchHelperCodes = async () => {
+  const kw = helperSearchKeyword.value.trim()
+  if (!kw) return
+  
+  helperLoading.value = true
+  hasSearchedHelper.value = true
+  helperResults.value = []
+  
+  try {
+    const market = store.selectedMarket
+    const table = market === 'kr' ? 'stock_info' : 'us_ticker_master'
+    const resp = await http.get<any>(`/preview/${market}/${table}`, {
+      params: {
+        limit: 15,
+        keyword: kw,
+        match_type: helperMatchType.value,
+        search_field: helperSearchField.value
+      }
+    })
+    if (resp.data && resp.data.data) {
+      helperResults.value = resp.data.data
+    }
+  } catch (err) {
+    console.error('Helper search failed:', err)
+  } finally {
+    helperLoading.value = false
+  }
+}
+
+const applyHelperCode = (row: any) => {
+  if (store.selectedMarket === 'kr') {
+    store.stkCd = row.stk_cd
+  } else {
+    const cikTables = [
+      'us_ticker_history', 'us_collection_blacklist', 'us_financial_facts',
+      'us_standard_financials', 'us_share_history', 'us_price_adjustment_factors',
+      'us_daily_valuation', 'us_financial_metrics'
+    ]
+    if (cikTables.includes(store.selectedTable)) {
+      store.stkCd = row.cik
+    } else {
+      store.stkCd = row.latest_ticker || row.ticker || ''
+    }
+  }
 }
 </script>
 
@@ -126,21 +238,21 @@ const handleLimitChange = async () => {
           </select>
         </div>
 
-        <!-- 종목 코드 필터 -->
-        <div class="filter-item text-field">
-          <label for="stk-cd-input">종목코드/티커/CIK</label>
+        <!-- 종목 코드 필터 (동적) -->
+        <div v-if="showStkCdFilter" class="filter-item text-field">
+          <label for="stk-cd-input">{{ stkCdLabel }}</label>
           <input 
             id="stk-cd-input" 
             type="text" 
             v-model="store.stkCd" 
-            placeholder="예: 005930 또는 AAPL"
+            :placeholder="stkCdPlaceholder"
             @keyup.enter="handleSearch"
             :disabled="store.loading"
           />
         </div>
 
-        <!-- 날짜 필터 -->
-        <div class="filter-item date-field">
+        <!-- 날짜 필터 (동적) -->
+        <div v-if="showDateFilter" class="filter-item date-field">
           <label>날짜 범위</label>
           <div class="date-range-inputs">
             <input 
@@ -157,6 +269,43 @@ const handleLimitChange = async () => {
           </div>
         </div>
 
+        <!-- 분기 필터 (동적) -->
+        <div v-if="showQuarterFilter" class="filter-item text-field">
+          <label for="quarter-input">{{ quarterLabel }}</label>
+          <input 
+            id="quarter-input" 
+            type="text" 
+            v-model="store.quarter" 
+            :placeholder="quarterPlaceholder"
+            @keyup.enter="handleSearch"
+            :disabled="store.loading"
+          />
+        </div>
+
+        <!-- 시장 상세 구분 필터 (동적) -->
+        <div v-if="showMarketFilter" class="filter-item select-field">
+          <label for="market-filter-input">{{ marketFilterLabel }}</label>
+          <select 
+            v-if="isMarketSelect"
+            id="market-filter-input" 
+            v-model="store.marketFilter"
+            :disabled="store.loading"
+            @change="handleSearch"
+          >
+            <option value="KOSPI">KOSPI</option>
+            <option value="KOSDAQ">KOSDAQ</option>
+          </select>
+          <input 
+            v-else
+            id="market-filter-input" 
+            type="text" 
+            v-model="store.marketFilter" 
+            :placeholder="store.selectedMarket === 'us' ? '예: NASDAQ, NYSE' : '예: KOSPI, KOSDAQ'"
+            @keyup.enter="handleSearch"
+            :disabled="store.loading"
+          />
+        </div>
+
         <!-- 조회 버튼 -->
         <div class="filter-item button-field">
           <button 
@@ -167,6 +316,117 @@ const handleLimitChange = async () => {
             <span v-if="store.loading" class="spinner-mini"></span>
             조회하기
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2.5 종목 코드 헬퍼창 -->
+    <div class="code-helper-box">
+      <div class="helper-header">
+        <span class="helper-title">🔑 종목 코드 검색기 ({{ store.selectedMarket === 'kr' ? 'KR: 코드-종목명' : 'US: CIK-티커-회사명' }})</span>
+      </div>
+      <div class="helper-layout">
+        <!-- 왼쪽: 결과 출력 (70%) -->
+        <div class="helper-left-pane">
+          <div v-if="helperResults.length > 0" class="helper-results-scroll">
+            <table class="helper-results-table">
+              <thead>
+                <tr v-if="store.selectedMarket === 'kr'">
+                  <th>종목코드</th>
+                  <th>종목명</th>
+                  <th>시장</th>
+                  <th>작업</th>
+                </tr>
+                <tr v-else>
+                  <th>CIK</th>
+                  <th>티커</th>
+                  <th>회사명</th>
+                  <th>거래소</th>
+                  <th>작업</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in helperResults" :key="item.stk_cd || item.cik">
+                  <template v-if="store.selectedMarket === 'kr'">
+                    <td><code>{{ item.stk_cd }}</code></td>
+                    <td>{{ item.stk_nm }}</td>
+                    <td>{{ item.market_type }}</td>
+                  </template>
+                  <template v-else>
+                    <td><code>{{ item.cik }}</code></td>
+                    <td><code>{{ item.latest_ticker }}</code></td>
+                    <td>{{ item.latest_name || item.name || '-' }}</td>
+                    <td>{{ item.exchange }}</td>
+                  </template>
+                  <td>
+                    <button class="apply-badge-btn" @click="applyHelperCode(item)">
+                      ⚡ 필터 적용
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else-if="hasSearchedHelper && !helperLoading" class="helper-no-results">
+            검색 결과가 없습니다.
+          </div>
+          <div v-else class="helper-placeholder">
+            우측 검색란에 티커 또는 종목명을 입력하여 검색해 주세요.
+          </div>
+        </div>
+
+        <!-- 오른쪽: 입력 검색 (30%) -->
+        <div class="helper-right-pane">
+          <div class="helper-search-group">
+            <label>검색어</label>
+            <div class="helper-search-input-wrapper">
+              <input 
+                type="text" 
+                v-model="helperSearchKeyword" 
+                :placeholder="store.selectedMarket === 'kr' ? '예: 삼성전자, 005930' : '예: Apple, AAPL, 0000320193'" 
+                @keyup.enter="searchHelperCodes"
+                :disabled="helperLoading"
+              />
+              <button class="helper-btn search-trigger-btn" @click="searchHelperCodes" :disabled="helperLoading">
+                <span v-if="helperLoading" class="spinner-mini"></span>
+                검색
+              </button>
+            </div>
+          </div>
+          
+          <div class="helper-filter-options">
+            <div class="option-group match-type-group">
+              <label>일치 방식</label>
+              <div class="radio-options">
+                <label>
+                  <input type="radio" v-model="helperMatchType" value="contains" />
+                  부분
+                </label>
+                <label>
+                  <input type="radio" v-model="helperMatchType" value="exact" />
+                  정확
+                </label>
+              </div>
+            </div>
+            
+            <div class="option-group search-field-group">
+              <label>검색 범위</label>
+              <div class="radio-options">
+                <label>
+                  <input type="radio" v-model="helperSearchField" value="all" />
+                  전체
+                </label>
+                <label>
+                  <input type="radio" v-model="helperSearchField" value="code" />
+                  코드
+                </label>
+                <label>
+                  <input type="radio" v-model="helperSearchField" value="name" />
+                  명칭
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -345,7 +605,7 @@ const handleLimitChange = async () => {
 
 .filter-grid {
   display: grid;
-  grid-template-columns: 150px 1.5fr 1.2fr 300px 110px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) 120px;
   gap: 16px;
   align-items: flex-end;
 }
@@ -354,12 +614,21 @@ const handleLimitChange = async () => {
   .filter-grid {
     grid-template-columns: 1fr;
   }
+  .filter-item.date-field {
+    grid-column: span 1 !important;
+    min-width: auto !important;
+  }
 }
 
 .filter-item {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.filter-item.date-field {
+  grid-column: span 2;
+  min-width: 320px;
 }
 
 .filter-item label {
@@ -679,5 +948,226 @@ select:focus, input[type="text"]:focus, input[type="date"]:focus {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* 코드 헬퍼 스타일 추가 */
+.code-helper-box {
+  background: rgba(30, 41, 59, 0.25);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-top: 14px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+
+.helper-header {
+  margin-bottom: 8px;
+}
+
+.helper-title {
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  letter-spacing: 0.5px;
+}
+
+.helper-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 코드 헬퍼 스타일 개편 */
+.helper-layout {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .helper-layout {
+    flex-direction: column-reverse;
+  }
+}
+
+.helper-left-pane {
+  flex: 7;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.helper-right-pane {
+  flex: 3;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 240px;
+}
+
+.helper-search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.helper-search-group label {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.helper-search-input-wrapper {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+}
+
+.helper-search-input-wrapper input {
+  flex: 1;
+  min-width: 0;
+  height: 32px !important;
+  font-size: 0.8rem;
+}
+
+.helper-filter-options {
+  display: flex;
+  gap: 12px;
+}
+
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.match-type-group {
+  flex: 2;
+}
+
+.search-field-group {
+  flex: 3;
+}
+
+.option-group label {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.radio-options {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.radio-options label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.radio-options input[type="radio"] {
+  cursor: pointer;
+  margin: 0;
+  width: auto;
+  height: auto;
+}
+
+.search-trigger-btn {
+  width: 60px;
+  flex-shrink: 0;
+  justify-content: center;
+  height: 32px !important;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0 8px;
+}
+
+.helper-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  background: rgba(15, 23, 42, 0.15);
+  border: 1px dashed rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.helper-results-scroll {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.helper-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.helper-results-table th, 
+.helper-results-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.helper-results-table th {
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.helper-results-table code {
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #a5b4fc;
+}
+
+.apply-badge-btn {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.apply-badge-btn:hover {
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4f46e5;
+}
+
+.helper-no-results {
+  color: #64748b;
+  text-align: center;
+  padding: 8px;
+  font-style: italic;
 }
 </style>

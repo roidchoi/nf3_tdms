@@ -21,13 +21,14 @@ def get_integrated_status():
 async def run_task(
     market: str = Query(..., description="시장 구분 (kr 또는 us)"),
     task_id: str = Query(..., description="실행할 태스크 식별자"),
-    is_test: bool = Query(True, description="테스트 모드 여부 (한국 전용)")
+    is_test: bool = Query(True, description="테스트 모드 여부 (한국 전용)"),
+    days: int | None = Query(None, description="수동 백필 지정 일수 범위")
 ):
     """
     통합 태스크 수동 실행 API.
     """
     try:
-        result = await status_service.run_task(market=market, task_id=task_id, is_test=is_test)
+        result = await status_service.run_task(market=market, task_id=task_id, is_test=is_test, days=days)
         if result.get("status") == "error":
             raise HTTPException(status_code=502, detail=result["message"])
         return result
@@ -95,9 +96,9 @@ async def get_integrated_schedules(market: str):
 
 
 @router.put("/schedules/{market}/{job_id}")
-async def update_integrated_schedule(market: str, job_id: str, hour: int = Query(...), minute: int = Query(...)):
+async def update_integrated_schedule(market: str, job_id: str, hour: int = Query(...), minute: int = Query(...), day_of_week: str | None = Query(None)):
     """
-    시장(kr/us)별 특정 스케줄 작업의 기동 시각을 수정합니다.
+    시장(kr/us)별 특정 스케줄 작업의 기동 시각 및 요일을 수정합니다.
     """
     if market not in ["kr", "us"]:
         raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
@@ -107,11 +108,38 @@ async def update_integrated_schedule(market: str, job_id: str, hour: int = Query
     else:
         url = f"{settings.P3_USDMS_URL}/api/admin/schedules?job_id={job_id}&hour={hour}&minute={minute}"
         
+    if day_of_week:
+        url += f"&day_of_week={day_of_week}"
+        
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.put(url, timeout=5.0)
             if resp.status_code != 200:
                 raise HTTPException(status_code=resp.status_code, detail=f"스케줄 변경 실패: {resp.text}")
+            return resp.json()
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=503, detail=f"{market.upper()} 백엔드 통신 실패: {str(e)}")
+
+
+@router.post("/schedules/{market}/reload")
+async def reload_integrated_schedule(market: str):
+    """
+    시장(kr/us)별 백엔드의 .env 파일을 메모리에 다시 로드하고 스케줄러 일정을 갱신합니다.
+    """
+    if market not in ["kr", "us"]:
+        raise HTTPException(status_code=400, detail="market 파라미터는 'kr' 또는 'us'이어야 합니다.")
+        
+    url = (
+        f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/scheduler/reload"
+        if market == "kr"
+        else f"{settings.P3_USDMS_URL}/api/admin/schedules/reload"
+    )
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(url, timeout=5.0)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=f"스케줄 재로드 실패: {resp.text}")
             return resp.json()
         except httpx.RequestError as e:
             raise HTTPException(status_code=503, detail=f"{market.upper()} 백엔드 통신 실패: {str(e)}")
@@ -322,6 +350,7 @@ async def release_us_blacklist(cik: str):
 ALLOWED_TABLES_KR = {
     "stock_info",
     "daily_ohlcv",
+    "daily_ohlcv_adjusted",
     "daily_market_cap",
     "minute_ohlcv",
     "financial_statements",
@@ -330,6 +359,7 @@ ALLOWED_TABLES_KR = {
     "system_milestones",
     "trading_calendar",
     "minute_target_history",
+    "daily_investor_trade",
 }
 
 ALLOWED_TABLES_US = {
@@ -355,6 +385,7 @@ def get_preview_metadata():
         "kr": [
             { "table": "stock_info", "name": "종목 마스터 정보" },
             { "table": "daily_ohlcv", "name": "일봉 시세" },
+            { "table": "daily_ohlcv_adjusted", "name": "수정 일봉 시세(물리)" },
             { "table": "daily_market_cap", "name": "일별 시가총액" },
             { "table": "minute_ohlcv", "name": "분봉 시세" },
             { "table": "financial_statements", "name": "PIT 재무제표" },
@@ -362,7 +393,8 @@ def get_preview_metadata():
             { "table": "price_adjustment_factors", "name": "수정주가 팩터" },
             { "table": "system_milestones", "name": "수집 마일스톤 이력" },
             { "table": "trading_calendar", "name": "영업일 달력" },
-            { "table": "minute_target_history", "name": "수집 대상 이력" }
+            { "table": "minute_target_history", "name": "수집 대상 이력" },
+            { "table": "daily_investor_trade", "name": "종목별 투자자매매동향" }
         ],
         "us": [
             { "table": "us_ticker_master", "name": "미국 티커 마스터" },
@@ -387,7 +419,12 @@ async def get_preview_table(
     offset: int = Query(0, ge=0),
     stk_cd: str | None = Query(None),
     start_date: str | None = Query(None),
-    end_date: str | None = Query(None)
+    end_date: str | None = Query(None),
+    quarter: str | None = Query(None),
+    market_filter: str | None = Query(None),
+    keyword: str | None = Query(None),
+    match_type: str | None = Query(None),
+    search_field: str | None = Query(None)
 ):
     """
     시장(kr/us)별 테이블 미리보기 데이터를 조회하여 중계하고 장애를 격리합니다.
@@ -416,18 +453,31 @@ async def get_preview_table(
         params["start_date"] = start_date
     if end_date:
         params["end_date"] = end_date
+    if quarter:
+        params["quarter"] = quarter
+    if market_filter:
+        params["market"] = market_filter
+    if keyword:
+        params["keyword"] = keyword
+    if match_type:
+        params["match_type"] = match_type
+    if search_field:
+        params["search_field"] = search_field
         
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(url, params=params, timeout=5.0)
             if resp.status_code == 200:
                 res_data = resp.json()
-                return {
+                ret_obj = {
                     "offline": False,
                     "table": res_data.get("table", table),
                     "count": res_data.get("count", 0),
                     "data": res_data.get("data", [])
                 }
+                if "applied_quarter" in res_data:
+                    ret_obj["applied_quarter"] = res_data["applied_quarter"]
+                return ret_obj
             return {
                 "offline": True,
                 "table": table,

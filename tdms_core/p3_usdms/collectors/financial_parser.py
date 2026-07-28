@@ -39,21 +39,49 @@ class FinancialParser:
         logger.info(f"Gap Recovery: Processing {len(target_ciks)} CIKs...")
         self.run(sorted(list(target_ciks)))
 
-    def run(self, ciks: List[str]) -> None:
+    def run(self, ciks: List[str]) -> tuple[int, List[str]]:
         """
-        Process list of CIKs with progress bar.
+        Process list of CIKs with detailed logger.info progress and Speed/ETA tracking.
         """
         logger.info(f"Starting Financial Backfill for {len(ciks)} tickers...")
         
-        for cik in tqdm(ciks, desc="Fetching Financials", unit="ticker"):
+        import time
+        total = len(ciks)
+        loop_start_time = time.time()
+        success_count = 0
+        ingested_ciks = []
+        
+        for idx, cik in enumerate(ciks):
+            if idx % 10 == 0 or idx == total - 1:
+                elapsed = time.time() - loop_start_time
+                if elapsed == 0:
+                    elapsed = 1e-6
+                items_per_sec = (idx + 1) / elapsed
+                remaining = total - (idx + 1)
+                eta_seconds = remaining / items_per_sec if items_per_sec > 0 else 0
+                eta_str = time.strftime('%H:%M:%S', time.gmtime(eta_seconds))
+                progress_pct = (idx + 1) / total * 100.0
+                
+                logger.info(
+                    f"[USDMS 재무 수집] Progress: {progress_pct:.1f}% ({idx+1}/{total}) | "
+                    f"Speed: {items_per_sec:.2f} it/s | Elapsed: {elapsed:.0f}s | ETA: {eta_str} | "
+                    f"Success: {success_count} | Current CIK: {cik}"
+                )
+            
             try:
-                self.process_company(cik)
+                ingested = self.process_company(cik)
+                success_count += 1
+                if ingested:
+                    ingested_ciks.append(cik)
                 # Rate Limiting
                 time.sleep(0.5) 
             except Exception as e:
                 logger.error(f"Failed to process CIK {cik}: {e}")
 
-    def process_company(self, cik: str) -> None:
+        logger.info(f"Financial Ingestion Complete. Success: {success_count}/{total} | Ingested: {len(ingested_ciks)}")
+        return success_count, ingested_ciks
+
+    def process_company(self, cik: str) -> bool:
         """
         1. SEC API를 통한 raw company facts 데이터 fetch
         2. dei 파트 내 주식수 정보 추출 및 us_share_history 저장
@@ -62,6 +90,9 @@ class FinancialParser:
         5. 정제 완료된 표준 데이터 us_standard_financials에 업서트
         """
         facts_json = self.sec_client.get_company_facts(cik)
+        if facts_json is None:
+            logger.info(f"CIK {cik} facts data not modified (304). Skipping parse/load.")
+            return False
         
         # 1. Process Shares Outstanding (DEI)
         dei_data = facts_json.get('facts', {}).get('dei', {})
@@ -71,7 +102,7 @@ class FinancialParser:
         us_gaap_data = facts_json.get('facts', {}).get('us-gaap', {})
         if not us_gaap_data:
             logger.warning(f"No us-gaap data for CIK {cik}")
-            return
+            return False
 
         # 2. Flatten & Normalize
         raw_facts = []
@@ -110,6 +141,8 @@ class FinancialParser:
         # 5. Upsert Standard Financials
         if std_financials:
             self.repo.upsert_standard_financials(std_financials)
+            return True
+        return False
 
     def _standardize_financials_v2(self, cik: str, raw_facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

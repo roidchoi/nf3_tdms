@@ -4,6 +4,7 @@ services:
     image: timescale/timescaledb-ha:pg16
     container_name: kdms_timescaledb
     restart: always
+    shm_size: '512mb'
     environment:
       POSTGRES_USER: ${DEV_KDMS_DB_USER:-roid}
       POSTGRES_PASSWORD: ${DEV_KDMS_DB_PASSWORD:-password}
@@ -30,9 +31,18 @@ services:
         rm -f /var/lib/postgresql/data/postmaster.pid
         (
           sleep 30
-          until pg_isready -h localhost -p 5432 -d template1; do sleep 2; done
-          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM stock_info LIMIT 1;" > /dev/null 2>&1
-          if [ $$? -ne 0 ]; then
+          until pg_isready -h localhost -p 5432 -U $$POSTGRES_USER -d template1; do sleep 2; done
+          success=0
+          for i in 1 2 3; do
+            psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM stock_info LIMIT 1;" > /dev/null 2>&1
+            if [ $$? -eq 0 ]; then
+              success=1
+              break
+            fi
+            echo "⚠️ [KDMS DB 검증 시도 $$i/3 실패] 10초 후 재시도합니다..."
+            sleep 10
+          done
+          if [ $$success -ne 1 ]; then
             echo "❌ [KDMS DB 검증 실패] 물리 데이터 마운트 유실 또는 테이블 미존재 감지! 컨테이너를 중지합니다."
             kill -3 1
           else
@@ -46,6 +56,7 @@ services:
     image: timescale/timescaledb@sha256:9e9f50161784dc57d3f547b89ded4af73553f9acb4677345ed05f45af7c7f664
     container_name: usdms_timescaledb
     restart: always
+    shm_size: '512mb'
     environment:
       POSTGRES_USER: ${DEV_USDMS_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DEV_USDMS_DB_PASSWORD:-password}
@@ -72,9 +83,18 @@ services:
         rm -f /var/lib/postgresql/data/postmaster.pid
         (
           sleep 30
-          until pg_isready -h localhost -p 5432 -d template1; do sleep 2; done
-          psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM us_ticker_master LIMIT 1;" > /dev/null 2>&1
-          if [ $$? -ne 0 ]; then
+          until pg_isready -h localhost -p 5432 -U $$POSTGRES_USER -d template1; do sleep 2; done
+          success=0
+          for i in 1 2 3; do
+            psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "SELECT 1 FROM us_ticker_master LIMIT 1;" > /dev/null 2>&1
+            if [ $$? -eq 0 ]; then
+              success=1
+              break
+            fi
+            echo "⚠️ [USDMS DB 검증 시도 $$i/3 실패] 10초 후 재시도합니다..."
+            sleep 10
+          done
+          if [ $$success -ne 1 ]; then
             echo "❌ [USDMS DB 검증 실패] 물리 데이터 마운트 유실 또는 테이블 미존재 감지! 컨테이너를 중지합니다."
             kill -3 1
           else
@@ -95,9 +115,12 @@ services:
         condition: service_healthy
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
+      - PYTHONUNBUFFERED=1
+      - LOG_DIR=/app/logs
     volumes:
       - ./backups:/app/backups
       - ./.env:/app/.env
+      - ./logs/p2_kdms:/app/logs
     networks:
       tdms-net:
         ipv4_address: 172.20.0.5
@@ -114,9 +137,12 @@ services:
         condition: service_healthy
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
+      - PYTHONUNBUFFERED=1
+      - LOG_DIR=/app/logs
     volumes:
       - ./backups:/app/backups
       - ./.env:/app/.env
+      - ./logs/p3_usdms:/app/logs
     networks:
       tdms-net:
         ipv4_address: 172.20.0.6
@@ -135,6 +161,7 @@ services:
         condition: service_started
     environment:
       - TDMS_ENV=${TDMS_ENV:-dev}
+      - PYTHONUNBUFFERED=1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/app/data

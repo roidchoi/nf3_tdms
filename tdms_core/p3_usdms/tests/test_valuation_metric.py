@@ -349,3 +349,44 @@ def test_valuation_calculator_bulk_500_stocks_performance_with_real_db(real_pool
     # 명시적 GC 강제 수행
     gc.collect()
 
+
+@pytest.mark.integration
+def test_calculators_bulk_performance_with_real_db(real_pool):
+    """
+    [목적] 새로 구현된 ValuationCalculator.calculate_and_save_bulk 및 MetricCalculator.calculate_and_save_bulk 가
+           실제 DB와 100개 단위 청크로 메모리 OOM 없이 정상 동작하고 속도가 빠른지 검증
+    """
+    import time
+    import gc
+    from p3_usdms.repositories.valuation_repo import ValuationRepo
+    from p3_usdms.engines.valuation_calculator import ValuationCalculator
+    from p3_usdms.engines.metric_calculator import MetricCalculator
+    
+    repo = ValuationRepo()
+    val_calc = ValuationCalculator(repo=repo)
+    met_calc = MetricCalculator(repo=repo)
+    
+    with repo.get_cursor() as cur:
+        cur.execute("SELECT cik FROM us_ticker_master WHERE is_collect_target = TRUE LIMIT 150")
+        rows = cur.fetchall()
+        
+    ciks = [r['cik'] for r in rows]
+    if not ciks:
+        return  # 빈 DB일 경우 스킵
+        
+    print(f"\n[벌크 계산 시작] {len(ciks)}개 종목에 대한 벌크 연산 및 적재 검증 구동 중...")
+    
+    start_time = time.time()
+    
+    # 벌크 기동
+    val_calc.calculate_and_save_bulk(ciks, rebuild=False, chunk_size=50)
+    met_calc.calculate_and_save_bulk(ciks, rebuild=False, chunk_size=50)
+            
+    total_duration = time.time() - start_time
+    print(f"\n[벌크 계산 완료] 소요 시간: {total_duration:.4f}초")
+    
+    assert total_duration < 30.0, f"벌크 계산 연산 속도 임계치 초과: {total_duration:.4f}초 소요됨."
+    
+    gc.collect()
+
+

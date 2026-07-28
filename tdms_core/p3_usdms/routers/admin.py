@@ -58,6 +58,17 @@ async def _async_run_weekly():
     finally:
         set_running_task(None)
 
+async def _async_run_us_financial():
+    set_running_task("us_financial")
+    try:
+        from p3_usdms.tasks.us_financial_routine import UsFinancialRoutine
+        routine = UsFinancialRoutine()
+        await routine.run()
+    except Exception as e:
+        logger.error(f"Background UsFinancialRoutine run encountered error: {e}")
+    finally:
+        set_running_task(None)
+
 # =================================================================
 # 1. 태스크 수동 실행 API
 # =================================================================
@@ -74,6 +85,19 @@ async def run_daily_routine(background_tasks: BackgroundTasks):
         )
     background_tasks.add_task(_async_run_routine)
     return {"status": "SUBMITTED", "message": "Daily routine has been triggered in the background."}
+
+@router.post("/tasks/us_financial/run")
+async def run_us_financial(background_tasks: BackgroundTasks):
+    """
+    US 재무 수집 루틴을 백그라운드로 수동 기동합니다.
+    """
+    if is_routine_running():
+        raise HTTPException(
+            status_code=409,
+            detail="Another background routine is already running."
+        )
+    background_tasks.add_task(_async_run_us_financial)
+    return {"status": "SUBMITTED", "message": "US Financial routine has been triggered in the background."}
 
 @router.post("/tasks/weekly_backfill/run")
 async def run_weekly_backfill(background_tasks: BackgroundTasks):
@@ -99,11 +123,12 @@ def get_tasks_status() -> List[Dict[str, Any]]:
     역순으로 조회하여 최근 10건의 실행 이력 리포트 리스트를 반환하되,
     현재 메모리 상에서 실행 중인 태스크 상태를 오버라이딩하여 반영합니다.
     """
-    logs_dir = "logs"
+    from p3_usdms.config import get_settings
+    logs_dir = get_settings().LOG_DIR
     log_files = []
     if os.path.exists(logs_dir):
         for f in os.listdir(logs_dir):
-            if f.endswith(".json") and (f.startswith("daily_routine_") or f.startswith("weekly_backfill_")):
+            if f.endswith(".json") and (f.startswith("daily_routine_") or f.startswith("weekly_backfill_") or f.startswith("us_financial_")):
                 log_files.append(f)
             
     # 파일명 역순 정렬 (타임스탬프 기반 최신순)
@@ -120,7 +145,7 @@ def get_tasks_status() -> List[Dict[str, Any]]:
         except Exception as e:
             logger.warning(f"Failed to read/parse report file {f}: {e}")
             reports.append({
-                "routine": "daily_routine" if "daily_routine" in f else "weekly_backfill",
+                "routine": "daily_routine" if "daily_routine" in f else "weekly_backfill" if "weekly_backfill" in f else "us_financial",
                 "file_name": f,
                 "status": "ERROR",
                 "error": str(e),
@@ -140,6 +165,8 @@ def get_tasks_status() -> List[Dict[str, Any]]:
                     routine_name = "daily_routine"
                 elif fname.startswith("weekly_backfill"):
                     routine_name = "weekly_backfill"
+                elif fname.startswith("us_financial"):
+                    routine_name = "us_financial"
             
             if routine_name == running:
                 report["is_running"] = True
@@ -156,6 +183,18 @@ def get_tasks_status() -> List[Dict[str, Any]]:
                 "start_time": datetime.now(KST).isoformat()
             }
             reports.insert(0, new_report)
+            
+    # 3단계: 리포트 목록에 daily_routine 및 weekly_backfill, us_financial에 대한 기본 placeholder가 없는 경우 주입
+    routines_found = {r.get("routine") for r in reports if r.get("routine")}
+    for r_type in ["daily_routine", "us_financial", "weekly_backfill"]:
+        if r_type not in routines_found:
+            reports.append({
+                "routine": r_type,
+                "is_running": False,
+                "status": "none",
+                "start_time": None,
+                "end_time": None
+            })
             
     return reports
 
@@ -189,10 +228,11 @@ def update_schedule(
     job_id: str,
     hour: int,
     minute: int,
-    request: Request
+    request: Request,
+    day_of_week: Optional[str] = Query(None, description="요일 설정")
 ) -> Dict[str, Any]:
     """
-    특정 스케줄 작업(예: daily_collection_job)의 실행 시각을 동적으로 변경하며,
+    특정 스케줄 작업(예: daily_collection_job)의 실행 시각 및 요일을 동적으로 변경하며,
     .env 파일의 스케줄 설정도 영구 보존 업데이트합니다.
     """
     scheduler = getattr(request.app.state, "scheduler", None)
@@ -205,26 +245,30 @@ def update_schedule(
         
     var_map = {
         "daily_collection_job": "SCHEDULE_USDMS_DAILY_ROUTINE",
-        "weekly_maintenance_job": "SCHEDULE_USDMS_WEEKLY_MAINTENANCE"
+        "weekly_maintenance_job": "SCHEDULE_USDMS_WEEKLY_MAINTENANCE",
+        "financial_collection_job": "SCHEDULE_USDMS_FINANCIAL_ROUTINE"
     }
     
     var_name = var_map.get(job_id)
     
     try:
-        new_time_str = f"{hour:02d}:{minute:02d}"
+        if day_of_week:
+            new_time_str = f"{day_of_week}:{hour:02d}:{minute:02d}"
+        else:
+            new_time_str = f"{hour:02d}:{minute:02d}"
         
         if var_name:
             from p1_shared.utils.schedule_utils import update_env_value, parse_schedule_string
             import os
             
-            # 1. .env 파일 및 os.environ 업데이트 (요일 보존 처리 내장)
+            # 1. .env 파일 및 os.environ 업데이트
             update_env_value(var_name, new_time_str)
             
             # 2. 업데이트된 값에서 요일 정보 등을 다시 읽어 스케줄러 갱신
             updated_val = os.environ.get(var_name, new_time_str)
-            h, m, day_of_week = parse_schedule_string(updated_val)
+            h, m, parsed_dow = parse_schedule_string(updated_val)
             
-            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=parsed_dow, hour=h, minute=m)
             logger.info(f"Successfully updated job {job_id} schedule to {updated_val} (and persisted to .env).")
             return {
                 "status": "SUCCESS",
@@ -232,7 +276,7 @@ def update_schedule(
             }
         else:
             # 매핑 변수가 없는 특수 job의 경우 기존 방식 적용
-            scheduler.reschedule_job(job_id, trigger="cron", hour=hour, minute=minute)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=hour, minute=minute)
             logger.info(f"Successfully updated job {job_id} schedule to {new_time_str}.")
             return {
                 "status": "SUCCESS",
@@ -241,6 +285,53 @@ def update_schedule(
     except Exception as e:
         logger.error(f"Failed to reschedule job {job_id}: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Failed to reschedule job {job_id}: {str(e)}")
+
+
+@router.post("/schedules/reload", summary="환경설정(.env)에서 스케줄을 다시 읽어 스케줄러 갱신")
+def reload_schedules(request: Request) -> Dict[str, Any]:
+    """
+    물리 .env 파일을 다시 읽고, os.environ 갱신 후 
+    스케줄러에 등록된 각 작업들의 일정을 동적으로 갱신합니다.
+    """
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if not scheduler:
+        raise HTTPException(status_code=500, detail="Scheduler is not running or not registered.")
+        
+    try:
+        from dotenv import load_dotenv
+        import os
+        from p1_shared.utils.schedule_utils import parse_schedule_string
+        
+        # 1. .env 파일 강제 덮어쓰기 로드 (override=True)
+        env_path = "/app/.env" if os.path.exists("/app/.env") else None
+        load_dotenv(dotenv_path=env_path, override=True)
+        
+        # 2. 각 작업의 설정 키 갱신
+        var_map = {
+            "daily_collection_job": ("SCHEDULE_USDMS_DAILY_ROUTINE", "tue-sat"),
+            "weekly_maintenance_job": ("SCHEDULE_USDMS_WEEKLY_MAINTENANCE", "sat"),
+            "financial_collection_job": ("SCHEDULE_USDMS_FINANCIAL_ROUTINE", "wed,sat")
+        }
+        
+        updated_jobs = []
+        for job_id, (env_key, default_days) in var_map.items():
+            job = scheduler.get_job(job_id)
+            if not job:
+                continue
+            
+            val = os.environ.get(env_key)
+            if not val:
+                continue
+                
+            h, m, day_of_week = parse_schedule_string(val, default_days=default_days)
+            scheduler.reschedule_job(job_id, trigger="cron", day_of_week=day_of_week, hour=h, minute=m)
+            updated_jobs.append({"job_id": job_id, "schedule": val})
+            
+        logger.info(f"스케줄러 .env 재로드 완료: {updated_jobs}")
+        return {"status": "SUCCESS", "updated_jobs": updated_jobs}
+    except Exception as e:
+        logger.error(f"Failed to reload schedules from .env: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"스케줄 재로드 실패: {str(e)}")
 
 
 
@@ -291,7 +382,8 @@ async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = Query(N
     """
     await websocket.accept()
     
-    logs_dir = "logs"
+    from p3_usdms.config import get_settings
+    logs_dir = get_settings().LOG_DIR
     target_log_path = None
     
     if log_file:
@@ -300,12 +392,8 @@ async def websocket_logs(websocket: WebSocket, log_file: Optional[str] = Query(N
         if os.path.exists(safe_path):
             target_log_path = safe_path
     else:
-        # logs/ 디렉토리 내에서 가장 최신의 daily_routine_*.log 또는 daily_routine.log 파일 탐색
-        if os.path.exists(logs_dir):
-            log_files = [f for f in os.listdir(logs_dir) if f.endswith(".log")]
-            if log_files:
-                log_files.sort(reverse=True)
-                target_log_path = os.path.join(logs_dir, log_files[0])
+        # daily_routine과 us_financial 모두 daily_routine.log에 로그가 쌓이므로 이를 기본 타겟으로 설정합니다.
+        target_log_path = os.path.join(logs_dir, "daily_routine.log")
                 
     if not target_log_path or not os.path.exists(target_log_path):
         # 방어적 조치: 파일이 없다면 logs/daily_routine.log 경로를 기본 경로로 삼고 빈 파일을 만듭니다.

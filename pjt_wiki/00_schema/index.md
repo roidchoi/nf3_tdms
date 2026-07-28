@@ -1,8 +1,8 @@
 # pjt_wiki Index (MoC)
 
 > **프로젝트**: NF3 TDMS (Total Data Management System)
-> **마지막 업데이트**: 2026-07-03
-> **총 등록 파일**: 57개
+> **마지막 업데이트**: 2026-07-22
+> **총 등록 파일**: 62개
 
 
 ---
@@ -21,6 +21,7 @@
 | `architecture.md` | 시스템 아키텍처 (템플릿) | — |
 | `decisions.md` | 공통 의사결정 (템플릿) | — |
 | `environment.md` | 공통 환경 (템플릿) | — |
+| `new_feature_guide.md` | 신규 기능 추가 시 시행착오 방지 개발 가이드 (Perfect Isolation, KIS 엑셀 스펙 파싱, 도커 빌드 정책, UI 검증 프로세스 등) | 2026-07-16 |
 
 ---
 
@@ -87,8 +88,10 @@
 |---|---|---|---|
 | `ohlcv_repo.md` | OhlcvRepo | **39** | 일봉/수정주가(On-the-fly+물리)/분봉 CRUD, 팩터역산용 DF |
 | `financial_repo.md` | FinancialRepo | **38** | PIT 재무제표/비율 INSERT + DISTINCT ON 버전 선택 |
+| `investor_trade_repo.md` | InvestorTradeRepo | — | 일별 투자자 매매동향(수급) 벌크 UPSERT 및 기간별 조회 기능 제공 |
 | `schema_kdms_db.md` | kdms_db | — | kdms_timescaledb 내 12개 테이블 컬럼 타입, PK, 인덱스, hypertable 3종 상세 스키마 |
 | `data_api_endpoints.md` | routers/data.py | — | /api/data/* 전체 엔드포인트 명세 |
+| `backfill_investor_trade_cli.md` | scripts/backfill_investor_trade_by_year.py | — | 일별 투자자 매매동향(수급) 연도별 백필 전용 CLI 인터페이스 |
 | `fastapi_lifespan.md` | main.py lifespan | — | DB풀, StartupValidator, APScheduler 크론 등록 순서 |
 | `settings_config.md` | Settings | — | pydantic-settings Layer A/B 이중 구조, .env 변수 |
 
@@ -102,6 +105,11 @@
 | `dec-004_kis_api_throttling_strategy.md` | 속도 정책: 안전 마진 기반 KIS API 스로틀링(Throttling) 및 방어적 시가총액 bigint 연산 | Task-010 |
 | `dec-005_filter_non_equity_instruments.md` | 특수 상품: 비주식성 특수 상품(BC, MF, EW) 수집 제외 필터링 적용 | T-011 |
 | `dec-006_fallback_listed_shares_mechanism.md` | 상장주식수 누락: API 0 유입 시 DB 최근 데이터 Fallback 대체 | — |
+| `dec-007_financial_update_optimization.md` | KDMS 재무 업데이트 성능 최적화 전략 | — |
+| `dec-008_scheduler_reload_and_logging.md` | 스케줄러 동적 리로드 및 진행률 로깅 개선 | — |
+| `dec-009_kdms_backfill_optimization.md` | KDMS 백필 누락 감지 및 API 호출 한도 계산 고도화 | — |
+| `dec-010_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 | — |
+| `dec-011_file_persistent_dict_nested_mutation.md` | FilePersistentDict 중첩 딕셔너리 변경 시 캐시 저장 보장 패턴 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 
@@ -111,6 +119,10 @@
 | `err-002_bigint_out_of_range_in_market_cap.md` | 기형적 주식수 데이터 연산으로 인한 시총 bigint 오버플로우 -> 1000억 주 초과 컷오프 | Critical |
 | `err-003_task_kst_timezone_mismatch.md` | 태스크 실행 상태 기록 시 KST 시간대 처리 불일치 -> datetime.now(KST) 및 isoformat() 직렬화 | Medium |
 | `err-004_listed_shares_zero_accumulation.md` | KIS 마스터 수집 장애로 인한 상장주식수/시가총액 0 누적 적재 -> 최근 10일 DB 데이터 Fallback 대체 | Critical |
+| `err-005_daily_ohlcv_amt_turn_rt_zero_accumulation.md` | 거래대금/회전율 0 누적 적재 에러 조치 | High |
+| `err-006_kis_api_weekend_maintenance_stuck.md` | KIS 주말 점검에 따른 접속 실패 대기시간 누적으로 수집기 Stuck 장애 및 컨테이너 재시작 | High |
+| `err-007_run_daily_update_name_error_metric_tracking.md` | 일일 업데이트 태스크 NameError 해결 및 수집 메트릭 파이프라인 반환 고도화 | Critical |
+| `err-008_market_cap_dual_math_schema_overflow_fix.md` | 시가총액 2017~2019년 자체 연산 쿼리 스키마 오류 및 단위 정제 해결 | High |
 
 ---
 
@@ -123,8 +135,8 @@
 
 | 파일 | 내용 요약 | 마지막 업데이트 |
 |---|---|---|
-| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | 2026-06-05 |
-| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | 2026-06-05 |
+| `codebase_map.md` | 미국 시장 코드베이스 물리 구조 및 모듈 상태 | 2026-07-17 |
+| `environment.md` | p3_usdms Conda 환경 및 의존성 패키지 | 2026-07-17 |
 | `interfaces/schema_usdms_db.md` | usdms_db TimescaleDB 스키마 구성, 인덱스 및 관계 명세 | 2026-06-08 |
 
 ### interfaces/ (미국 시장 마스터 수집 핵심 인터페이스)
@@ -137,8 +149,9 @@
 | `master_repo.md` | MasterRepo | 마스터, 이력 DB CRUD 및 Dynamic Targeting Rules SQL 적용 |
 | `blacklist_repo.md` | BlacklistRepo | us_collection_blacklist 테이블 연동 CRUD 처리 |
 | `blacklist_manager.md` | BlacklistManager | 실패 에러 분석 및 일시적/영구적 에러 분기, 쿨다운 관리 매니저 |
-| `daily_routine.md` | DailyRoutine | 5단계 일일 루틴 자동화, 동적 lookback 계산 및 이상치 롤백/격리 |
-| `financial_parser.md` | FinancialParser | SEC XBRL facts 수집/정제 및 discrete 분기 재무 데이터 도출 파이프라인 |
+| `daily_routine.md` | DailyRoutine | 4단계 일일 시세 수집 자동화 및 이상치 롤백/격리 (시세 전용 경량화, 샤딩 제거) |
+| `us_financial_routine.md` | UsFinancialRoutine | 5일 index 스캔 기반 재무 공시 수집 및 핀포인트 비율/일별 가치 연산 스케줄러 [NEW] |
+| `financial_parser.md` | FinancialParser | SEC XBRL facts 수집/정제, discrete 분기 재무 데이터 도출 및 실질 적재(ingested_ciks) 반환 |
 | `financial_repo.md` | FinancialRepo | us_financial_facts, us_standard_financials, us_share_history 테이블 CRUD/Upsert |
 | `xbrl_mapper.md` | XBRLMapper | US-GAAP 원시 태그의 분석용 표준 회계 필드 우선순위 매핑 및 정규화 |
 | `valuation_repo.md` | ValuationRepo | 일별 가격, 주식수 이력, 표준재무 조회 및 daily_valuation/financial_metrics 일괄 Upsert |
@@ -155,6 +168,13 @@
 | `decisions.md#USDMS_DEC-002` | 자가 치유형(Self-Healing) 가치평가 및 지표 복구 엔진 최적화 | T-005 |
 | `decisions.md#USDMS_DEC-003` | 일시적/영구적 에러의 이원화 예외 처리 및 자동 쿨다운 릴리즈 루프 | T-005 |
 | `decisions.md#USDMS_DEC-004` | 수집 마감 분기점 및 거래정지/차단 배제 기반 실질 갭 진단 정책 | T-007 |
+| `decisions.md#USDMS_DEC-005` | 수/토요일 시분할 일정에 따른 미국 휴장일 전체 스킵 로직 제거 및 캘린더 싱크 보존 | — |
+| `decisions.md#USDMS_DEC-006` | 2분할 MOD 2 해시 샤딩 기반 가치평가 연산 최적화 [NEW] | — |
+| `decisions.md#USDMS_DEC-007` | USDMS 스케줄러 동적 리로드 및 진행률 로깅 개선 [NEW] | — |
+| `dec-008_blacklist_progressive_cooldown.md` | 수집 오류 누적 횟수 기반 점진적 쿨다운 및 5회차 영구 제외 의사결정 [NEW] | — |
+| `dec-009_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 [NEW] | — |
+| `dec-011_us_financial_routine_pinpoint_pipeline.md` | 시세/재무 수집 이원화, 수집 대상 종목 필터링 및 핀포인트 연산 도입 의사결정 | — |
+| `dec-012_master_sync_safety_lock_and_defensive_authority.md` | MasterSync 방어적 권한 검증 및 Safety Lock 도입으로 대량 오탐 비활성화 방지 [NEW] | — |
 
 ### errors/ (해결된 에러 기록)
 
@@ -165,6 +185,8 @@
 | `usdms-err-003_logging_missing_and_running_status_loss.md` | 로깅 기본값 누락 및 백그라운드 실행 상태 유실 -> logging.basicConfig 및 _running_task 동적 상태 오버라이드 | High |
 | `usdms-err-004_financial_tag_and_date_filtering_null_metrics.md` | 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 (해결 및 백필 완료) | High |
 | `usdms-err-005_apscheduler_misfire_grace_time_skipped.md` | APScheduler misfire_grace_time 미지정으로 인한 스케줄러 트리거 누락 | High |
+| `usdms-err-006_test_isolation_failure_blacklist_aapl.md` | 테스트 기동 시 실 DB 블랙리스트 오염으로 인한 AAPL 수집 중단 장애 | Critical |
+| `usdms-err-007_container_log_vol_loss_and_permission_denied.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 볼륨 유실 및 권한 차단 에러 [NEW] | High |
 
 ---
 
@@ -179,7 +201,8 @@
 |---|---|---|
 | `codebase_map.md` | 17개 파일의 물리구조, 새로 구성된 Vue SPA 프론트엔드 폴더 구조 및 테스트 현황 | T-009 |
 | `environment.md` | tdms_p4_env Conda/Node.js 런타임 환경, 주요 패키지(fastapi, vue3, vitest, websockets) 버전, Nginx 프록시 해결책 및 TS5101/TS6133 빌드 오류 대안 기록 | T-009 |
-| `decisions.md` | Nginx 동적 리졸브(P4DEC-001) 및 백그라운드 캐싱 폴링/장애 격리(P4DEC-002), 데이터 갭 정규화 및 API 동적 예외 격리(P4DEC-003) 적용 결정, 서버 백업 물리 차단 안전장치(P4DEC-004) 적용, 볼륨 바인딩(P4DEC-005), 시장 격리 백업/복구 및 권한 래퍼 아키텍처(P4DEC-006) 결정 추가 | T-009 |
+| `decisions.md` | Nginx 동적 리졸브(P4DEC-001), 백그라운드 캐싱 폴링/장애 격리(P4DEC-002), 데이터 갭 정규화 및 API 동적 예외 격리(P4DEC-003), 서버 백업 물리 차단 안전장치(P4DEC-004) 적용, 볼륨 바인딩(P4DEC-005), 시장 격리 백업/복구(P4DEC-006), IP 자가탐색(P4DEC-007), 크론 요일 편집/재로드 대우(P4DEC-008) 결정 추가, 가치평가 날짜 기본값 및 검색 조건 옵션 개편(P4DEC-009) 추가 | T-009 |
+| `decisions/p4dec-011_backfill_dashboard_refactoring.md` | 대시보드 주간 백필 카드 UI 및 다중 백필 제어 개선 [NEW] | — |
 
 ### interfaces/ (인터페이스 명세)
 
@@ -227,11 +250,16 @@
 - [P2-ERR-001] KIS API 403 Forbidden 차단 → `p2_kdms_wiki/errors/err-001_kis_api_403_forbidden.md`
 - [P2-ERR-002] 시총 bigint 오버플로우 롤백 → `p2_kdms_wiki/errors/err-002_bigint_out_of_range_in_market_cap.md`
 - [P2-ERR-003] KST 시간대 처리 불일치 → `p2_kdms_wiki/errors/err-003_task_kst_timezone_mismatch.md`
+- [P2-ERR-006] KIS API 주말 점검으로 인한 수집 정체 stuck 장애 → `p2_kdms_wiki/errors/err-006_kis_api_weekend_maintenance_stuck.md`
+- [P2-ERR-007] 일일 업데이트 태스크 NameError 및 통계 누락 → `p2_kdms_wiki/errors/err-007_run_daily_update_name_error_metric_tracking.md`
+- [P2-ERR-008] 시가총액 2017~2019 자체 연산 쿼리 스키마 오류 및 단위 정제 → `p2_kdms_wiki/errors/err-008_market_cap_dual_math_schema_overflow_fix.md` [NEW]
 - [USDMS-ERR-001] WSL2 바인드 마운트 동기화 유실 → `p3_usdms_wiki/errors/usdms-err-001_wsl2_bind_mount_sync_error.md`
 - [USDMS-ERR-002] Valuation 자가치유 갭 탐색 타임아웃 → `p3_usdms_wiki/errors/usdms-err-002_valuation_rebuild_timeout.md`
 - [USDMS-ERR-003] 로깅 기본값 누락 및 실행 상태 유실 → `p3_usdms_wiki/errors/usdms-err-003_logging_missing_and_running_status_loss.md`
 - [USDMS-ERR-004] 재무 팩트 수집 필터링 및 날짜 어긋남에 의한 지표(ROE/ROIC) 누락 오류 → `p3_usdms_wiki/errors/usdms-err-004_financial_tag_and_date_filtering_null_metrics.md`
 - [USDMS-ERR-005] APScheduler misfire_grace_time 미지정으로 인한 스케줄러 트리거 누락 → `p3_usdms_wiki/errors/usdms-err-005_apscheduler_misfire_grace_time_skipped.md`
+- [USDMS-ERR-006] 테스트 기동 시 실 DB 오염으로 인한 AAPL 수집 중단 장애 → `p3_usdms_wiki/errors/usdms-err-006_test_isolation_failure_blacklist_aapl.md` [NEW]
+- [USDMS-ERR-007] 도커 내 환경변수 오버라이드로 인한 로그 유실 및 소유권 거부 → `p3_usdms_wiki/errors/usdms-err-007_container_log_vol_loss_and_permission_denied.md` [NEW]
 - [P4-ERR-002] 대용량 DB 볼륨 tar 백업 권한 장애 → `p4_manager_wiki/errors/p4err-002_real_db_volume_tar_permission.md`
 - [P4-ERR-003] 로컬 CLI 백업 기동 장애 → `p4_manager_wiki/errors/p4err-003_host_cli_backup_execution_trouble.md`
 - [P4-ERR-004] WSL2 에이전트 브라우저 실행 및 포워딩 장애 → `p4_manager_wiki/errors/p4err-004_wsl2_agent_browser_forwarding.md`
@@ -259,7 +287,7 @@
 - `kr_milestones`: `/api/mgr/health/kr/milestones` 한국 마일스톤 생성/조회 중계 API 명세 → `p4_manager_wiki/interfaces/kr_milestones.md`
 - `get_preview_meta`: `/api/mgr/preview/meta` 데이터 탐색기 지원 테이블 메타조회 API 명세 → `p4_manager_wiki/interfaces/get_preview_meta.md`
 - `get_preview_table`: `/api/mgr/preview/{market}/{table}` 데이터 100건 동적 조회 및 장애 격리 API 명세 → `p4_manager_wiki/interfaces/get_preview_table.md`
-- `DailyRoutine`: target_date 파라미터화, 미국 휴장일 자동 스킵 및 trading_calendar 테이블 자동 동기화 → `p3_usdms_wiki/interfaces/daily_routine.md`
+- `DailyRoutine`: target_date 파라미터화, 미국 휴장일 자동 스킵 제거(수/토 배치 안정화) 및 trading_calendar 테이블 자동 동기화 → `p3_usdms_wiki/interfaces/daily_routine.md`
 - `date_utils`: 미국 주식시장 영업일/공휴일 판정 및 마지막 영업일 산출 공통 유틸리티 → `p1_shared_wiki/interfaces/date_utils.md`
 - `Health/Admin API Endpoints`: Freshness/Gaps 판정, 차단 해제 API 신설, 동적 스케줄링 및 WebSocket 실시간 로그 중계 → `p3_usdms_wiki/interfaces/health_admin_api.md`
 - `Auditors 3종`: 재무(항등식/Null), 지표(ROE/Outlier), 수정주가(KIS API 대조) 감사 엔진 → `p3_usdms_wiki/interfaces/auditors.md`

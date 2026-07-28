@@ -67,7 +67,8 @@ class StatusService:
                 tasks_data[task_id] = {
                     "is_running": info.get("is_running", False),
                     "last_run_time": last_run_time,
-                    "last_status": last_status
+                    "last_status": last_status,
+                    "details": info
                 }
             
             return {
@@ -116,7 +117,12 @@ class StatusService:
                         job_id = "daily_routine"
                     elif fname.startswith("weekly_backfill"):
                         job_id = "weekly_backfill"
+                    elif fname.startswith("us_financial") or fname.startswith("financial_routine"):
+                        job_id = "us_financial"
                         
+                if job_id == "financial_collection_job" or job_id == "financial_routine":
+                    job_id = "us_financial"
+                    
                 if not job_id:
                     continue
                 if job_id in tasks_data:
@@ -128,7 +134,8 @@ class StatusService:
                 tasks_data[job_id] = {
                     "is_running": info.get("is_running", False),
                     "last_run_time": last_run_time,
-                    "last_status": last_status
+                    "last_status": last_status,
+                    "details": info
                 }
             
             return {
@@ -145,7 +152,7 @@ class StatusService:
                 "tasks": None
             }
 
-    async def run_task(self, market: str, task_id: str, is_test: bool = True) -> Dict[str, Any]:
+    async def run_task(self, market: str, task_id: str, is_test: bool = True, days: Optional[int] = None) -> Dict[str, Any]:
         if market not in ["kr", "us"]:
             raise ValueError(f"Invalid market: {market}")
 
@@ -153,7 +160,10 @@ class StatusService:
             try:
                 if market == "kr":
                     url = f"{settings.P2_KDMS_URL}/api/v1/admin/tasks/{task_id}/run"
-                    resp = await client.post(url, json={"test_mode": is_test})
+                    params = {}
+                    if days is not None and days >= 0:
+                        params["days"] = days
+                    resp = await client.post(url, json={"test_mode": is_test}, params=params)
                 else:  # us
                     url = f"{settings.P3_USDMS_URL}/api/admin/tasks/{task_id}/run"
                     resp = await client.post(url)

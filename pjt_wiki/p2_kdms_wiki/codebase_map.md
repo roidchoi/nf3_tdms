@@ -1,7 +1,7 @@
 # 코드베이스 맵 (codebase_map.md)
 
 > **Sub Project**: p2_kdms (한국 시장 데이터 백엔드)
-> **마지막 업데이트**: 2026-06-16 (KST 시간대 처리 수정 반영 완료)
+> **마지막 업데이트**: 2026-07-27 (시가총액 2017~2019 자체 연산 쿼리 오류 해결 및 수급 백필 CLI 지식화 완료)
 > **기록 원칙**: "현재 상태"만 기재. 미래 계획 혼재 금지. 상태 표시 필수.
 
 ---
@@ -145,6 +145,7 @@ tdms_core/p2_kdms/
 | `main.py` (FastAPI 서버) | `uvicorn main:app --reload --port 8000` | API 서버 기동, 스케줄러 시작 |
 | `ops/check_db.py` | `conda run -n tdms_p2_env python -m ops.check_db` | DB 헬스체크 |
 | `ops/run_monthly_backfill.py` | `conda run -n tdms_p2_env python -m ops.run_monthly_backfill` | 월간 분봉 백필 |
+| `scripts/backfill_investor_trade_by_year.py` | `conda run -n tdms_p2_env python scripts/backfill_investor_trade_by_year.py --start-year 2024 --end-year 2025 --skip-existing` | 연도별 투자자 매매동향(수급) 백필 스크립트 |
 | Admin API POST | `POST /api/v1/admin/run_task {"task_name": "daily_update"}` | 배치 태스크 즉시 실행 |
 
 ---
@@ -184,3 +185,4 @@ tdms_core/p2_kdms/
 | 2026-05-28 | KIS 마스터 데이터 오차 대응을 위한 시가총액 bigint 오버플로우 방어 패치 적용 |
 | T-011 | 스케줄링 환경 변수 외부화 및 API 개정 작업 완료, KIS 마스터 비주식 특수 상품(BC/MF/EW) 제외 필터 적용 |
 | T-105 (2026-06-16) | 재무 업데이트 및 분봉 백필 태스크 기동/완료 상태 기록 시 KST 시간대(+09:00) 처리 및 isoformat() 적용 |
+| 2026-07-27 | 시가총액 2017~2019년 자체 연산 쿼리 스키마/오버플로우 오류 해결(err-008), 2017-01-02 일봉 수집 단위 표준화 정제 완수, 수급 백필 CLI 스크립트 작성 및 위키 지식화 |

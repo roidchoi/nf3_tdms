@@ -70,4 +70,4 @@ class PriceEngine:
             
             clean_factors = list(unique_factors.values())
             self.price_repo.upsert_price_factors(clean_factors)
-            logger.info(f"[{cik}] Calculated {len(clean_factors)} adjustment factors.")
+            logger.debug(f"[{cik}] Calculated {len(clean_factors)} adjustment factors.")

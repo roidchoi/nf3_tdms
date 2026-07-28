@@ -33,3 +33,7 @@ backups/
 # Gemini temp files
 .gemini/
 
+# Temporary scratch scripts
+scratch/
+
+

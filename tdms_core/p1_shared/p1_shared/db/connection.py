@@ -1,3 +1,5 @@
+import os
+import sys
 from contextlib import contextmanager
 from typing import Generator
 import psycopg2
@@ -23,6 +25,18 @@ class DbConnectionPool:
         Raises:
             psycopg2.OperationalError: DSN이 유효하지 않거나 DB에 연결 불가한 경우
         """
+        # 테스트 실행 중 실 DB 접근 차단 Guard
+        is_test_runner = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
+        is_explicit_integration = os.environ.get("RUN_INTEGRATION_TESTS", "false").lower() in ("true", "1")
+        is_live_db = any(ip in dsn for ip in ["192.168.35.249", "192.168.35.176", "EDM-LAB-ALT02", "EDM-LAB-MD02"])
+        
+        if is_test_runner and is_live_db and not is_explicit_integration:
+            raise RuntimeError(
+                f"🚨 [DB Connection Guard] Test environment detected! "
+                f"Connecting to live database ({dsn}) is blocked during unit tests "
+                f"to prevent data corruption. Please mock your database repositories or set RUN_INTEGRATION_TESTS=true."
+            )
+            
         self._pool = psycopg2.pool.ThreadedConnectionPool(min_conn, max_conn, dsn)
 
     @contextmanager

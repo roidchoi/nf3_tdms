@@ -30,11 +30,11 @@ def create_kdms_pool():
     return repo._pool
 
 async def scheduled_daily():
-    from p3_usdms.routers.admin import is_routine_running, set_routine_running
+    from p3_usdms.routers.admin import is_routine_running, set_running_task
     if is_routine_running():
         logger.warning("Scheduled daily routine skipped because another routine is running.")
         return
-    set_routine_running(True)
+    set_running_task("daily_routine")
     try:
         from p3_usdms.tasks.daily_routine import DailyRoutine
         routine = DailyRoutine()
@@ -42,14 +42,29 @@ async def scheduled_daily():
     except Exception as e:
         logger.error(f"Scheduled daily routine failed: {e}")
     finally:
-        set_routine_running(False)
+        set_running_task(None)
+
+async def scheduled_financial():
+    from p3_usdms.routers.admin import is_routine_running, set_running_task
+    if is_routine_running():
+        logger.warning("Scheduled financial routine skipped because another routine is running.")
+        return
+    set_running_task("us_financial")
+    try:
+        from p3_usdms.tasks.us_financial_routine import UsFinancialRoutine
+        routine = UsFinancialRoutine()
+        await routine.run()
+    except Exception as e:
+        logger.error(f"Scheduled financial routine failed: {e}")
+    finally:
+        set_running_task(None)
 
 def scheduled_weekly():
-    from p3_usdms.routers.admin import is_routine_running, set_routine_running
+    from p3_usdms.routers.admin import is_routine_running, set_running_task
     if is_routine_running():
         logger.warning("Scheduled weekly backfill skipped because another routine is running.")
         return
-    set_routine_running(True)
+    set_running_task("weekly_backfill")
     try:
         from p3_usdms.tasks.daily_routine import DailyRoutine
         routine = DailyRoutine()
@@ -57,10 +72,39 @@ def scheduled_weekly():
     except Exception as e:
         logger.error(f"Scheduled weekly backfill failed: {e}")
     finally:
-        set_routine_running(False)
+        set_running_task(None)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 0. 로컬 파일 로깅 설정 (서버 기동 로그 및 일상 로그가 파일에 남아 모니터링 보드 진입 시 복구 가능하게 지원)
+    import sys
+    import os
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    
+    class KstFormatter(logging.Formatter):
+        def formatTime(self, record, datefmt=None):
+            dt = datetime.fromtimestamp(record.created, tz=ZoneInfo("Asia/Seoul"))
+            if datefmt:
+                return dt.strftime(datefmt)
+            else:
+                return dt.strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+
+    settings = get_settings()
+    logs_dir = settings.LOG_DIR
+    os.makedirs(logs_dir, exist_ok=True)
+    is_test = os.environ.get("TDMS_ENV") == "test" or "pytest" in sys.modules
+    log_filename = "daily_routine_test.log" if is_test else "daily_routine.log"
+    log_file_path = os.path.join(logs_dir, log_filename)
+    
+    file_handler = logging.FileHandler(log_file_path, mode="a", encoding="utf-8")
+    file_handler.setFormatter(KstFormatter("[%(asctime)s] %(levelname)s - %(message)s"))
+    file_handler.setLevel(logging.INFO)
+    
+    logger.setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().addHandler(file_handler)
+
     # 1. DSN 기반 DB 커넥션 풀 기동
     pool = create_kdms_pool()
     app.state.pool = pool
@@ -76,11 +120,12 @@ async def lifespan(app: FastAPI):
     if not report.is_healthy:
         raise RuntimeError(f"USDMS DB 기동 검증 실패: {report.missing_tables} / {report.low_row_tables}")
         
-    # 3. APScheduler 기동 및 태스크 등록
     scheduler = AsyncIOScheduler(
         timezone="Asia/Seoul",
         job_defaults={
-            "misfire_grace_time": 900  # 15분 유예 (지터 및 기동 지연으로 인한 스케줄 누락 방지)
+            "misfire_grace_time": 900,   # 15분 유예 (찰나의 지터는 허용하고 과도한 지연 기동은 방지)
+            "coalesce": True,            # 동일 작업 누적 시 1회만 병합 실행
+            "max_instances": 1           # 중복 동시 실행 철저 제한
         }
     )
     
@@ -136,6 +181,32 @@ async def lifespan(app: FastAPI):
             minute=0,
             id="weekly_maintenance_job"
         )
+
+    # 3.3. 재무 및 가치평가 수집 실행 일정 등록
+    try:
+        financial_h, financial_m, financial_days = parse_schedule_string(
+            settings.SCHEDULE_USDMS_FINANCIAL_ROUTINE,
+            default_days="wed,sat"
+        )
+        scheduler.add_job(
+            scheduled_financial, 
+            "cron", 
+            day_of_week=financial_days, 
+            hour=financial_h, 
+            minute=financial_m, 
+            id="financial_collection_job"
+        )
+    except Exception as e:
+        logger.warning(f"SCHEDULE_USDMS_FINANCIAL_ROUTINE parsing failed, falling back to wed,sat 15:00. Error: {e}")
+        scheduler.add_job(
+            scheduled_financial, 
+            "cron", 
+            day_of_week="wed,sat", 
+            hour=15, 
+            minute=0, 
+            id="financial_collection_job"
+        )
+
 
     
     # 개발 PC(dev)인 경우 기동 시 스케줄을 일시정지 상태로 시작

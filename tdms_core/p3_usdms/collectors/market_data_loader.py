@@ -10,6 +10,7 @@ from p3_usdms.repositories.price_repo import PriceRepo
 from p3_usdms.collectors.price_engine import PriceEngine
 from p3_usdms.collectors.kis_us_client import KisUSClient
 from p1_shared.db.connection import DbConnectionPool
+from p3_usdms.utils.silent_logger import SilentLoopContext
 
 logger = logging.getLogger(__name__)
 
@@ -120,18 +121,42 @@ class MarketDataLoader:
         logger.info(f"Dynamic US Market Date bounds resolved: {start_str} ~ {end_str} (Based on KST Run Time: {now_kst.strftime('%Y-%m-%d %H:%M:%S')})")
         
         success_count = 0
-        for i, t in enumerate(targets):
-            try:
-                if self.process_ticker(t['cik'], t['latest_ticker'], start_date=start_str, end_date=end_str):
-                    success_count += 1
-            except Exception as e:
-                logger.error(f"[{t['latest_ticker']}] Update Error: {e}")
+        failure_count = 0
+        import time
+        loop_start_time = time.time()
+        
+        silent_modules = [
+            "p3_usdms.collectors.kis_us_client",
+            "p3_usdms.collectors.price_engine",
+            "urllib3",
+            "requests"
+        ]
+        with SilentLoopContext(silent_modules):
+            for i, t in enumerate(targets):
+                try:
+                    if self.process_ticker(t['cik'], t['latest_ticker'], start_date=start_str, end_date=end_str):
+                        success_count += 1
+                    else:
+                        failure_count += 1
+                except Exception as e:
+                    logger.debug(f"[{t['latest_ticker']}] Update Error: {e}")
+                    failure_count += 1
 
-            if (i + 1) % 50 == 0:
-                percent = int(((i + 1) / len(targets)) * 100)
-                logger.info(f"Market Data Progress: {i + 1}/{len(targets)} ({percent}%)")
-                
-        logger.info(f"Daily Update Complete. Success: {success_count}/{len(targets)}")
+                if (i + 1) % 50 == 0 or i == len(targets) - 1:
+                    elapsed = time.time() - loop_start_time
+                    if elapsed == 0:
+                        elapsed = 1e-6
+                    items_per_sec = (i + 1) / elapsed
+                    remaining = len(targets) - (i + 1)
+                    eta_seconds = remaining / items_per_sec if items_per_sec > 0 else 0
+                    eta_str = time.strftime('%H:%M:%S', time.gmtime(eta_seconds))
+                    progress_pct = (i + 1) / len(targets) * 100.0
+                    
+                    logger.info(
+                        f"[USDMS 시세 수집] Progress: {progress_pct:.1f}% ({i+1}/{len(targets)}) | "
+                        f"Speed: {items_per_sec:.1f} symbols/s | Elapsed: {elapsed:.0f}s | ETA: {eta_str} | "
+                        f"Success: {success_count} | Failure: {failure_count} | Current Ticker: {t['latest_ticker']}"
+                    )
 
     def process_ticker(self, cik: str, ticker: str, start_date: str = None, end_date: str = None) -> bool:
         """
@@ -142,6 +167,7 @@ class MarketDataLoader:
             df = self.kis.get_ohlcv(ticker, start_date=start_date, end_date=end_date, add_adjusted=True)
             
             if df.empty:
+                logger.debug(f"[{ticker}] No data returned from KIS API (empty DataFrame).")
                 return False
                 
             # 2. 가격 데이터 및 수정계수 연쇄 반영
@@ -149,7 +175,7 @@ class MarketDataLoader:
             return True
             
         except Exception as e:
-            logger.error(f"[{ticker}] Process Error: {e}")
+            logger.debug(f"[{ticker}] Process Error: {e}")
             return False
 
     def _save_data(self, cik: str, ticker: str, df: pd.DataFrame):
@@ -175,7 +201,7 @@ class MarketDataLoader:
             }
             
             if not all(c in df.columns for c in rename_map.keys()):
-                logger.error(f"[{ticker}] Missing columns: {df.columns}")
+                logger.debug(f"[{ticker}] Missing columns: {df.columns}")
                 return
 
             df = df.rename(columns=rename_map)

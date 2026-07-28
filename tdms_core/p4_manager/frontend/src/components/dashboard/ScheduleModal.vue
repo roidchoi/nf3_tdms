@@ -23,6 +23,23 @@
           </div>
         </div>
 
+        <div class="day-input-group">
+          <label>실행 요일 (day_of_week):</label>
+          <input 
+            type="text" 
+            v-model="selectedDayOfWeek" 
+            placeholder="예: mon-fri, wed,sat, * 등" 
+            class="day-input"
+          />
+          <p class="input-tip">
+            자주 쓰는 패턴: 
+            <span class="tip-badge" @click="selectedDayOfWeek = 'mon-fri'">월-금</span>
+            <span class="tip-badge" @click="selectedDayOfWeek = 'tue-sat'">화-토</span>
+            <span class="tip-badge" @click="selectedDayOfWeek = 'wed,sat'">수,토</span>
+            <span class="tip-badge" @click="selectedDayOfWeek = '*'">매일</span>
+          </p>
+        </div>
+
         <!-- 미국 마켓인 경우 현지 시각(EST/EDT) 환산 정보 노출 -->
         <div v-if="market === 'us'" class="timezone-guide">
           <p class="timezone-text">🇺🇸 미국 현지 시각 환산 (EST 기준):</p>
@@ -88,20 +105,32 @@ export default defineComponent({
   setup(props, { emit }) {
     const selectedHour = ref(17);
     const selectedMinute = ref(0);
+    const selectedDayOfWeek = ref('');
     const safetyConfirmText = ref('');
     const isSubmitting = ref(false);
 
-    // 스케줄 시간 기본값 세팅
+    // 스케줄 시간 및 요일 기본값 세팅
     watch(() => props.isOpen, (newVal) => {
-      if (newVal && props.job.next_run_time) {
-        try {
-          const dateObj = new Date(props.job.next_run_time);
-          selectedHour.value = dateObj.getHours();
-          selectedMinute.value = dateObj.getMinutes();
-        } catch {
-          selectedHour.value = 17;
-          selectedMinute.value = 0;
+      if (newVal) {
+        if (props.job.next_run_time) {
+          try {
+            const dateObj = new Date(props.job.next_run_time);
+            selectedHour.value = dateObj.getHours();
+            selectedMinute.value = dateObj.getMinutes();
+          } catch {
+            selectedHour.value = 17;
+            selectedMinute.value = 0;
+          }
         }
+        
+        // job.trigger 에서 day_of_week 추출 (예: cron[hour='17', day_of_week='mon-fri'])
+        if (props.job.trigger) {
+          const match = props.job.trigger.match(/day_of_week='([^']+)'/);
+          selectedDayOfWeek.value = match ? match[1] : '';
+        } else {
+          selectedDayOfWeek.value = '';
+        }
+        
         safetyConfirmText.value = '';
       }
     });
@@ -146,7 +175,8 @@ export default defineComponent({
         emit('save', {
           job_id: props.job.job_id,
           hour: selectedHour.value,
-          minute: selectedMinute.value
+          minute: selectedMinute.value,
+          day_of_week: selectedDayOfWeek.value.trim() || undefined
         });
       } finally {
         isSubmitting.value = false;
@@ -156,6 +186,7 @@ export default defineComponent({
     return {
       selectedHour,
       selectedMinute,
+      selectedDayOfWeek,
       safetyConfirmText,
       isSubmitting,
       convertedEstTime,
@@ -356,5 +387,55 @@ export default defineComponent({
   background: rgba(59, 130, 246, 0.3);
   color: rgba(255, 255, 255, 0.4);
   cursor: not-allowed;
+}
+
+/* Day input styling */
+.day-input-group {
+  margin-bottom: 18px;
+}
+
+.day-input-group label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+  color: #cbd5e1;
+}
+
+.day-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #f1f3f5;
+  padding: 8px 12px;
+  font-size: 1rem;
+  outline: none;
+}
+
+.day-input:focus {
+  border-color: #3b82f6;
+}
+
+.input-tip {
+  margin: 6px 0 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.tip-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tip-badge:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
 }
 </style>

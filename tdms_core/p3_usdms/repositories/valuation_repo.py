@@ -301,4 +301,76 @@ class ValuationRepo(BaseRepository):
             cur.execute(query, tuple(params))
             return cur.fetchall()
 
+    def load_prices_bulk(self, ciks: List[str], start_date=None) -> List[Dict[str, Any]]:
+        """
+        주어진 CIK 목록 전체에 대해 일별 주가를 dt 오름차순으로 조회합니다.
+        """
+        if not ciks:
+            return []
+        
+        if start_date:
+            query = """
+                SELECT cik, dt, cls_prc 
+                FROM us_daily_price 
+                WHERE cik = ANY(%s) AND dt >= %s 
+                ORDER BY dt ASC
+            """
+            params = (ciks, start_date)
+        else:
+            query = """
+                SELECT cik, dt, cls_prc 
+                FROM us_daily_price 
+                WHERE cik = ANY(%s) 
+                ORDER BY dt ASC
+            """
+            params = (ciks,)
+            
+        with self.get_cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+    def load_shares_bulk(self, ciks: List[str]) -> List[Dict[str, Any]]:
+        """
+        주어진 CIK 목록 전체에 대해 발행주식수 변동 이력을 filed_dt 오름차순으로 조회합니다.
+        """
+        if not ciks:
+            return []
+            
+        query = """
+            SELECT cik, filed_dt, val 
+            FROM us_share_history 
+            WHERE cik = ANY(%s) 
+            ORDER BY filed_dt ASC
+        """
+        with self.get_cursor() as cur:
+            cur.execute(query, (ciks,))
+            return cur.fetchall()
+
+    def load_financials_bulk(self, ciks: List[str]) -> List[Dict[str, Any]]:
+        """
+        주어진 CIK 목록 전체에 대해 표준화 재무 정보를 report_period 및 filed_dt 오름차순으로 조회합니다.
+        """
+        if not ciks:
+            return []
+            
+        query = """
+            SELECT 
+                cik, report_period, filed_dt, fiscal_year, fiscal_period,
+                total_assets, current_assets, cash_and_equiv, inventory, account_receivable,
+                total_equity, retained_earnings,
+                total_liabilities, current_liabilities, total_debt,
+                shares_outstanding,
+                revenue, cogs, gross_profit,
+                sgna_expense, rnd_expense,
+                op_income, interest_expense, tax_provision, net_income,
+                ebitda, ocf, capex, fcf
+            FROM us_standard_financials
+            WHERE cik = ANY(%s)
+            ORDER BY report_period ASC, filed_dt ASC
+        """
+        with self.get_cursor() as cur:
+            cur.execute(query, (ciks,))
+            return cur.fetchall()
+
+
 
