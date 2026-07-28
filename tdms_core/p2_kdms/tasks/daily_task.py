@@ -868,6 +868,11 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
             "steps": steps
         })
         logger.info(f"✅ [{job_id}] {final_log}")
+        try:
+            from routers.admin import save_task_report_json
+            save_task_report_json(job_id, job_statuses[job_id])
+        except Exception as save_err:
+            logger.warning(f"[{job_id}] Failed to save task report json: {save_err}")
 
     except Exception as e:
         logger.critical(f"[{job_id}] 일일 수집 태스크 구동 중 오류 발생: {e}", exc_info=True)
@@ -888,6 +893,11 @@ def run_daily_update(job_statuses: Dict[str, Any], test_mode: bool = False):
                 }
             ]
         })
+        try:
+            from routers.admin import save_task_report_json
+            save_task_report_json(job_id, job_statuses[job_id])
+        except Exception:
+            pass
     finally:
         status_dict = job_statuses.get(job_id, {})
         status_dict["is_running"] = False
