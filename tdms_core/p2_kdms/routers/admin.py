@@ -97,11 +97,64 @@ task_map = {
 VALID_TASK_IDS = list(task_map.keys())
 
 
+def save_task_report_json(task_id: str, status_data: Dict[str, Any]):
+    """태스크 실행 결과를 logs/ 디렉토리에 JSON 리포트 파일로 영구 저장합니다."""
+    import json
+    import os
+    from datetime import datetime
+    try:
+        logs_dir = "/app/logs" if os.path.exists("/.dockerenv") else "logs"
+        os.makedirs(logs_dir, exist_ok=True)
+        now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{task_id}_{now_str}.json"
+        filepath = os.path.join(logs_dir, filename)
+        
+        save_payload = dict(status_data)
+        save_payload["task_id"] = task_id
+        save_payload["file_name"] = filename
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(save_payload, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to save task report json for {task_id}: {e}")
+
+
+def restore_task_statuses_from_disk(target_statuses: Dict[str, Any]):
+    """서버 재시작 후에도 디스크의 최근 태스크 실행 리포트 JSON에서 상태를 복원합니다."""
+    import json
+    import os
+    try:
+        logs_dir = "/app/logs" if os.path.exists("/.dockerenv") else "logs"
+        if not os.path.exists(logs_dir):
+            return
+        
+        files = [f for f in os.listdir(logs_dir) if f.endswith(".json") and "_" in f]
+        files.sort(reverse=True)
+        
+        for f in files:
+            parts = f.rsplit("_", 2)
+            if len(parts) < 3:
+                continue
+            task_id = parts[0]
+            if task_id in VALID_TASK_IDS and task_id not in target_statuses:
+                filepath = os.path.join(logs_dir, f)
+                try:
+                    with open(filepath, "r", encoding="utf-8") as file:
+                        data = json.load(file)
+                        data["is_running"] = False
+                        target_statuses[task_id] = data
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning(f"Failed to restore task statuses from disk: {e}")
+
+
 @router.get("/status", summary="모든 백그라운드 태스크 상태 조회")
 async def get_all_task_statuses():
     """
-    현재 등록되어 수행되거나 완료된 모든 배치 작업 상태를 반환합니다.
+    현재 메모리 상의 작업 상태 및 디스크에 적재된 최근 실행 이력을 복원하여 반환합니다.
     """
+    restore_task_statuses_from_disk(job_statuses)
     return job_statuses
 
 

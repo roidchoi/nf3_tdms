@@ -400,7 +400,6 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
         })
         logger.info(f"✅ [{job_id}] {final_msg}")
 
-
     except Exception as e:
         logger.critical(f"[{job_id}] 수집 파이프라인 구동 중 치명적 오류 발생: {e}", exc_info=True)
         job_statuses[job_id].update({
@@ -413,6 +412,11 @@ def run_financial_update(job_statuses: Dict[str, Any], test_mode: bool = False, 
         status_dict = job_statuses.get(job_id, {})
         status_dict["is_running"] = False
         job_statuses[job_id] = status_dict
+        try:
+            from routers.admin import save_task_report_json
+            save_task_report_json(job_id, status_dict)
+        except Exception as save_err:
+            logger.warning(f"[{job_id}] Failed to save task report json: {save_err}")
 
 
 def _compare_financial_data(api_data: dict, db_data: dict, columns: List[str], logger: logging.Logger) -> bool:

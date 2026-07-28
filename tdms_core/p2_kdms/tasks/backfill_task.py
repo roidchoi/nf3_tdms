@@ -780,6 +780,11 @@ def run_backfill_market_cap(
         status_dict = job_statuses.get(job_id, {})
         status_dict["is_running"] = False
         job_statuses[job_id] = status_dict
+        try:
+            from routers.admin import save_task_report_json
+            save_task_report_json(job_id, status_dict)
+        except Exception as save_err:
+            logger.warning(f"[{job_id}] Failed to save task report json: {save_err}")
 
 
 def run_backfill_daily_data(
