@@ -11,6 +11,8 @@
 ---
 
 <!-- 아래부터 실제 로그 항목 추가. 최신 항목이 위에 오도록. -->
+## [2026-07-29] Task완료+의사결정 | KDMS 태스크 상태 디스크 JSON 영구 적재 및 재시작 자동 복원 패치 완수 (dec-012). 태스크 완료/실패 시 `logs/{task_id}_YYYYMMDD_HHMMSS.json` 실행 결과 리포트를 디스크에 저장하고, 서버 PC 재시작 시 `/tasks/status` API에서 디스크 최신 리포트를 스캔하여 `job_statuses` 메모리를 영구 복원(Restore)하도록 구현 완료.
+
 ## [2026-07-27] Task완료+에러등록 | KDMS 시가총액(daily_market_cap) 2017~2019년 자체 연산 SQL 쿼리 스키마/오버플로우 오류 해결(err-008), 2017-01-02 일봉(daily_ohlcv) 수집 단위 표준화 정제 완수, 수급 백필 CLI 스크립트 인터페이스(backfill_investor_trade_cli.md) 신규 지식화 및 MoC(index.md) 갱신 완료.
 
 ## [2026-07-23] Task완료+에러등록 | KDMS 일별 수급 수집 타겟 정상화 및 로깅 소음 정밀 최적화 (err-007 3차). 기존 분봉 백필 타겟(2,399개) 쿼리로 오용되던 investor_trade_repo.py의 get_active_symbols_for_date 쿼리를 stock_info 상장 활성 종목(3,920개) 전체로 교정하고, 매 종목별 벌크 UPSERT 완료 로그(INFO)를 DEBUG 수준으로 전환하여 폭풍 로그를 소탕하였으며, 50종목 단위의 실시간 진행률 전용 로그만 남도록 개선 후 p2_kdms 도커 재빌드 배포 완료.

@@ -109,7 +109,8 @@
 | `dec-008_scheduler_reload_and_logging.md` | 스케줄러 동적 리로드 및 진행률 로깅 개선 | — |
 | `dec-009_kdms_backfill_optimization.md` | KDMS 백필 누락 감지 및 API 호출 한도 계산 고도화 | — |
 | `dec-010_container_log_directory_force_binding.md` | 도커 기동 시 환경변수 오버라이드로 인한 로그 디렉토리 이탈 방지 강제 설정 | — |
-| `dec-011_file_persistent_dict_nested_mutation.md` | FilePersistentDict 중첩 딕셔너리 변경 시 캐시 저장 보장 패턴 [NEW] | — |
+| `dec-011_file_persistent_dict_nested_mutation.md` | FilePersistentDict 중첩 딕셔너리 변경 시 캐시 저장 보장 패턴 | — |
+| `dec-012_task_status_disk_persistence_and_restore.md` | KDMS 태스크 상태 디스크 JSON 영구 적재 및 재시작 자동 복원 | — |
 
 ### errors/ (해결된 에러 기록)
 
