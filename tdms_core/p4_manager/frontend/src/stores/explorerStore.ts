@@ -144,7 +144,7 @@ export const useExplorerStore = defineStore('explorer', () => {
     if (selectedMarket.value === 'kr') {
       if (table === 'stock_info') {
         marketFilter.value = ''
-      } else if (table === 'daily_ohlcv' || table === 'daily_market_cap' || table === 'daily_investor_trade') {
+      } else if (table === 'daily_ohlcv' || table === 'daily_ohlcv_adjusted' || table === 'daily_market_cap' || table === 'daily_investor_trade') {
         stkCd.value = '005930'
         startDate.value = oneMonthAgoStr
         endDate.value = todayStr
@@ -152,8 +152,12 @@ export const useExplorerStore = defineStore('explorer', () => {
         stkCd.value = '005930'
         startDate.value = threeDaysAgoStr
         endDate.value = todayStr
-      } else if (table === 'financial_statements' || table === 'financial_ratios' || table === 'price_adjustment_factors') {
+      } else if (table === 'financial_statements' || table === 'financial_ratios') {
         stkCd.value = '005930'
+      } else if (table === 'price_adjustment_factors') {
+        stkCd.value = '005930'
+        startDate.value = oneMonthAgoStr
+        endDate.value = todayStr
       } else if (table === 'minute_target_history') {
         quarter.value = ''
         marketFilter.value = 'KOSPI'
@@ -168,7 +172,11 @@ export const useExplorerStore = defineStore('explorer', () => {
         stkCd.value = 'AAPL'
         startDate.value = oneMonthAgoStr
         endDate.value = todayStr
-      } else if (table === 'us_financial_facts' || table === 'us_standard_financials' || table === 'us_share_history' || table === 'us_price_adjustment_factors' || table === 'us_financial_metrics') {
+      } else if (table === 'us_price_adjustment_factors') {
+        stkCd.value = 'AAPL'
+        startDate.value = oneMonthAgoStr
+        endDate.value = todayStr
+      } else if (table === 'us_financial_facts' || table === 'us_standard_financials' || table === 'us_share_history' || table === 'us_financial_metrics') {
         stkCd.value = '0000320193'
       } else if (table === 'us_daily_valuation') {
         stkCd.value = '0000320193'

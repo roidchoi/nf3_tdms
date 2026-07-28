@@ -89,9 +89,9 @@ const stkCdPlaceholder = computed(() => {
 
 const showDateFilter = computed(() => {
   return [
-    'daily_ohlcv', 'daily_market_cap', 'minute_ohlcv',
-    'system_milestones', 'trading_calendar',
-    'us_daily_price', 'us_daily_valuation',
+    'daily_ohlcv', 'daily_ohlcv_adjusted', 'daily_market_cap', 'minute_ohlcv',
+    'system_milestones', 'trading_calendar', 'price_adjustment_factors',
+    'us_daily_price', 'us_daily_valuation', 'us_price_adjustment_factors',
     'us_ticker_history', 'us_collection_blacklist',
     'daily_investor_trade'
   ].includes(store.selectedTable)

@@ -12,25 +12,33 @@ TABLES = [
 def run_simple_audit():
     load_dotenv()
     env = EnvDetector()
-    peer_ip = env.get_peer_host()
-    local_ip = os.getenv("DEV_IP", "127.0.0.1") if env.detect() == "dev" else os.getenv("SERVER_IP", "127.0.0.1")
+    is_docker = os.path.exists("/.dockerenv")
+
+    if is_docker:
+        local_host = os.getenv("DEV_USDMS_DB_HOST", "usdms_db")
+        peer_host = os.getenv("SERVER_IP") or env.get_peer_host()
+    else:
+        peer_host = env.get_peer_host()
+        local_host = os.getenv("DEV_USDMS_DB_HOST") or (os.getenv("DEV_IP", "127.0.0.1") if env.detect() == "dev" else os.getenv("SERVER_IP", "127.0.0.1"))
 
     # DEV 환경 (로컬) 설정
     dev_db = {
-        "host": local_ip, 
+        "host": local_host, 
         "port": int(os.getenv("DEV_USDMS_DB_PORT", 5433)), 
         "user": os.getenv("DEV_USDMS_DB_USER", "postgres"), 
         "password": os.getenv("DEV_USDMS_DB_PASSWORD"), 
-        "dbname": os.getenv("DEV_USDMS_DB_NAME", "usdms_db")
+        "dbname": os.getenv("DEV_USDMS_DB_NAME", "usdms_db"),
+        "connect_timeout": 15
     }
     
     # SERVER 환경 (원격) 설정
     srv_db = {
-        "host": peer_ip, 
+        "host": peer_host, 
         "port": int(os.getenv("SERVER_USDMS_DB_PORT", 5435)), 
         "user": os.getenv("SERVER_USDMS_DB_USER", "postgres"), 
         "password": os.getenv("SERVER_USDMS_DB_PASSWORD"), 
-        "dbname": os.getenv("SERVER_USDMS_DB_NAME", "usdms_db")
+        "dbname": os.getenv("SERVER_USDMS_DB_NAME", "usdms_db"),
+        "connect_timeout": 15
     }
 
     try:
